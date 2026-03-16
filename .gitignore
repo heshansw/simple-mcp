@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.db
+*.db.bak
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.local
+.DS_Store
+*.log
+.simple-mcp/
