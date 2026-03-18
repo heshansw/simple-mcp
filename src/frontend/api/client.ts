@@ -24,7 +24,7 @@ function createApiClient(): ApiClientMethods {
     path: string,
     body?: unknown
   ): Promise<T> {
-    const url = new URL(path, baseUrl);
+    const url = `${baseUrl}${path}`;
     const options: RequestInit = {
       method,
       headers: {
@@ -36,7 +36,7 @@ function createApiClient(): ApiClientMethods {
       options.body = JSON.stringify(body);
     }
 
-    const response = await fetch(url.toString(), options);
+    const response = await fetch(url, options);
 
     if (!response.ok) {
       throw new ApiError(response.status, response.statusText);

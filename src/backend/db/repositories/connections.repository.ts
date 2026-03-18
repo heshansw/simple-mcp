@@ -7,32 +7,32 @@ export type Connection = typeof connectionsTable.$inferSelect;
 export type NewConnection = typeof connectionsTable.$inferInsert;
 
 export interface ConnectionsRepository {
-  findAll(): Connection[];
-  findById(id: string): Connection | undefined;
-  create(data: Omit<NewConnection, "id" | "createdAt" | "updatedAt">): Connection;
-  update(id: string, data: Partial<Omit<NewConnection, "id" | "createdAt">>): Connection | undefined;
-  delete(id: string): boolean;
+  findAll(): Promise<Connection[]>;
+  findById(id: string): Promise<Connection | undefined>;
+  create(data: Omit<NewConnection, "id" | "createdAt" | "updatedAt">): Promise<Connection>;
+  update(id: string, data: Partial<Omit<NewConnection, "id" | "createdAt">>): Promise<Connection | undefined>;
+  delete(id: string): Promise<boolean>;
 }
 
 export function createConnectionsRepository(
   db: DrizzleDB
 ): ConnectionsRepository {
   return {
-    findAll(): Connection[] {
-      return db.select().from(connectionsTable).all();
+    async findAll(): Promise<Connection[]> {
+      return await db.select().from(connectionsTable);
     },
 
-    findById(id: string): Connection | undefined {
-      return db
+    async findById(id: string): Promise<Connection | undefined> {
+      const results = await db
         .select()
         .from(connectionsTable)
-        .where(eq(connectionsTable.id, id))
-        .get();
+        .where(eq(connectionsTable.id, id));
+      return results[0];
     },
 
-    create(
+    async create(
       data: Omit<NewConnection, "id" | "createdAt" | "updatedAt">
-    ): Connection {
+    ): Promise<Connection> {
       const now = new Date().toISOString();
       const id = randomUUID();
 
@@ -43,13 +43,14 @@ export function createConnectionsRepository(
         updatedAt: now,
       };
 
-      db.insert(connectionsTable).values(newConnection).run();
+      await db.insert(connectionsTable).values(newConnection);
 
-      const created = db
+      const results = await db
         .select()
         .from(connectionsTable)
-        .where(eq(connectionsTable.id, id))
-        .get();
+        .where(eq(connectionsTable.id, id));
+
+      const created = results[0];
 
       if (!created) {
         throw new Error(`Failed to retrieve created connection with id ${id}`);
@@ -58,34 +59,34 @@ export function createConnectionsRepository(
       return created;
     },
 
-    update(
+    async update(
       id: string,
       data: Partial<Omit<NewConnection, "id" | "createdAt">>
-    ): Connection | undefined {
+    ): Promise<Connection | undefined> {
       const now = new Date().toISOString();
 
-      db.update(connectionsTable)
+      await db
+        .update(connectionsTable)
         .set({
           ...data,
           updatedAt: now,
         })
-        .where(eq(connectionsTable.id, id))
-        .run();
+        .where(eq(connectionsTable.id, id));
 
-      return db
+      const results = await db
         .select()
         .from(connectionsTable)
-        .where(eq(connectionsTable.id, id))
-        .get();
+        .where(eq(connectionsTable.id, id));
+
+      return results[0];
     },
 
-    delete(id: string): boolean {
-      const result = db
+    async delete(id: string): Promise<boolean> {
+      await db
         .delete(connectionsTable)
-        .where(eq(connectionsTable.id, id))
-        .run();
+        .where(eq(connectionsTable.id, id));
 
-      return result.changes > 0;
+      return true;
     },
   };
 }

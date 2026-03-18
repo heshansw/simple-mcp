@@ -1,22 +1,95 @@
-import { drizzle, BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/libsql";
+import { createClient } from "@libsql/client";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { copyFileSync } from "node:fs";
 
-export type DrizzleDB = BetterSQLite3Database<Record<string, never>>;
+export type DrizzleDB = ReturnType<typeof drizzle>;
 
 export async function createDatabase(dbPath: string): Promise<DrizzleDB> {
   const directory = dirname(dbPath);
   await mkdir(directory, { recursive: true });
 
-  const sqlite = new Database(dbPath);
+  const client = createClient({
+    url: `file:${dbPath}`,
+  });
 
-  // Enable WAL mode for concurrent read performance
-  sqlite.pragma("journal_mode = WAL");
+  const db = drizzle(client);
 
-  // Return drizzle-wrapped database
-  return drizzle(sqlite);
+  // Create tables (IF NOT EXISTS is safe to run every time)
+  await createTables(client);
+
+  return db;
+}
+
+async function createTables(
+  client: ReturnType<typeof createClient>
+): Promise<void> {
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS connections (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      integration_type TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      auth_method TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'disconnected',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS credentials (
+      id TEXT PRIMARY KEY,
+      connection_id TEXT NOT NULL REFERENCES connections(id),
+      encrypted_data TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      algorithm TEXT NOT NULL DEFAULT 'aes-256-cbc',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS agent_configs (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL UNIQUE,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      parameter_overrides TEXT NOT NULL DEFAULT '{}',
+      linked_connection_ids TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS server_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sync_metadata (
+      id TEXT PRIMARY KEY,
+      connection_id TEXT NOT NULL REFERENCES connections(id),
+      metadata_type TEXT NOT NULL,
+      data TEXT NOT NULL,
+      last_sync_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      details TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS reviews (
+      id TEXT PRIMARY KEY,
+      owner TEXT NOT NULL,
+      repo TEXT NOT NULL,
+      pr_number INTEGER NOT NULL,
+      pr_title TEXT NOT NULL DEFAULT '',
+      verdict TEXT NOT NULL,
+      inline_comment_count INTEGER NOT NULL DEFAULT 0,
+      review_body TEXT NOT NULL DEFAULT '',
+      github_review_id INTEGER,
+      github_review_url TEXT,
+      input_tokens_estimate INTEGER,
+      output_tokens_estimate INTEGER,
+      created_at TEXT NOT NULL
+    );
+  `);
 }
 
 export function backupDatabase(dbPath: string): void {

@@ -17,6 +17,12 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:3101",
         changeOrigin: true,
+        bypass(req) {
+          // Don't proxy source file requests — only proxy actual API calls
+          if (req.url && /\.(ts|tsx|js|jsx|css|html)(\?|$)/.test(req.url)) {
+            return req.url;
+          }
+        },
       },
     },
   },

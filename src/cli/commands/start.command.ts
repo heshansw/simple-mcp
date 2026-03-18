@@ -34,16 +34,16 @@ export async function executeStartCommand(
 
   const config = envResult.value;
 
-  // Check if server is already running
-  if (isServerRunning()) {
-    const existingPid = readPidFile();
-    console.log(`Server is already running (PID: ${existingPid})`);
-    process.exit(0);
-  }
-
   // Handle daemon mode
   if (options.daemon) {
-    console.log("Starting server in daemon mode...");
+    // In daemon mode: check for an existing instance to avoid duplicates
+    if (isServerRunning()) {
+      const existingPid = readPidFile();
+      console.error(`Server is already running in daemon mode (PID: ${existingPid})`);
+      process.exit(0);
+    }
+
+    console.error("Starting server in daemon mode...");
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const scriptPath = resolve(__dirname, "../../backend/server.js");
 
@@ -54,9 +54,9 @@ export async function executeStartCommand(
 
     if (child.pid) {
       await writePidFile(child.pid);
-      console.log(`Server started in background (PID: ${child.pid})`);
-      console.log(`PID file: ${getPidDir()}/server.pid`);
-      console.log(
+      console.error(`Server started in background (PID: ${child.pid})`);
+      console.error(`PID file: ${getPidDir()}/server.pid`);
+      console.error(
         `Admin panel: http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}`
       );
 
@@ -68,18 +68,18 @@ export async function executeStartCommand(
       process.exit(1);
     }
   } else {
-    // Run in foreground
-    console.log("Starting server...");
-    console.log(
+    // Foreground / stdio mode — Claude Desktop owns the process lifecycle.
+    // Never check for an existing PID here: Claude Desktop may spawn this
+    // process multiple times during protocol negotiation, and an early exit
+    // caused by a stale PID file would tear down the active connection.
+    console.error("Starting server...");
+    console.error(
       `Admin panel: http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}`
     );
 
-    // Write PID file for this process
-    await writePidFile(process.pid);
-
     // Handle graceful shutdown
     const cleanup = (): void => {
-      console.log("\nShutting down server...");
+      console.error("\nShutting down server...");
       process.exit(0);
     };
 

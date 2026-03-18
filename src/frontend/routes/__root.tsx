@@ -39,6 +39,8 @@ export function Root() {
           }}
         >
           <NavLink to="/">Dashboard</NavLink>
+          <NavLink to="/my-prs">My PRs</NavLink>
+          <NavLink to="/reviews">Review Insights</NavLink>
           <NavLink to="/connections">Connections</NavLink>
           <NavLink to="/agents">Agents</NavLink>
           <NavLink to="/settings">Settings</NavLink>

@@ -120,3 +120,23 @@ export function databaseError(
 ): DatabaseError {
   return { _tag: "DatabaseError", message, operation: operation ?? undefined };
 }
+
+/** Extract a human-readable message from any DomainError variant */
+export function domainErrorMessage(error: DomainError): string {
+  switch (error._tag) {
+    case "ValidationError":
+      return error.message;
+    case "NotFoundError":
+      return `${error.resource} not found: ${error.id}`;
+    case "AuthorizationError":
+      return error.message;
+    case "IntegrationError":
+      return error.message;
+    case "DatabaseError":
+      return error.message;
+    default: {
+      const _exhaustive: never = error;
+      return String(_exhaustive);
+    }
+  }
+}

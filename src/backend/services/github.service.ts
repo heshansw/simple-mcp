@@ -6,11 +6,47 @@ import {
   integrationError,
 } from "../../shared/result.js";
 import type { DomainError } from "../../shared/result.js";
-import type { GitHubConfig } from "../../shared/schemas/integration.schema.js";
+
+const GITHUB_API_BASE = "https://api.github.com";
 
 export interface GitHubDependencies {
   logger: Logger;
+  getToken: () => Promise<string | null>;
 }
+
+export type GitHubPullRequest = {
+  number: number;
+  title: string;
+  state: string;
+  user: { login: string };
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  head: { ref: string; sha: string };
+  base: { ref: string };
+  body: string | null;
+  draft: boolean;
+  changed_files?: number;
+  additions?: number;
+  deletions?: number;
+};
+
+export type GitHubPRFile = {
+  sha: string;
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
+};
+
+export type GitHubReview = {
+  id: number;
+  state: string;
+  html_url: string;
+  submitted_at: string;
+};
 
 export interface GitHubListPullRequestsParams {
   owner: string;
@@ -18,157 +54,326 @@ export interface GitHubListPullRequestsParams {
   state?: "open" | "closed" | "all";
 }
 
+export type GitHubReviewComment = {
+  path: string;
+  position: number;
+  body: string;
+};
+
 export interface GitHubReviewPullRequestParams {
   owner: string;
   repo: string;
   prNumber: number;
   body: string;
   event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+  /** Optional inline comments on specific lines */
+  comments?: GitHubReviewComment[] | undefined;
 }
 
 export interface GitHubSearchCodeParams {
   query: string;
 }
 
-export interface GitHubRepositoryMetadata {
-  owner: string;
-  repo: string;
-  description?: string;
-  defaultBranch: string;
-}
-
-export interface GitHubServiceResult {
+export interface GitHubService {
   listPullRequests(
-    config: GitHubConfig,
     params: GitHubListPullRequestsParams
-  ): Promise<Result<unknown, DomainError>>;
+  ): Promise<Result<GitHubPullRequest[], DomainError>>;
+
+  getPullRequest(
+    owner: string,
+    repo: string,
+    prNumber: number
+  ): Promise<Result<GitHubPullRequest, DomainError>>;
+
+  getPullRequestFiles(
+    owner: string,
+    repo: string,
+    prNumber: number
+  ): Promise<Result<GitHubPRFile[], DomainError>>;
+
   reviewPullRequest(
-    config: GitHubConfig,
     params: GitHubReviewPullRequestParams
-  ): Promise<Result<unknown, DomainError>>;
+  ): Promise<Result<GitHubReview, DomainError>>;
+
   searchCode(
-    config: GitHubConfig,
     params: GitHubSearchCodeParams
   ): Promise<Result<unknown, DomainError>>;
-  getRepositoryMetadata(
-    config: GitHubConfig
-  ): Promise<Result<GitHubRepositoryMetadata[], DomainError>>;
+
+  /** Get the authenticated user's info */
+  getAuthenticatedUser(): Promise<Result<{ login: string; name: string | null; avatar_url: string }, DomainError>>;
+
+  /** List PRs assigned to the authenticated user across repos */
+  getMyAssignedPRs(): Promise<Result<GitHubPullRequest[], DomainError>>;
+
+  /** List PRs where the authenticated user's review is requested */
+  getMyReviewRequests(): Promise<Result<GitHubPullRequest[], DomainError>>;
+
+  /** List PRs created by the authenticated user */
+  getMyCreatedPRs(): Promise<Result<GitHubPullRequest[], DomainError>>;
+}
+
+async function githubFetch<T>(
+  path: string,
+  token: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const url = `${GITHUB_API_BASE}${path}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...((options.headers as Record<string, string>) ?? {}),
+    },
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(
+      `GitHub API ${response.status}: ${response.statusText} — ${errorBody}`
+    );
+  }
+
+  return (await response.json()) as T;
 }
 
 export function createGitHubService(
   deps: GitHubDependencies
-): GitHubServiceResult {
-  const { logger } = deps;
+): GitHubService {
+  const { logger, getToken } = deps;
+
+  async function resolveToken(): Promise<string> {
+    const token = await getToken();
+    if (!token) {
+      throw new Error(
+        "No GitHub access token configured. Add a token in Connections > GitHub > Credentials."
+      );
+    }
+    return token;
+  }
 
   return {
     async listPullRequests(
-      config: GitHubConfig,
       params: GitHubListPullRequestsParams
-    ): Promise<Result<unknown, DomainError>> {
+    ): Promise<Result<GitHubPullRequest[], DomainError>> {
       try {
-        // TODO: Implement real GitHub API call to list pull requests
-        // GET /repos/{owner}/{repo}/pulls with state query parameter
-        // Use native fetch with Bearer token (GitHub PAT or app token) authentication
-        logger.debug(
-          { config, params },
+        const token = await resolveToken();
+        const state = params.state ?? "open";
+        logger.info(
+          { owner: params.owner, repo: params.repo, state },
           "Listing GitHub pull requests"
         );
 
-        // Placeholder response
-        return ok({ pullRequests: [], total: 0 });
+        const prs = await githubFetch<GitHubPullRequest[]>(
+          `/repos/${params.owner}/${params.repo}/pulls?state=${state}&per_page=30`,
+          token
+        );
+
+        logger.info(
+          { count: prs.length },
+          "Pull requests retrieved"
+        );
+        return ok(prs);
       } catch (error) {
-        logger.error(
-          { error, config, params },
-          "Failed to list GitHub pull requests"
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg, params }, "Failed to list pull requests");
+        return err(integrationError("github", msg));
+      }
+    },
+
+    async getPullRequest(
+      owner: string,
+      repo: string,
+      prNumber: number
+    ): Promise<Result<GitHubPullRequest, DomainError>> {
+      try {
+        const token = await resolveToken();
+        logger.info({ owner, repo, prNumber }, "Fetching PR details");
+
+        const pr = await githubFetch<GitHubPullRequest>(
+          `/repos/${owner}/${repo}/pulls/${prNumber}`,
+          token
         );
-        return err(
-          integrationError("github", "Failed to list pull requests")
+
+        return ok(pr);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, "Failed to fetch PR");
+        return err(integrationError("github", msg));
+      }
+    },
+
+    async getPullRequestFiles(
+      owner: string,
+      repo: string,
+      prNumber: number
+    ): Promise<Result<GitHubPRFile[], DomainError>> {
+      try {
+        const token = await resolveToken();
+        logger.info({ owner, repo, prNumber }, "Fetching PR files");
+
+        const files = await githubFetch<GitHubPRFile[]>(
+          `/repos/${owner}/${repo}/pulls/${prNumber}/files?per_page=100`,
+          token
         );
+
+        return ok(files);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, "Failed to fetch PR files");
+        return err(integrationError("github", msg));
       }
     },
 
     async reviewPullRequest(
-      config: GitHubConfig,
       params: GitHubReviewPullRequestParams
-    ): Promise<Result<unknown, DomainError>> {
+    ): Promise<Result<GitHubReview, DomainError>> {
       try {
-        // TODO: Implement real GitHub API call to review a pull request
-        // POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews with review data
-        // Use native fetch with Bearer token authentication
-        logger.debug(
-          { config, params },
-          "Reviewing GitHub pull request"
+        const token = await resolveToken();
+        logger.info(
+          {
+            owner: params.owner,
+            repo: params.repo,
+            prNumber: params.prNumber,
+            event: params.event,
+          },
+          "Submitting PR review"
         );
 
-        // Placeholder response
-        return ok({ reviewId: "", status: "reviewed" });
+        const reviewPayload: Record<string, unknown> = {
+          body: params.body,
+          event: params.event,
+        };
+
+        if (params.comments && params.comments.length > 0) {
+          reviewPayload.comments = params.comments.map((c) => ({
+            path: c.path,
+            position: c.position,
+            body: c.body,
+          }));
+        }
+
+        const review = await githubFetch<GitHubReview>(
+          `/repos/${params.owner}/${params.repo}/pulls/${params.prNumber}/reviews`,
+          token,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(reviewPayload),
+          }
+        );
+
+        logger.info(
+          { reviewId: review.id, state: review.state },
+          "PR review submitted"
+        );
+        return ok(review);
       } catch (error) {
-        logger.error(
-          { error, config, params },
-          "Failed to review GitHub pull request"
-        );
-        return err(
-          integrationError("github", "Failed to review pull request")
-        );
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg, params }, "Failed to submit PR review");
+        return err(integrationError("github", msg));
       }
     },
 
     async searchCode(
-      config: GitHubConfig,
       params: GitHubSearchCodeParams
     ): Promise<Result<unknown, DomainError>> {
       try {
-        // TODO: Implement real GitHub API call to search code
-        // GET /search/code with query parameter
-        // Use native fetch with Bearer token authentication
-        logger.debug(
-          { config, params },
-          "Searching GitHub code"
+        const token = await resolveToken();
+        logger.info({ query: params.query }, "Searching GitHub code");
+
+        const results = await githubFetch<unknown>(
+          `/search/code?q=${encodeURIComponent(params.query)}&per_page=30`,
+          token
         );
 
-        // Placeholder response
-        return ok({ results: [], total: 0 });
+        return ok(results);
       } catch (error) {
-        logger.error(
-          { error, config, params },
-          "Failed to search GitHub code"
-        );
-        return err(
-          integrationError("github", "Failed to search code")
-        );
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg, params }, "Failed to search code");
+        return err(integrationError("github", msg));
       }
     },
 
-    async getRepositoryMetadata(
-      config: GitHubConfig
-    ): Promise<Result<GitHubRepositoryMetadata[], DomainError>> {
+    async getAuthenticatedUser(): Promise<Result<{ login: string; name: string | null; avatar_url: string }, DomainError>> {
       try {
-        // TODO: Implement real GitHub API call to fetch repository metadata
-        // GET /repos/{owner}/{repo} for each repo in config.repos
-        // Use native fetch with Bearer token authentication
-        logger.debug(
-          { config },
-          "Fetching GitHub repository metadata"
+        const token = await resolveToken();
+        const user = await githubFetch<{ login: string; name: string | null; avatar_url: string }>(
+          "/user",
+          token
         );
-
-        // Placeholder response
-        const metadata: GitHubRepositoryMetadata[] = config.repos.map(
-          (repo) => ({
-            owner: config.owner,
-            repo,
-            defaultBranch: "main",
-          })
-        );
-
-        return ok(metadata);
+        return ok(user);
       } catch (error) {
-        logger.error(
-          { error, config },
-          "Failed to fetch GitHub repository metadata"
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, "Failed to get authenticated user");
+        return err(integrationError("github", msg));
+      }
+    },
+
+    async getMyAssignedPRs(): Promise<Result<GitHubPullRequest[], DomainError>> {
+      try {
+        const token = await resolveToken();
+
+        // First get the authenticated user's login
+        const userResult = await githubFetch<{ login: string }>("/user", token);
+
+        logger.info({ user: userResult.login }, "Fetching PRs assigned to me");
+
+        // Use the search API to find PRs assigned to the user
+        const searchResult = await githubFetch<{ items: GitHubPullRequest[] }>(
+          `/search/issues?q=${encodeURIComponent(`is:pr is:open assignee:${userResult.login}`)}&per_page=50&sort=updated&order=desc`,
+          token
         );
-        return err(
-          integrationError("github", "Failed to fetch repository metadata")
+
+        return ok(searchResult.items);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, "Failed to fetch assigned PRs");
+        return err(integrationError("github", msg));
+      }
+    },
+
+    async getMyReviewRequests(): Promise<Result<GitHubPullRequest[], DomainError>> {
+      try {
+        const token = await resolveToken();
+
+        const userResult = await githubFetch<{ login: string }>("/user", token);
+
+        logger.info({ user: userResult.login }, "Fetching PRs needing my review");
+
+        // Search for PRs where review is requested from the user
+        const searchResult = await githubFetch<{ items: GitHubPullRequest[] }>(
+          `/search/issues?q=${encodeURIComponent(`is:pr is:open review-requested:${userResult.login}`)}&per_page=50&sort=updated&order=desc`,
+          token
         );
+
+        return ok(searchResult.items);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, "Failed to fetch review requests");
+        return err(integrationError("github", msg));
+      }
+    },
+
+    async getMyCreatedPRs(): Promise<Result<GitHubPullRequest[], DomainError>> {
+      try {
+        const token = await resolveToken();
+
+        const userResult = await githubFetch<{ login: string }>("/user", token);
+
+        logger.info({ user: userResult.login }, "Fetching PRs created by me");
+
+        const searchResult = await githubFetch<{ items: GitHubPullRequest[] }>(
+          `/search/issues?q=${encodeURIComponent(`is:pr is:open author:${userResult.login}`)}&per_page=50&sort=updated&order=desc`,
+          token
+        );
+
+        return ok(searchResult.items);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg }, "Failed to fetch created PRs");
+        return err(integrationError("github", msg));
       }
     },
   };
