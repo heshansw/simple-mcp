@@ -2,6 +2,17 @@
 
 import { parseArgs } from "node:util";
 
+// Catch ALL unhandled errors so nothing is silently swallowed
+process.on("uncaughtException", (error) => {
+  console.error("[FATAL] Uncaught exception:", error);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] Unhandled rejection:", reason);
+  process.exit(1);
+});
+
 const VALID_COMMANDS = ["start", "stop", "status", "config"];
 
 async function main(): Promise<void> {
@@ -99,7 +110,7 @@ function parseStartOptions(args: string[]): {
 }
 
 function printHelp(): void {
-  console.log(`simple-mcp - TypeScript MCP Server CLI
+  console.error(`simple-mcp - TypeScript MCP Server CLI
 
 Usage: simple-mcp <command> [options]
 

@@ -26,7 +26,7 @@ export function registerResources(
     "List of all configured connections",
     async () => {
       try {
-        const connections = connectionsRepo.findAll();
+        const connections = await connectionsRepo.findAll();
         logger.debug(
           { connectionCount: connections.length },
           "Fetched connections resource"
@@ -80,9 +80,14 @@ Updated: ${conn.updatedAt}`,
           "Fetched agents resource"
         );
 
-        const content = agents.map((agent) => {
-          const config = agentConfigsRepo.findByAgentId(agent.id);
-          const enabled = config?.enabled ?? true;
+        const configPromises = agents.map((agent) =>
+          agentConfigsRepo.findByAgentId(agent.id)
+        );
+        const configs = await Promise.all(configPromises);
+
+        const content = agents.map((agent, idx) => {
+          const config = configs[idx];
+          const enabled = config?.enabled ? Boolean(config.enabled) : true;
 
           const requiredIntegrations = agent.requiredIntegrations.join(", ");
           const requiredTools = agent.requiredTools.join(", ");

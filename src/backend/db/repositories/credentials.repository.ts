@@ -7,32 +7,32 @@ export type Credential = typeof credentialsTable.$inferSelect;
 export type NewCredential = typeof credentialsTable.$inferInsert;
 
 export interface CredentialsRepository {
-  findByConnectionId(connectionId: string): Credential | undefined;
+  findByConnectionId(connectionId: string): Promise<Credential | undefined>;
   create(
     data: Omit<NewCredential, "id" | "createdAt" | "updatedAt">
-  ): Credential;
+  ): Promise<Credential>;
   update(
     id: string,
     data: Partial<Omit<NewCredential, "id" | "createdAt">>
-  ): Credential | undefined;
-  deleteByConnectionId(connectionId: string): boolean;
+  ): Promise<Credential | undefined>;
+  deleteByConnectionId(connectionId: string): Promise<boolean>;
 }
 
 export function createCredentialsRepository(
   db: DrizzleDB
 ): CredentialsRepository {
   return {
-    findByConnectionId(connectionId: string): Credential | undefined {
-      return db
+    async findByConnectionId(connectionId: string): Promise<Credential | undefined> {
+      const results = await db
         .select()
         .from(credentialsTable)
-        .where(eq(credentialsTable.connectionId, connectionId))
-        .get();
+        .where(eq(credentialsTable.connectionId, connectionId));
+      return results[0];
     },
 
-    create(
+    async create(
       data: Omit<NewCredential, "id" | "createdAt" | "updatedAt">
-    ): Credential {
+    ): Promise<Credential> {
       const now = new Date().toISOString();
       const id = randomUUID();
 
@@ -43,13 +43,14 @@ export function createCredentialsRepository(
         updatedAt: now,
       };
 
-      db.insert(credentialsTable).values(newCredential).run();
+      await db.insert(credentialsTable).values(newCredential);
 
-      const created = db
+      const results = await db
         .select()
         .from(credentialsTable)
-        .where(eq(credentialsTable.id, id))
-        .get();
+        .where(eq(credentialsTable.id, id));
+
+      const created = results[0];
 
       if (!created) {
         throw new Error(`Failed to retrieve created credential with id ${id}`);
@@ -58,34 +59,34 @@ export function createCredentialsRepository(
       return created;
     },
 
-    update(
+    async update(
       id: string,
       data: Partial<Omit<NewCredential, "id" | "createdAt">>
-    ): Credential | undefined {
+    ): Promise<Credential | undefined> {
       const now = new Date().toISOString();
 
-      db.update(credentialsTable)
+      await db
+        .update(credentialsTable)
         .set({
           ...data,
           updatedAt: now,
         })
-        .where(eq(credentialsTable.id, id))
-        .run();
+        .where(eq(credentialsTable.id, id));
 
-      return db
+      const results = await db
         .select()
         .from(credentialsTable)
-        .where(eq(credentialsTable.id, id))
-        .get();
+        .where(eq(credentialsTable.id, id));
+
+      return results[0];
     },
 
-    deleteByConnectionId(connectionId: string): boolean {
-      const result = db
+    async deleteByConnectionId(connectionId: string): Promise<boolean> {
+      await db
         .delete(credentialsTable)
-        .where(eq(credentialsTable.connectionId, connectionId))
-        .run();
+        .where(eq(credentialsTable.connectionId, connectionId));
 
-      return result.changes > 0;
+      return true;
     },
   };
 }

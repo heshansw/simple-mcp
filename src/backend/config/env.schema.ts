@@ -46,8 +46,13 @@ export const EnvSchema = z
       .min(32, "Encryption key must be at least 32 characters")
       .optional()
       .describe("Base64-encoded AES-256 encryption key for credentials"),
+
+    ANTHROPIC_API_KEY: z
+      .string()
+      .optional()
+      .describe("Anthropic API key for AI-powered PR reviews. Can also be stored as a Claude connection credential."),
   })
-  .strict();
+  .strip();
 
 export type EnvConfig = z.infer<typeof EnvSchema>;
 

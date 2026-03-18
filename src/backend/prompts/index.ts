@@ -116,6 +116,49 @@ Provide clear instructions for generating tokens and explain security implicatio
     }
   );
 
+  // Register PR review prompt
+  const ReviewPrArgsSchema = z.object({
+    owner: z.string().describe("Repository owner"),
+    repo: z.string().describe("Repository name"),
+    prNumber: z.string().describe("Pull request number"),
+  });
+
+  server.prompt(
+    "review-pr",
+    "Guided prompt for performing an AI-powered code review on a pull request",
+    ReviewPrArgsSchema.shape,
+    async (args) => {
+      const parsed = ReviewPrArgsSchema.parse(args);
+
+      return {
+        messages: [
+          {
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: `Please review PR #${parsed.prNumber} on ${parsed.owner}/${parsed.repo}.
+
+Use github_get_pr_diff to fetch the PR details and full diff, then perform a thorough code review covering:
+1. **Code Quality** — readability, naming, DRY, maintainability
+2. **Bugs & Logic Errors** — null handling, edge cases, off-by-one, race conditions
+3. **Security** — injection, XSS, credential exposure, unsafe patterns
+4. **Performance** — unnecessary allocations, N+1 queries, algorithmic complexity
+5. **Testing** — missing tests, untested edge cases
+6. **Best Practices** — TypeScript strict compliance, error handling, API design
+
+After your analysis, use github_submit_review to post your review with:
+- An overall summary of your findings
+- The appropriate verdict (APPROVE, REQUEST_CHANGES, or COMMENT)
+- Inline comments on specific lines that need attention
+
+Be constructive — suggest fixes, not just problems. Acknowledge good patterns.`,
+            },
+          },
+        ],
+      };
+    }
+  );
+
   // Register agent-help prompt
   server.prompt(
     "agent-help",
@@ -150,8 +193,8 @@ Provide clear instructions for generating tokens and explain security implicatio
             };
           }
 
-          const config = agentConfigsRepo.findByAgentId(agent.id);
-          const isEnabled = config?.enabled ?? true;
+          const config = await agentConfigsRepo.findByAgentId(agent.id);
+          const isEnabled = config?.enabled ? Boolean(config.enabled) : true;
 
           helpContent = `Agent: ${agent.name}
 Version: ${agent.version}
@@ -171,9 +214,13 @@ ${!isEnabled ? "\nNote: This agent is currently disabled. Enable it in settings 
         } else {
           // General help for all agents
           const allAgents = agentRegistry.getAll();
-          const enabledAgents = allAgents.filter((agent) => {
-            const config = agentConfigsRepo.findByAgentId(agent.id);
-            return config?.enabled ?? true;
+          const configPromises = allAgents.map((agent) =>
+            agentConfigsRepo.findByAgentId(agent.id)
+          );
+          const configs = await Promise.all(configPromises);
+          const enabledAgents = allAgents.filter((_, idx) => {
+            const config = configs[idx];
+            return config?.enabled ? Boolean(config.enabled) : true;
           });
 
           helpContent = `Available Agents Overview

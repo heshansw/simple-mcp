@@ -13,6 +13,8 @@ import { ConnectionDetailPage } from "@frontend/routes/connections/$connectionId
 import { AgentsListPage } from "@frontend/routes/agents/index";
 import { AgentDetailPage } from "@frontend/routes/agents/$agentId";
 import { SettingsPage } from "@frontend/routes/settings/index";
+import { MyPRsPage } from "@frontend/routes/my-prs/index";
+import { ReviewsPage } from "@frontend/routes/reviews/index";
 import { useState } from "react";
 
 // Create root route
@@ -66,9 +68,25 @@ const settingsRoute = new Route({
   component: SettingsPage,
 });
 
+// My PRs route
+const myPrsRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/my-prs",
+  component: MyPRsPage,
+});
+
+// Reviews route
+const reviewsRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/reviews",
+  component: ReviewsPage,
+});
+
 // Build route tree
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
+  myPrsRoute,
+  reviewsRoute,
   connectionsIndexRoute,
   newConnectionRoute,
   connectionDetailRoute,

@@ -7,35 +7,34 @@ export type SyncMetadata = typeof syncMetadataTable.$inferSelect;
 export type NewSyncMetadata = typeof syncMetadataTable.$inferInsert;
 
 export interface SyncMetadataRepository {
-  findByConnectionId(connectionId: string): SyncMetadata[];
+  findByConnectionId(connectionId: string): Promise<SyncMetadata[]>;
   upsert(
     connectionId: string,
     metadataType: string,
     data: string,
     lastSyncAt: string
-  ): SyncMetadata;
-  deleteByConnectionId(connectionId: string): boolean;
+  ): Promise<SyncMetadata>;
+  deleteByConnectionId(connectionId: string): Promise<boolean>;
 }
 
 export function createSyncMetadataRepository(
   db: DrizzleDB
 ): SyncMetadataRepository {
   return {
-    findByConnectionId(connectionId: string): SyncMetadata[] {
-      return db
+    async findByConnectionId(connectionId: string): Promise<SyncMetadata[]> {
+      return await db
         .select()
         .from(syncMetadataTable)
-        .where(eq(syncMetadataTable.connectionId, connectionId))
-        .all();
+        .where(eq(syncMetadataTable.connectionId, connectionId));
     },
 
-    upsert(
+    async upsert(
       connectionId: string,
       metadataType: string,
       data: string,
       lastSyncAt: string
-    ): SyncMetadata {
-      const existing = db
+    ): Promise<SyncMetadata> {
+      const existingResults = await db
         .select()
         .from(syncMetadataTable)
         .where(
@@ -43,23 +42,25 @@ export function createSyncMetadataRepository(
             eq(syncMetadataTable.connectionId, connectionId),
             eq(syncMetadataTable.metadataType, metadataType)
           )
-        )
-        .get();
+        );
+
+      const existing = existingResults[0];
 
       if (existing) {
-        db.update(syncMetadataTable)
+        await db
+          .update(syncMetadataTable)
           .set({
             data,
             lastSyncAt,
           })
-          .where(eq(syncMetadataTable.id, existing.id))
-          .run();
+          .where(eq(syncMetadataTable.id, existing.id));
 
-        const updated = db
+        const updatedResults = await db
           .select()
           .from(syncMetadataTable)
-          .where(eq(syncMetadataTable.id, existing.id))
-          .get();
+          .where(eq(syncMetadataTable.id, existing.id));
+
+        const updated = updatedResults[0];
 
         if (!updated) {
           throw new Error(
@@ -80,13 +81,14 @@ export function createSyncMetadataRepository(
         lastSyncAt,
       };
 
-      db.insert(syncMetadataTable).values(newMetadata).run();
+      await db.insert(syncMetadataTable).values(newMetadata);
 
-      const created = db
+      const createdResults = await db
         .select()
         .from(syncMetadataTable)
-        .where(eq(syncMetadataTable.id, id))
-        .get();
+        .where(eq(syncMetadataTable.id, id));
+
+      const created = createdResults[0];
 
       if (!created) {
         throw new Error(`Failed to retrieve created sync metadata with id ${id}`);
@@ -95,13 +97,12 @@ export function createSyncMetadataRepository(
       return created;
     },
 
-    deleteByConnectionId(connectionId: string): boolean {
-      const result = db
+    async deleteByConnectionId(connectionId: string): Promise<boolean> {
+      await db
         .delete(syncMetadataTable)
-        .where(eq(syncMetadataTable.connectionId, connectionId))
-        .run();
+        .where(eq(syncMetadataTable.connectionId, connectionId));
 
-      return result.changes > 0;
+      return true;
     },
   };
 }
