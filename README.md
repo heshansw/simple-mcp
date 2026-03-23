@@ -33,6 +33,7 @@ A React 19 web UI for managing the MCP server:
 - **Agents** — Configure pre-built agents (Jira Triage, PR Review, Code Search, Sprint Planning)
 - **Settings** — Server configuration
 
+
 ### Pre-built Agents
 
 - **Jira Triage** — Automated issue triage and classification
@@ -54,7 +55,7 @@ A React 19 web UI for managing the MCP server:
 ### 1. Clone and install
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/heshansw/simple-mcp
 cd claude_mcp
 pnpm install
 ```
