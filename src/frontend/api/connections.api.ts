@@ -152,3 +152,15 @@ export function useTestConnection() {
     },
   });
 }
+
+// Google Calendar OAuth
+
+export function useGoogleCalendarOAuthStart() {
+  return useMutation({
+    mutationFn: async () => {
+      return apiClient.get<{ url: string }>(
+        "/connections/google-calendar/oauth/start"
+      );
+    },
+  });
+}
