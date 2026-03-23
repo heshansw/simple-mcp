@@ -81,3 +81,74 @@ export function useDeleteConnection() {
     },
   });
 }
+
+// Credentials hooks
+
+export function useCredentialStatus(connectionId: string) {
+  return useQuery({
+    queryKey: [...connectionKeys.detail(connectionId), "credentials"] as const,
+    queryFn: async () => {
+      return apiClient.get<{ hasCredentials: boolean }>(
+        `/connections/${connectionId}/credentials/status`
+      );
+    },
+  });
+}
+
+export function useStoreCredentials() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ connectionId, token }: { connectionId: string; token: string }) => {
+      return apiClient.post<{ success: boolean; status: string }>(
+        `/connections/${connectionId}/credentials`,
+        { token }
+      );
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: connectionKeys.list(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: connectionKeys.detail(variables.connectionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...connectionKeys.detail(variables.connectionId), "credentials"] as const,
+      });
+    },
+  });
+}
+
+export function useRemoveCredentials() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (connectionId: string) => {
+      return apiClient.del<{ success: boolean }>(
+        `/connections/${connectionId}/credentials`
+      );
+    },
+    onSuccess: (_data, connectionId) => {
+      queryClient.invalidateQueries({
+        queryKey: connectionKeys.list(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: connectionKeys.detail(connectionId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...connectionKeys.detail(connectionId), "credentials"] as const,
+      });
+    },
+  });
+}
+
+export function useTestConnection() {
+  return useMutation({
+    mutationFn: async (connectionId: string) => {
+      return apiClient.post<{ status: string }>(
+        `/connections/${connectionId}/test`,
+        {}
+      );
+    },
+  });
+}

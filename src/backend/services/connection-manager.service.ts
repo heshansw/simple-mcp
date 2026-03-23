@@ -25,14 +25,14 @@ export interface ConnectionManagerDependencies {
 }
 
 export interface ConnectionManagerService {
-  getAllConnections(): Result<Connection[], DomainError>;
-  getConnection(id: string): Result<Connection, DomainError>;
+  getAllConnections(): Promise<Result<Connection[], DomainError>>;
+  getConnection(id: string): Promise<Result<Connection, DomainError>>;
   createConnection(data: {
     name: string;
     integrationType: "jira" | "github";
     baseUrl?: string;
     authMethod: "oauth2" | "api_token" | "personal_access_token";
-  }): Result<Connection, DomainError>;
+  }): Promise<Result<Connection, DomainError>>;
   updateConnection(
     id: string,
     data: {
@@ -40,11 +40,11 @@ export interface ConnectionManagerService {
       baseUrl?: string;
       status?: "connected" | "disconnected" | "error" | "refreshing";
     }
-  ): Result<Connection, DomainError>;
-  deleteConnection(id: string): Result<void, DomainError>;
-  testConnection(id: string): Result<{ status: string }, DomainError>;
-  storeCredentials(connectionId: string, plaintext: string): Result<void, DomainError>;
-  getDecryptedCredentials(connectionId: string): Result<string, DomainError>;
+  ): Promise<Result<Connection, DomainError>>;
+  deleteConnection(id: string): Promise<Result<void, DomainError>>;
+  testConnection(id: string): Promise<Result<{ status: string }, DomainError>>;
+  storeCredentials(connectionId: string, plaintext: string): Promise<Result<void, DomainError>>;
+  getDecryptedCredentials(connectionId: string): Promise<Result<string, DomainError>>;
   getConnectionStatuses(): Promise<Record<string, { status: string }>>;
   listConnections(): Promise<Array<{
     id: string;
@@ -52,7 +52,7 @@ export interface ConnectionManagerService {
     type: string;
     status: string;
   }>>;
-  hasConnection(integration: string): boolean;
+  hasConnection(integration: string): Promise<boolean>;
   hasTool(toolName: string): boolean;
 }
 
@@ -62,9 +62,9 @@ export function createConnectionManagerService(
   const { connectionsRepo, credentialsRepo, encryptionService, logger } = deps;
 
   return {
-    getAllConnections(): Result<Connection[], DomainError> {
+    async getAllConnections(): Promise<Result<Connection[], DomainError>> {
       try {
-        const connections = connectionsRepo.findAll();
+        const connections = await connectionsRepo.findAll();
         return ok(connections);
       } catch (error) {
         logger.error(
@@ -77,9 +77,9 @@ export function createConnectionManagerService(
       }
     },
 
-    getConnection(id: string): Result<Connection, DomainError> {
+    async getConnection(id: string): Promise<Result<Connection, DomainError>> {
       try {
-        const connection = connectionsRepo.findById(id);
+        const connection = await connectionsRepo.findById(id);
         if (!connection) {
           return err(notFoundError("Connection", id));
         }
@@ -92,12 +92,12 @@ export function createConnectionManagerService(
       }
     },
 
-    createConnection(data: {
+    async createConnection(data: {
       name: string;
       integrationType: "jira" | "github";
       baseUrl?: string;
       authMethod: "oauth2" | "api_token" | "personal_access_token";
-    }): Result<Connection, DomainError> {
+    }): Promise<Result<Connection, DomainError>> {
       try {
         // Validate input
         if (!data.name || data.name.trim().length === 0) {
@@ -127,7 +127,7 @@ export function createConnectionManagerService(
           );
         }
 
-        const created = connectionsRepo.create({
+        const created = await connectionsRepo.create({
           name: data.name,
           integrationType: data.integrationType,
           baseUrl: data.baseUrl || "",
@@ -144,16 +144,16 @@ export function createConnectionManagerService(
       }
     },
 
-    updateConnection(
+    async updateConnection(
       id: string,
       data: {
         name?: string;
         baseUrl?: string;
         status?: "connected" | "disconnected" | "error" | "refreshing";
       }
-    ): Result<Connection, DomainError> {
+    ): Promise<Result<Connection, DomainError>> {
       try {
-        const existing = connectionsRepo.findById(id);
+        const existing = await connectionsRepo.findById(id);
         if (!existing) {
           return err(notFoundError("Connection", id));
         }
@@ -175,7 +175,7 @@ export function createConnectionManagerService(
           updateData.status = data.status;
         }
 
-        const updated = connectionsRepo.update(id, updateData);
+        const updated = await connectionsRepo.update(id, updateData);
         if (!updated) {
           return err(notFoundError("Connection", id));
         }
@@ -189,18 +189,18 @@ export function createConnectionManagerService(
       }
     },
 
-    deleteConnection(id: string): Result<void, DomainError> {
+    async deleteConnection(id: string): Promise<Result<void, DomainError>> {
       try {
-        const existing = connectionsRepo.findById(id);
+        const existing = await connectionsRepo.findById(id);
         if (!existing) {
           return err(notFoundError("Connection", id));
         }
 
         // Delete associated credentials first
-        credentialsRepo.deleteByConnectionId(id);
+        await credentialsRepo.deleteByConnectionId(id);
 
         // Delete the connection
-        const deleted = connectionsRepo.delete(id);
+        const deleted = await connectionsRepo.delete(id);
         if (!deleted) {
           return err(notFoundError("Connection", id));
         }
@@ -214,9 +214,9 @@ export function createConnectionManagerService(
       }
     },
 
-    testConnection(id: string): Result<{ status: string }, DomainError> {
+    async testConnection(id: string): Promise<Result<{ status: string }, DomainError>> {
       try {
-        const connection = connectionsRepo.findById(id);
+        const connection = await connectionsRepo.findById(id);
         if (!connection) {
           return err(notFoundError("Connection", id));
         }
@@ -232,12 +232,12 @@ export function createConnectionManagerService(
       }
     },
 
-    storeCredentials(
+    async storeCredentials(
       connectionId: string,
       plaintext: string
-    ): Result<void, DomainError> {
+    ): Promise<Result<void, DomainError>> {
       try {
-        const connection = connectionsRepo.findById(connectionId);
+        const connection = await connectionsRepo.findById(connectionId);
         if (!connection) {
           return err(notFoundError("Connection", connectionId));
         }
@@ -250,15 +250,15 @@ export function createConnectionManagerService(
         const { encryptedData, iv } = encryptionService.encrypt(plaintext);
 
         // Check if credentials already exist for this connection
-        const existing = credentialsRepo.findByConnectionId(connectionId);
+        const existing = await credentialsRepo.findByConnectionId(connectionId);
 
         if (existing) {
-          credentialsRepo.update(existing.id, {
+          await credentialsRepo.update(existing.id, {
             encryptedData,
             iv,
           });
         } else {
-          credentialsRepo.create({
+          await credentialsRepo.create({
             connectionId,
             encryptedData,
             iv,
@@ -277,14 +277,14 @@ export function createConnectionManagerService(
       }
     },
 
-    getDecryptedCredentials(connectionId: string): Result<string, DomainError> {
+    async getDecryptedCredentials(connectionId: string): Promise<Result<string, DomainError>> {
       try {
-        const connection = connectionsRepo.findById(connectionId);
+        const connection = await connectionsRepo.findById(connectionId);
         if (!connection) {
           return err(notFoundError("Connection", connectionId));
         }
 
-        const credential = credentialsRepo.findByConnectionId(connectionId);
+        const credential = await credentialsRepo.findByConnectionId(connectionId);
         if (!credential) {
           return err(notFoundError("Credential", connectionId));
         }
@@ -312,7 +312,7 @@ export function createConnectionManagerService(
 
     async getConnectionStatuses(): Promise<Record<string, { status: string }>> {
       try {
-        const connections = connectionsRepo.findAll();
+        const connections = await connectionsRepo.findAll();
         const statuses: Record<string, { status: string }> = {};
 
         for (const connection of connections) {
@@ -336,7 +336,7 @@ export function createConnectionManagerService(
       status: string;
     }>> {
       try {
-        const connections = connectionsRepo.findAll();
+        const connections = await connectionsRepo.findAll();
         return connections.map((conn) => ({
           id: conn.id,
           name: conn.name,
@@ -352,9 +352,9 @@ export function createConnectionManagerService(
       }
     },
 
-    hasConnection(integration: string): boolean {
+    async hasConnection(integration: string): Promise<boolean> {
       try {
-        const connections = connectionsRepo.findAll();
+        const connections = await connectionsRepo.findAll();
         return connections.some(
           (conn) => conn.integrationType === integration && conn.status === "connected"
         );

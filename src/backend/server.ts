@@ -12,6 +12,7 @@ import { createCredentialsRepository } from "./db/repositories/credentials.repos
 import { createAgentConfigsRepository } from "./db/repositories/agent-configs.repository.js";
 import { createServerSettingsRepository } from "./db/repositories/server-settings.repository.js";
 import { createSyncMetadataRepository } from "./db/repositories/sync-metadata.repository.js";
+import { createReviewsRepository } from "./db/repositories/reviews.repository.js";
 
 import { createEncryptionService } from "./services/encryption.service.js";
 import { createConnectionManagerService } from "./services/connection-manager.service.js";
@@ -40,13 +41,15 @@ import { registerTransitionIssueTool } from "./tools/jira/transition-issue.tool.
 import { registerListPrsTool } from "./tools/github/list-prs.tool.js";
 import { registerReviewPrTool } from "./tools/github/review-pr.tool.js";
 import { registerSearchCodeTool } from "./tools/github/search-code.tool.js";
+import { registerGetPrDiffTool } from "./tools/github/get-pr-diff.tool.js";
+import { registerGetMyPrsTool } from "./tools/github/get-my-prs.tool.js";
 import { registerHealthCheckTool } from "./tools/system/health-check.tool.js";
 import { registerListConnectionsTool } from "./tools/system/list-connections.tool.js";
 
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
 
-import { isErr } from "@shared/result.js";
+import { isErr, domainErrorMessage } from "@shared/result.js";
 import type { MaintenanceScheduler } from "./maintenance/scheduler.js";
 
 export interface ServerComponents {
@@ -63,8 +66,10 @@ export async function createServer(
   logger.info({ config }, "Initializing server");
 
   // Backup and create database
+  console.error("[startup] Creating database...");
   backupDatabase(config.CLAUDE_MCP_DB_PATH);
   const db = await createDatabase(config.CLAUDE_MCP_DB_PATH);
+  console.error("[startup] Database created");
   logger.info({ path: config.CLAUDE_MCP_DB_PATH }, "Database initialized");
 
   // Create repositories
@@ -72,6 +77,7 @@ export async function createServer(
   const credentialsRepo = createCredentialsRepository(db);
   const agentConfigsRepo = createAgentConfigsRepository(db);
   const serverSettingsRepo = createServerSettingsRepository(db);
+  const reviewsRepo = createReviewsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -86,31 +92,78 @@ export async function createServer(
     logger,
   });
 
-  const jiraService = createJiraService({ logger });
-  const githubService = createGitHubService({ logger });
+  const jiraService = createJiraService({
+    logger,
+    getConnectionInfo: async () => {
+      const allConns = await connectionsRepo.findAll();
+      const jiraConn = allConns.find(
+        (c) => c.integrationType === "jira" && c.status === "connected"
+      );
+      if (!jiraConn) return null;
+      const cred = await credentialsRepo.findByConnectionId(jiraConn.id);
+      if (!cred) return null;
+      try {
+        const raw = encryptionService.decrypt(cred.encryptedData, cred.iv);
+        // Credentials are stored as JSON: { email, apiToken }
+        const parsed = JSON.parse(raw) as { email?: string; apiToken?: string };
+        if (!parsed.email || !parsed.apiToken) return null;
+        return {
+          siteUrl: jiraConn.baseUrl,
+          credentials: { email: parsed.email, apiToken: parsed.apiToken },
+        };
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  // GitHub service resolves its token from the first connected GitHub connection
+  // that actually has stored credentials (skip placeholder connections like "Claude (Local)")
+  const githubService = createGitHubService({
+    logger,
+    getToken: async () => {
+      const allConns = await connectionsRepo.findAll();
+      const githubConns = allConns.filter(
+        (c) => c.integrationType === "github" && c.status === "connected"
+      );
+      for (const conn of githubConns) {
+        const cred = await credentialsRepo.findByConnectionId(conn.id);
+        if (!cred) continue;
+        try {
+          const token = encryptionService.decrypt(cred.encryptedData, cred.iv);
+          if (token) return token;
+        } catch {
+          continue;
+        }
+      }
+      return null;
+    },
+  });
 
   // Create MCP server
+  console.error("[startup] Creating MCP server...");
   const mcpServer = new McpServer({
     name: "simple-mcp",
     version: "0.1.0",
   });
+  console.error("[startup] MCP server created");
 
-  // Register tools
-  const toolDeps = {
-    jiraService,
-    githubService,
-    connectionManager,
-    logger,
-  } as any;
+  // Register tools — GitHub tools use the new service interface directly
+  const githubToolDeps = { githubService, logger };
+  const jiraToolDeps = { jiraService, connectionManager, logger };
 
-  registerSearchIssuesTool(mcpServer, toolDeps);
-  registerCreateIssueTool(mcpServer, toolDeps);
-  registerTransitionIssueTool(mcpServer, toolDeps);
-  registerListPrsTool(mcpServer, toolDeps);
-  registerReviewPrTool(mcpServer, toolDeps);
-  registerSearchCodeTool(mcpServer, toolDeps);
-  registerHealthCheckTool(mcpServer, toolDeps);
-  registerListConnectionsTool(mcpServer, toolDeps);
+  console.error("[startup] Registering tools...");
+  registerSearchIssuesTool(mcpServer, jiraToolDeps);
+  registerCreateIssueTool(mcpServer, jiraToolDeps);
+  registerTransitionIssueTool(mcpServer, jiraToolDeps);
+  registerListPrsTool(mcpServer, githubToolDeps);
+  registerReviewPrTool(mcpServer, { ...githubToolDeps, reviewsRepo });
+  registerSearchCodeTool(mcpServer, githubToolDeps);
+  registerGetPrDiffTool(mcpServer, { ...githubToolDeps, reviewsRepo });
+  registerGetMyPrsTool(mcpServer, githubToolDeps);
+  registerHealthCheckTool(mcpServer, { logger, connectionManager } as any);
+  registerListConnectionsTool(mcpServer, { logger, connectionManager } as any);
+  console.error("[startup] Tools registered");
 
   logger.info("All MCP tools registered");
 
@@ -155,17 +208,17 @@ export async function createServer(
   });
 
   // Connections API
-  httpApp.get("/api/connections", (c) => {
-    const result = connectionManager.getAllConnections();
+  httpApp.get("/api/connections", async (c) => {
+    const result = await connectionManager.getAllConnections();
     if (isErr(result)) {
       throw result.error;
     }
-    return c.json({ connections: result.value });
+    return c.json(result.value);
   });
 
   httpApp.post("/api/connections", async (c) => {
     const body = await c.req.json();
-    const result = connectionManager.createConnection({
+    const result = await connectionManager.createConnection({
       name: body.name,
       integrationType: body.integrationType,
       baseUrl: body.baseUrl,
@@ -174,22 +227,76 @@ export async function createServer(
     if (isErr(result)) {
       throw result.error;
     }
-    return c.json({ connection: result.value }, { status: 201 });
+    return c.json(result.value, { status: 201 });
   });
 
-  httpApp.get("/api/connections/:id", (c) => {
+  // Credentials sub-routes MUST be registered before /api/connections/:id
+  // to avoid the wildcard :id from swallowing "credentials" as an id value
+  httpApp.post("/api/connections/:id/credentials", async (c) => {
     const id = c.req.param("id");
-    const result = connectionManager.getConnection(id);
+    const body = await c.req.json();
+    const token = body.token || body.accessToken;
+    if (!token || typeof token !== "string") {
+      return c.json({ error: "token is required" }, { status: 400 });
+    }
+    const result = await connectionManager.storeCredentials(id, token);
     if (isErr(result)) {
       throw result.error;
     }
-    return c.json({ connection: result.value });
+    // After storing credentials, mark connection as connected
+    const updateResult = await connectionManager.updateConnection(id, { status: "connected" });
+    if (isErr(updateResult)) {
+      throw updateResult.error;
+    }
+    return c.json({ success: true, status: "connected" });
+  });
+
+  httpApp.get("/api/connections/:id/credentials/status", async (c) => {
+    const id = c.req.param("id");
+    const result = await connectionManager.getDecryptedCredentials(id);
+    if (isErr(result)) {
+      return c.json({ hasCredentials: false });
+    }
+    return c.json({ hasCredentials: true });
+  });
+
+  httpApp.delete("/api/connections/:id/credentials", async (c) => {
+    const id = c.req.param("id");
+    try {
+      const existing = await credentialsRepo.findByConnectionId(id);
+      if (existing) {
+        await credentialsRepo.deleteByConnectionId(id);
+      }
+      await connectionManager.updateConnection(id, { status: "disconnected" });
+    } catch (error) {
+      logger.error({ error, id }, "Failed to remove credentials");
+    }
+    return c.json({ success: true });
+  });
+
+  httpApp.post("/api/connections/:id/test", async (c) => {
+    const id = c.req.param("id");
+    const result = await connectionManager.testConnection(id);
+    if (isErr(result)) {
+      throw result.error;
+    }
+    return c.json(result.value);
+  });
+
+  // Generic connection CRUD routes (after specific sub-routes)
+  httpApp.get("/api/connections/:id", async (c) => {
+    const id = c.req.param("id");
+    const result = await connectionManager.getConnection(id);
+    if (isErr(result)) {
+      throw result.error;
+    }
+    return c.json(result.value);
   });
 
   httpApp.put("/api/connections/:id", async (c) => {
     const id = c.req.param("id");
     const body = await c.req.json();
-    const result = connectionManager.updateConnection(id, {
+    const result = await connectionManager.updateConnection(id, {
       name: body.name,
       baseUrl: body.baseUrl,
       status: body.status,
@@ -197,29 +304,133 @@ export async function createServer(
     if (isErr(result)) {
       throw result.error;
     }
-    return c.json({ connection: result.value });
+    return c.json(result.value);
   });
 
-  httpApp.delete("/api/connections/:id", (c) => {
+  httpApp.delete("/api/connections/:id", async (c) => {
     const id = c.req.param("id");
-    const result = connectionManager.deleteConnection(id);
+    const result = await connectionManager.deleteConnection(id);
     if (isErr(result)) {
       throw result.error;
     }
     return c.json({ success: true });
   });
 
+  // Helper to convert agent definition to JSON-safe object
+  // Strips Zod schema instances (which contain circular refs and methods)
+  function serializeAgent(agent: ReturnType<typeof agentRegistry.getAll>[number]) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { configSchema, ...rest } = agent;
+    return rest;
+  }
+
   // Agents API
-  httpApp.get("/api/agents", (c) => {
+  // Specific named routes FIRST, then wildcard :id routes
+  httpApp.get("/api/agents", (_c) => {
     const agents = agentRegistry.getAll();
-    const enabledAgents = agents.filter((agent) => {
-      const config = agentConfigsRepo.findByAgentId(agent.id);
-      return config?.enabled ?? true;
-    });
+    return _c.json(agents.map(serializeAgent));
+  });
+
+  // ── Reviews API ──────────────────────────────────────────────────────
+
+  // GET /api/reviews — list all reviews (most recent first)
+  httpApp.get("/api/reviews", async (c) => {
+    const limit = Number(c.req.query("limit") ?? "100");
+    const reviews = await reviewsRepo.findAll(limit);
+    return c.json(reviews);
+  });
+
+  // GET /api/reviews/stats — aggregate insights
+  httpApp.get("/api/reviews/stats", async (c) => {
+    const stats = await reviewsRepo.getStats();
+    return c.json(stats);
+  });
+
+  // GET /api/reviews/in-progress — reviews currently being analyzed by Claude
+  httpApp.get("/api/reviews/in-progress", async (c) => {
+    const inProgress = await reviewsRepo.findInProgress();
+    return c.json(inProgress);
+  });
+
+  // ── My PRs dashboard endpoints ──────────────────────────────────────
+
+  // Get the authenticated GitHub user
+  httpApp.get("/api/github/me", async (c) => {
+    const result = await githubService.getAuthenticatedUser();
+    if (isErr(result)) {
+      return c.json({ error: domainErrorMessage(result.error) }, { status: 502 });
+    }
+    return c.json(result.value);
+  });
+
+  // PRs assigned to me
+  httpApp.get("/api/github/me/assigned", async (c) => {
+    const result = await githubService.getMyAssignedPRs();
+    if (isErr(result)) {
+      return c.json({ error: domainErrorMessage(result.error) }, { status: 502 });
+    }
+    return c.json(result.value);
+  });
+
+  // PRs where my review is requested
+  httpApp.get("/api/github/me/review-requested", async (c) => {
+    const result = await githubService.getMyReviewRequests();
+    if (isErr(result)) {
+      return c.json({ error: domainErrorMessage(result.error) }, { status: 502 });
+    }
+    return c.json(result.value);
+  });
+
+  // PRs I created
+  httpApp.get("/api/github/me/created", async (c) => {
+    const result = await githubService.getMyCreatedPRs();
+    if (isErr(result)) {
+      return c.json({ error: domainErrorMessage(result.error) }, { status: 502 });
+    }
+    return c.json(result.value);
+  });
+
+  // All my PRs in one combined response
+  httpApp.get("/api/github/me/dashboard", async (c) => {
+    const [assignedResult, reviewResult, createdResult, userResult] = await Promise.all([
+      githubService.getMyAssignedPRs(),
+      githubService.getMyReviewRequests(),
+      githubService.getMyCreatedPRs(),
+      githubService.getAuthenticatedUser(),
+    ]);
+
     return c.json({
-      agents,
-      enabledCount: enabledAgents.length,
+      user: isErr(userResult) ? null : userResult.value,
+      assigned: isErr(assignedResult) ? [] : assignedResult.value,
+      reviewRequested: isErr(reviewResult) ? [] : reviewResult.value,
+      created: isErr(createdResult) ? [] : createdResult.value,
     });
+  });
+
+  // Generic agent routes (wildcard :id — MUST come after named routes above)
+  httpApp.get("/api/agents/:id/config", async (c) => {
+    const id = c.req.param("id");
+    const agentConfig = await agentConfigsRepo.findByAgentId(id);
+    if (!agentConfig) {
+      return c.json({
+        agentId: id,
+        enabled: true,
+        parameterOverrides: {},
+        linkedConnectionIds: [],
+      });
+    }
+    return c.json(agentConfig);
+  });
+
+  httpApp.put("/api/agents/:id/config", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    const updated = await agentConfigsRepo.upsert(id, {
+      enabled: body.enabled ?? true,
+      parameterOverrides: body.parameterOverrides ?? {},
+      linkedConnectionIds: body.linkedConnectionIds ?? [],
+    });
+    return c.json(updated);
   });
 
   httpApp.get("/api/agents/:id", (c) => {
@@ -232,31 +443,40 @@ export async function createServer(
         id,
       };
     }
-    return c.json({ agent });
-  });
-
-  httpApp.put("/api/agents/:id/config", async (c) => {
-    const id = c.req.param("id");
-    const body = await c.req.json();
-    const updated = agentConfigsRepo.upsert(id, {
-      enabled: body.enabled ?? true,
-      parameterOverrides: body.parameterOverrides ?? undefined,
-      linkedConnectionIds: body.linkedConnectionIds ?? undefined,
-    });
-    return c.json({ config: updated });
+    return c.json(serializeAgent(agent));
   });
 
   // Server settings API
-  httpApp.get("/api/settings", (c) => {
-    const settings = serverSettingsRepo.getAll();
-    return c.json({ settings });
+  httpApp.get("/api/settings", async (c) => {
+    const settings = await serverSettingsRepo.getAll();
+    return c.json(settings);
   });
 
   httpApp.put("/api/settings", async (c) => {
     const body = await c.req.json();
-    const setting = serverSettingsRepo.set(body.key, body.value);
-    return c.json({ setting });
+    const setting = await serverSettingsRepo.set(body.key, body.value);
+    return c.json(setting);
   });
+
+  // Auto-create default Claude connection if it doesn't exist
+  try {
+    const existingConnections = await connectionsRepo.findAll();
+    const hasClaudeConnection = existingConnections.some(
+      (c) => c.name === "Claude (Local)" || c.integrationType === "claude" as string
+    );
+    if (!hasClaudeConnection) {
+      await connectionsRepo.create({
+        name: "Claude (Local)",
+        integrationType: "github", // default placeholder — acts as local MCP connection
+        baseUrl: `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}`,
+        authMethod: "api_token",
+        status: "connected",
+      });
+      logger.info("Auto-created default Claude (Local) connection");
+    }
+  } catch (error) {
+    logger.warn({ error }, "Failed to auto-create Claude connection (non-fatal)");
+  }
 
   // Create maintenance scheduler
   const scheduler = createMaintenanceScheduler({ logger });
@@ -276,20 +496,10 @@ export async function createServer(
     1 * 60 * 1000, // 1 minute
     async () => {
       logger.debug("Running health monitor task");
-      // TODO: Implement health monitoring logic
     }
   );
 
-  scheduler.registerTask(
-    "schema-sync",
-    30 * 60 * 1000, // 30 minutes
-    async () => {
-      logger.debug("Running schema sync task");
-      // TODO: Implement schema sync logic
-    }
-  );
-
-  logger.info("Maintenance scheduler configured with 3 tasks");
+  logger.info("Maintenance scheduler configured with 2 tasks");
 
   // Cleanup function
   const cleanup = async (): Promise<void> => {
@@ -309,24 +519,25 @@ export async function createServer(
 export async function startServer(config: EnvConfig): Promise<void> {
   const logger = createLogger(config.CLAUDE_MCP_LOG_LEVEL);
 
-  const { mcpServer, httpApp, scheduler, cleanup } = await createServer(config);
+  let components: ServerComponents;
+  try {
+    components = await createServer(config);
+  } catch (error) {
+    logger.error({ error }, "Failed to create server");
+    console.error("Server creation failed:", error);
+    throw error;
+  }
+
+  const { mcpServer, httpApp, scheduler, cleanup } = components;
 
   // Start maintenance scheduler
   scheduler.start();
   logger.info("Maintenance scheduler started");
 
-  // Connect MCP transport based on config
-  if (config.CLAUDE_MCP_TRANSPORT === "stdio") {
-    const transport = createStdioTransport();
-    await mcpServer.connect(transport);
-    logger.info("MCP server connected via stdio transport");
-  } else if (config.CLAUDE_MCP_TRANSPORT === "sse") {
-    const sseTransport = createSSETransport(httpApp);
-    sseTransport.setupRoutes();
-    logger.info("MCP server configured for SSE transport");
-  }
-
-  // Start HTTP server
+  // Start HTTP admin panel server.
+  // In stdio mode Claude Desktop may spawn this process concurrently with an
+  // existing instance. If the admin port is already bound, log a warning and
+  // continue — the MCP stdio transport works independently of the admin panel.
   const server = serve(
     {
       fetch: httpApp.fetch,
@@ -340,11 +551,44 @@ export async function startServer(config: EnvConfig): Promise<void> {
     }
   );
 
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      // Another instance already owns the admin port — this is expected when
+      // Claude Desktop spawns a second process during protocol negotiation.
+      // Warn and continue; the MCP tools are fully functional without it.
+      logger.warn(
+        { port: config.CLAUDE_MCP_ADMIN_PORT },
+        `Admin panel port ${config.CLAUDE_MCP_ADMIN_PORT} is already in use — skipping admin server for this instance`
+      );
+    } else {
+      logger.error({ error }, "HTTP server error — exiting");
+      process.exit(1);
+    }
+  });
+
+  // Connect MCP transport based on config
+  // NOTE: stdio transport takes over stdin/stdout, so it must start AFTER
+  // the HTTP server and should not be used when running alongside a dev
+  // server (e.g. `pnpm dev` via concurrently). Use SSE or HTTP transport
+  // for dev mode instead.
+  if (config.CLAUDE_MCP_TRANSPORT === "stdio") {
+    const transport = createStdioTransport();
+    await mcpServer.connect(transport);
+    logger.info("MCP server connected via stdio transport");
+  } else if (config.CLAUDE_MCP_TRANSPORT === "sse") {
+    const sseTransport = createSSETransport(httpApp);
+    sseTransport.setupRoutes();
+    logger.info("MCP server configured for SSE transport");
+  } else {
+    logger.info({ transport: config.CLAUDE_MCP_TRANSPORT }, "MCP transport configured");
+  }
+
   // Handle graceful shutdown
   const handleShutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, "Shutdown signal received");
     await cleanup();
-    server.close();
+    // server.close() is a no-op if the admin server never started (EADDRINUSE)
+    try { server.close(); } catch { /* already closed or never started */ }
     process.exit(0);
   };
 

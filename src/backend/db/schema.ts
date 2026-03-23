@@ -57,3 +57,26 @@ export const auditLogTable = sqliteTable("audit_log", {
   details: text("details").notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+export const reviewsTable = sqliteTable("reviews", {
+  id: text("id").primaryKey(),
+  owner: text("owner").notNull(),
+  repo: text("repo").notNull(),
+  prNumber: integer("pr_number").notNull(),
+  prTitle: text("pr_title").notNull().default(""),
+  prAuthor: text("pr_author").notNull().default(""),
+  status: text("status").notNull().default("in_progress"), // in_progress | completed
+  verdict: text("verdict").notNull().default(""), // APPROVE | REQUEST_CHANGES | COMMENT (set on completion)
+  inlineCommentCount: integer("inline_comment_count").notNull().default(0),
+  reviewBody: text("review_body").notNull().default(""),
+  filesChanged: integer("files_changed").notNull().default(0),
+  additions: integer("additions").notNull().default(0),
+  deletions: integer("deletions").notNull().default(0),
+  githubReviewId: integer("github_review_id"),
+  githubReviewUrl: text("github_review_url"),
+  inputTokensEstimate: integer("input_tokens_estimate"),
+  outputTokensEstimate: integer("output_tokens_estimate"),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull(),
+});

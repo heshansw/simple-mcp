@@ -5,6 +5,6 @@ export default defineConfig({
   out: "./src/backend/db/migrations",
   dialect: "sqlite",
   dbCredentials: {
-    url: process.env["CLAUDE_MCP_DB_PATH"] ?? "~/.simple-mcp/data.db",
+    url: `file:${process.env["CLAUDE_MCP_DB_PATH"] ?? "~/.claude-mcp/data.db"}`,
   },
 });

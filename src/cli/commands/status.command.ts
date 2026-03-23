@@ -12,23 +12,23 @@ export async function executeStatusCommand(): Promise<void> {
     ? 3101
     : envResult.value.CLAUDE_MCP_ADMIN_PORT;
 
-  console.log("Server Status");
-  console.log("=".repeat(50));
+  console.error("Server Status");
+  console.error("=".repeat(50));
 
   if (!pid) {
-    console.log("Status: Not running (no PID file)");
+    console.error("Status: Not running (no PID file)");
   } else if (running) {
-    console.log(`Status: Running`);
-    console.log(`PID: ${pid}`);
-    console.log(
+    console.error(`Status: Running`);
+    console.error(`PID: ${pid}`);
+    console.error(
       `Admin Panel: http://localhost:${adminPort}`
     );
   } else {
-    console.log(`Status: Not running (stale PID file: ${pid})`);
+    console.error(`Status: Not running (stale PID file: ${pid})`);
   }
 
-  console.log(`PID File: ${getPidDir()}/server.pid`);
-  console.log("=".repeat(50));
+  console.error(`PID File: ${getPidDir()}/server.pid`);
+  console.error("=".repeat(50));
 
   process.exit(running ? 0 : 1);
 }

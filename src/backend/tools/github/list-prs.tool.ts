@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { isErr } from "@shared/result.js";
+import type { GitHubService } from "../../services/github.service.js";
+import { isErr, domainErrorMessage } from "@shared/result.js";
 
 export const ListPrsInputSchema = z.object({
   owner: z.string().min(1, "Owner is required"),
@@ -14,22 +15,10 @@ export const ListPrsInputSchema = z.object({
 export type ListPrsInput = z.infer<typeof ListPrsInputSchema>;
 
 export type ListPrsToolDeps = {
-  githubService: {
-    listPullRequests(
-      owner: string,
-      repo: string,
-      state: "open" | "closed" | "all"
-    ): Promise<
-      | { _tag: "Ok"; value: unknown }
-      | { _tag: "Err"; error: { _tag: string; message: string } }
-    >;
-  };
-  connectionManager: {
-    getConnection(integrationName: string): unknown;
-  };
+  githubService: GitHubService;
   logger: {
-    info(msg: string, meta?: unknown): void;
-    error(msg: string, meta?: unknown): void;
+    info(obj: unknown, msg?: string): void;
+    error(obj: unknown, msg?: string): void;
   };
 };
 
@@ -44,41 +33,40 @@ export function registerListPrsTool(
     async (args) => {
       try {
         const input = ListPrsInputSchema.parse(args);
-        deps.logger.info("Listing GitHub pull requests", {
+
+        const result = await deps.githubService.listPullRequests({
           owner: input.owner,
           repo: input.repo,
           state: input.state,
         });
 
-        const result = await deps.githubService.listPullRequests(
-          input.owner,
-          input.repo,
-          input.state
-        );
-
         if (isErr(result)) {
-          const errorMsg = `Failed to list GitHub pull requests: ${result.error.message}`;
-          deps.logger.error(errorMsg);
           return {
-            content: [{ type: "text" as const, text: errorMsg }],
+            content: [{ type: "text" as const, text: `Failed to list PRs: ${domainErrorMessage(result.error)}` }],
             isError: true,
           };
         }
 
-        const successText = JSON.stringify(result.value, null, 2);
+        const prs = result.value;
+        const summary = prs.map((pr) => ({
+          number: pr.number,
+          title: pr.title,
+          author: pr.user.login,
+          state: pr.state,
+          draft: pr.draft,
+          url: pr.html_url,
+          created: pr.created_at,
+          head: pr.head.ref,
+          base: pr.base.ref,
+        }));
+
         return {
-          content: [{ type: "text" as const, text: successText }],
+          content: [{ type: "text" as const, text: JSON.stringify(summary, null, 2) }],
         };
       } catch (error) {
-        const errorMsg =
-          error instanceof Error ? error.message : String(error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
         return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Error listing GitHub pull requests: ${errorMsg}`,
-            },
-          ],
+          content: [{ type: "text" as const, text: `Error listing PRs: ${errorMsg}` }],
           isError: true,
         };
       }

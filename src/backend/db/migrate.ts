@@ -1,9 +1,9 @@
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import type { DrizzleDB } from "./client.js";
 
-export function runMigrations(db: DrizzleDB): void {
+export async function runMigrations(db: DrizzleDB): Promise<void> {
   try {
-    migrate(db, { migrationsFolder: "src/backend/db/migrations" });
+    await migrate(db, { migrationsFolder: "src/backend/db/migrations" });
   } catch (error) {
     // Handle first-run gracefully when no migrations folder exists
     if (

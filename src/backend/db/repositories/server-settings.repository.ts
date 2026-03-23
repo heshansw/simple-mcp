@@ -6,50 +6,51 @@ export type ServerSetting = typeof serverSettingsTable.$inferSelect;
 export type NewServerSetting = typeof serverSettingsTable.$inferInsert;
 
 export interface ServerSettingsRepository {
-  get(key: string): string | undefined;
-  set(key: string, value: string): ServerSetting;
-  upsert(key: string, value: string): ServerSetting;
-  findAll(): ServerSetting[];
-  getAll(): Record<string, string>;
+  get(key: string): Promise<string | undefined>;
+  set(key: string, value: string): Promise<ServerSetting>;
+  upsert(key: string, value: string): Promise<ServerSetting>;
+  findAll(): Promise<ServerSetting[]>;
+  getAll(): Promise<Record<string, string>>;
 }
 
 export function createServerSettingsRepository(
   db: DrizzleDB
 ): ServerSettingsRepository {
   return {
-    get(key: string): string | undefined {
-      const setting = db
+    async get(key: string): Promise<string | undefined> {
+      const results = await db
         .select()
         .from(serverSettingsTable)
-        .where(eq(serverSettingsTable.key, key))
-        .get();
+        .where(eq(serverSettingsTable.key, key));
 
-      return setting?.value;
+      return results[0]?.value;
     },
 
-    set(key: string, value: string): ServerSetting {
+    async set(key: string, value: string): Promise<ServerSetting> {
       const now = new Date().toISOString();
 
-      const existing = db
+      const existingResults = await db
         .select()
         .from(serverSettingsTable)
-        .where(eq(serverSettingsTable.key, key))
-        .get();
+        .where(eq(serverSettingsTable.key, key));
+
+      const existing = existingResults[0];
 
       if (existing) {
-        db.update(serverSettingsTable)
+        await db
+          .update(serverSettingsTable)
           .set({
             value,
             updatedAt: now,
           })
-          .where(eq(serverSettingsTable.key, key))
-          .run();
+          .where(eq(serverSettingsTable.key, key));
 
-        const updated = db
+        const updatedResults = await db
           .select()
           .from(serverSettingsTable)
-          .where(eq(serverSettingsTable.key, key))
-          .get();
+          .where(eq(serverSettingsTable.key, key));
+
+        const updated = updatedResults[0];
 
         if (!updated) {
           throw new Error(`Failed to retrieve updated setting for key ${key}`);
@@ -64,13 +65,14 @@ export function createServerSettingsRepository(
         updatedAt: now,
       };
 
-      db.insert(serverSettingsTable).values(newSetting).run();
+      await db.insert(serverSettingsTable).values(newSetting);
 
-      const created = db
+      const createdResults = await db
         .select()
         .from(serverSettingsTable)
-        .where(eq(serverSettingsTable.key, key))
-        .get();
+        .where(eq(serverSettingsTable.key, key));
+
+      const created = createdResults[0];
 
       if (!created) {
         throw new Error(`Failed to retrieve created setting for key ${key}`);
@@ -79,16 +81,16 @@ export function createServerSettingsRepository(
       return created;
     },
 
-    upsert(key: string, value: string): ServerSetting {
+    async upsert(key: string, value: string): Promise<ServerSetting> {
       return this.set(key, value);
     },
 
-    findAll(): ServerSetting[] {
-      return db.select().from(serverSettingsTable).all();
+    async findAll(): Promise<ServerSetting[]> {
+      return await db.select().from(serverSettingsTable);
     },
 
-    getAll(): Record<string, string> {
-      const settings = db.select().from(serverSettingsTable).all();
+    async getAll(): Promise<Record<string, string>> {
+      const settings = await db.select().from(serverSettingsTable);
 
       const result: Record<string, string> = {};
       for (const setting of settings) {

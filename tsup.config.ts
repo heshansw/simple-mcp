@@ -9,9 +9,7 @@ export default defineConfig({
   sourcemap: true,
   dts: false,
   splitting: false,
-  banner: {
-    js: "#!/usr/bin/env node",
-  },
-  external: ["better-sqlite3"],
-  noExternal: [/^(?!better-sqlite3)/],
+  // Don't bundle node_modules — they're always present at runtime
+  // Bundling CJS deps into ESM causes "Dynamic require" errors
+  external: [/node_modules/],
 });

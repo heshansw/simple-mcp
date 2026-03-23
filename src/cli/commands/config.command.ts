@@ -12,14 +12,14 @@ export async function executeConfigCommand(): Promise<void> {
 
   const url = `http://localhost:${adminPort}`;
 
-  console.log(`Opening admin panel: ${url}`);
+  console.error(`Opening admin panel: ${url}`);
 
   try {
     const cmd = getPlatformOpenCommand(url);
     execSync(cmd, { stdio: "ignore" });
   } catch (error) {
     console.error("Failed to open browser automatically");
-    console.log(`Please open this URL manually: ${url}`);
+    console.error(`Please open this URL manually: ${url}`);
     process.exit(1);
   }
 }
