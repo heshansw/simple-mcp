@@ -80,13 +80,20 @@ async function createTables(
       repo TEXT NOT NULL,
       pr_number INTEGER NOT NULL,
       pr_title TEXT NOT NULL DEFAULT '',
-      verdict TEXT NOT NULL,
+      pr_author TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'in_progress',
+      verdict TEXT NOT NULL DEFAULT '',
       inline_comment_count INTEGER NOT NULL DEFAULT 0,
       review_body TEXT NOT NULL DEFAULT '',
+      files_changed INTEGER NOT NULL DEFAULT 0,
+      additions INTEGER NOT NULL DEFAULT 0,
+      deletions INTEGER NOT NULL DEFAULT 0,
       github_review_id INTEGER,
       github_review_url TEXT,
       input_tokens_estimate INTEGER,
       output_tokens_estimate INTEGER,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
       created_at TEXT NOT NULL
     );
   `);

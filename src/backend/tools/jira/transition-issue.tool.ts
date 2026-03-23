@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isErr } from "@shared/result.js";
+import type { Result, DomainError } from "@shared/result.js";
 
 export const TransitionIssueInputSchema = z.object({
   issueKey: z.string().min(1, "Issue key is required"),
@@ -14,10 +15,7 @@ export type TransitionIssueToolDeps = {
     transitionIssue(
       issueKey: string,
       transitionId: string
-    ): Promise<
-      | { _tag: "Ok"; value: unknown }
-      | { _tag: "Err"; error: { _tag: string; message: string } }
-    >;
+    ): Promise<Result<unknown, DomainError>>;
   };
   connectionManager: {
     getConnection(integrationName: string): unknown;
@@ -49,7 +47,7 @@ export function registerTransitionIssueTool(
         );
 
         if (isErr(result)) {
-          const errorMsg = `Failed to transition Jira issue: ${result.error.message}`;
+          const errorMsg = `Failed to transition Jira issue: ${"message" in result.error ? result.error.message : String(result.error)}`;
           deps.logger.error(errorMsg);
           return {
             content: [{ type: "text" as const, text: errorMsg }],

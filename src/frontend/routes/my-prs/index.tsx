@@ -1,61 +1,9 @@
 import { useMyPRDashboard } from "@frontend/api/github.api";
 import type { GitHubPR } from "@frontend/api/github.api";
+import { useReviews, useReviewStats, useInProgressReviews } from "@frontend/api/reviews.api";
+import type { Review } from "@frontend/api/reviews.api";
 import { LoadingSpinner } from "@frontend/components/loading-spinner";
 import { ErrorDisplay } from "@frontend/components/error-display";
-import { useQuery } from "@tanstack/react-query";
-
-// ── Review types ─────────────────────────────────────────────────────────────
-
-type Review = {
-  id: string;
-  owner: string;
-  repo: string;
-  prNumber: number;
-  prTitle: string;
-  verdict: "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
-  inlineCommentCount: number;
-  githubReviewUrl: string | null;
-  inputTokensEstimate: number | null;
-  outputTokensEstimate: number | null;
-  createdAt: string;
-};
-
-type ReviewStats = {
-  totalReviews: number;
-  approvals: number;
-  changesRequested: number;
-  comments: number;
-  totalInlineComments: number;
-  totalInputTokensEstimate: number;
-  totalOutputTokensEstimate: number;
-  reviewsByRepo: Array<{ repo: string; owner: string; count: number }>;
-};
-
-// ── Hooks ────────────────────────────────────────────────────────────────────
-
-function useReviews() {
-  return useQuery<Review[]>({
-    queryKey: ["reviews"],
-    queryFn: async () => {
-      const res = await fetch("/api/reviews?limit=500");
-      if (!res.ok) throw new Error("Failed to fetch reviews");
-      return res.json() as Promise<Review[]>;
-    },
-    refetchInterval: 30_000,
-  });
-}
-
-function useReviewStats() {
-  return useQuery<ReviewStats>({
-    queryKey: ["reviews", "stats"],
-    queryFn: async () => {
-      const res = await fetch("/api/reviews/stats");
-      if (!res.ok) throw new Error("Failed to fetch review stats");
-      return res.json() as Promise<ReviewStats>;
-    },
-    refetchInterval: 30_000,
-  });
-}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -118,19 +66,17 @@ function findReviewForPR(
 function ReviewBadge({ review }: { review: Review | undefined }) {
   if (!review) {
     return (
-      <span
-        style={{
-          display: "inline-block",
-          padding: "0.2rem 0.55rem",
-          borderRadius: "999px",
-          fontSize: "0.7rem",
-          fontWeight: "600",
-          color: "#9ca3af",
-          backgroundColor: "#f3f4f6",
-          border: "1px solid #e5e7eb",
-        }}
-      >
+      <span style={{ display: "inline-block", padding: "0.2rem 0.55rem", borderRadius: "999px", fontSize: "0.7rem", fontWeight: "600", color: "#9ca3af", backgroundColor: "#f3f4f6", border: "1px solid #e5e7eb" }}>
         Not Reviewed
+      </span>
+    );
+  }
+
+  if (review.status === "in_progress") {
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", padding: "0.2rem 0.55rem", borderRadius: "999px", fontSize: "0.7rem", fontWeight: "600", color: "#fff", backgroundColor: "#f59e0b" }}>
+        <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#fff", display: "inline-block", animation: "pulse 1.5s ease-in-out infinite" }} />
+        Analyzing...
       </span>
     );
   }
@@ -188,8 +134,8 @@ function PRCard({
         padding: "1rem 1.25rem",
         backgroundColor: "#fff",
         borderRadius: "0.375rem",
-        border: `1px solid ${review ? "#d1fae5" : "#e5e7eb"}`,
-        borderLeft: review ? `3px solid ${verdictColor(review.verdict)}` : "1px solid #e5e7eb",
+        border: `1px solid ${review ? (review.status === "in_progress" ? "#fde68a" : "#d1fae5") : "#e5e7eb"}`,
+        borderLeft: review ? `3px solid ${review.status === "in_progress" ? "#f59e0b" : verdictColor(review.verdict)}` : "1px solid #e5e7eb",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "flex-start",
@@ -384,6 +330,7 @@ function PRSection({
 export function MyPRsPage() {
   const { data, isLoading, error, refetch } = useMyPRDashboard();
   const { data: reviews } = useReviews();
+  const { data: inProgress } = useInProgressReviews();
   const { data: stats } = useReviewStats();
 
   if (isLoading) {
@@ -406,7 +353,8 @@ export function MyPRsPage() {
     created: [],
   };
 
-  const allReviews = reviews ?? [];
+  // Merge completed + in-progress reviews for PR-level lookup
+  const allReviews = [...(reviews ?? []), ...(inProgress ?? [])];
   const totalTokens = stats
     ? (stats.totalInputTokensEstimate ?? 0) + (stats.totalOutputTokensEstimate ?? 0)
     : 0;
@@ -450,7 +398,8 @@ export function MyPRsPage() {
             flexWrap: "wrap",
           }}
         >
-          <StatPill label="Reviews" value={stats.totalReviews} />
+          <StatPill label="Completed" value={stats.completedReviews} />
+          {stats.inProgressReviews > 0 && <StatPill label="In Progress" value={stats.inProgressReviews} color="#f59e0b" />}
           <StatPill label="Approved" value={stats.approvals} color="#16a34a" />
           <StatPill label="Changes" value={stats.changesRequested} color="#dc2626" />
           <StatPill label="Comments" value={stats.comments} color="#2563eb" />
@@ -483,6 +432,13 @@ export function MyPRsPage() {
         prs={created}
         reviews={allReviews}
       />
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   );
 }
