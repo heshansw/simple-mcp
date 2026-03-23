@@ -135,21 +135,43 @@ export function registerReviewPrTool(
         const outputTokensEstimate =
           input.outputTokensEstimate ?? Math.ceil(input.body.length / 4);
 
-        // Persist the review to the database for insights tracking
+        // Persist the review: complete an existing in-progress row, or create a new completed row
         try {
-          await deps.reviewsRepo.create({
-            owner: input.owner,
-            repo: input.repo,
-            prNumber: input.prNumber,
-            prTitle: input.prTitle ?? "",
-            verdict: input.event,
-            inlineCommentCount: commentCount,
-            reviewBody: input.body,
-            githubReviewId: review.id,
-            githubReviewUrl: review.html_url,
-            inputTokensEstimate: input.inputTokensEstimate ?? null,
-            outputTokensEstimate,
-          });
+          const completed = await deps.reviewsRepo.completeReview(
+            input.owner,
+            input.repo,
+            input.prNumber,
+            {
+              verdict: input.event,
+              inlineCommentCount: commentCount,
+              reviewBody: input.body,
+              githubReviewId: review.id,
+              githubReviewUrl: review.html_url,
+              outputTokensEstimate,
+            }
+          );
+
+          // If no in-progress row existed, create a completed one from scratch
+          if (!completed) {
+            await deps.reviewsRepo.createCompleted({
+              owner: input.owner,
+              repo: input.repo,
+              prNumber: input.prNumber,
+              prTitle: input.prTitle ?? "",
+              prAuthor: "",
+              verdict: input.event,
+              inlineCommentCount: commentCount,
+              reviewBody: input.body,
+              filesChanged: 0,
+              additions: 0,
+              deletions: 0,
+              githubReviewId: review.id,
+              githubReviewUrl: review.html_url,
+              inputTokensEstimate: input.inputTokensEstimate ?? null,
+              outputTokensEstimate,
+              completedAt: new Date().toISOString(),
+            });
+          }
         } catch (dbErr) {
           // Don't fail the tool call if DB write fails — the review was already posted
           deps.logger.error({ error: dbErr }, "Failed to persist review to DB");

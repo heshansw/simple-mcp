@@ -24,6 +24,12 @@ export const healthKeys = {
   status: () => [...healthKeys.all, "status"] as const,
 };
 
+export const reviewKeys = {
+  all: ["reviews"] as const,
+  list: () => [...reviewKeys.all, "list"] as const,
+  stats: () => [...reviewKeys.all, "stats"] as const,
+};
+
 export const githubKeys = {
   all: ["github"] as const,
   me: () => [...githubKeys.all, "me"] as const,

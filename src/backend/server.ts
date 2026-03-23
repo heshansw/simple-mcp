@@ -92,24 +92,51 @@ export async function createServer(
     logger,
   });
 
-  const jiraService = createJiraService({ logger });
+  const jiraService = createJiraService({
+    logger,
+    getConnectionInfo: async () => {
+      const allConns = await connectionsRepo.findAll();
+      const jiraConn = allConns.find(
+        (c) => c.integrationType === "jira" && c.status === "connected"
+      );
+      if (!jiraConn) return null;
+      const cred = await credentialsRepo.findByConnectionId(jiraConn.id);
+      if (!cred) return null;
+      try {
+        const raw = encryptionService.decrypt(cred.encryptedData, cred.iv);
+        // Credentials are stored as JSON: { email, apiToken }
+        const parsed = JSON.parse(raw) as { email?: string; apiToken?: string };
+        if (!parsed.email || !parsed.apiToken) return null;
+        return {
+          siteUrl: jiraConn.baseUrl,
+          credentials: { email: parsed.email, apiToken: parsed.apiToken },
+        };
+      } catch {
+        return null;
+      }
+    },
+  });
 
   // GitHub service resolves its token from the first connected GitHub connection
+  // that actually has stored credentials (skip placeholder connections like "Claude (Local)")
   const githubService = createGitHubService({
     logger,
     getToken: async () => {
       const allConns = await connectionsRepo.findAll();
-      const githubConn = allConns.find(
+      const githubConns = allConns.filter(
         (c) => c.integrationType === "github" && c.status === "connected"
       );
-      if (!githubConn) return null;
-      const cred = await credentialsRepo.findByConnectionId(githubConn.id);
-      if (!cred) return null;
-      try {
-        return encryptionService.decrypt(cred.encryptedData, cred.iv);
-      } catch {
-        return null;
+      for (const conn of githubConns) {
+        const cred = await credentialsRepo.findByConnectionId(conn.id);
+        if (!cred) continue;
+        try {
+          const token = encryptionService.decrypt(cred.encryptedData, cred.iv);
+          if (token) return token;
+        } catch {
+          continue;
+        }
       }
+      return null;
     },
   });
 
@@ -123,7 +150,7 @@ export async function createServer(
 
   // Register tools — GitHub tools use the new service interface directly
   const githubToolDeps = { githubService, logger };
-  const jiraToolDeps = { jiraService, connectionManager, logger } as any;
+  const jiraToolDeps = { jiraService, connectionManager, logger };
 
   console.error("[startup] Registering tools...");
   registerSearchIssuesTool(mcpServer, jiraToolDeps);
@@ -132,7 +159,7 @@ export async function createServer(
   registerListPrsTool(mcpServer, githubToolDeps);
   registerReviewPrTool(mcpServer, { ...githubToolDeps, reviewsRepo });
   registerSearchCodeTool(mcpServer, githubToolDeps);
-  registerGetPrDiffTool(mcpServer, githubToolDeps);
+  registerGetPrDiffTool(mcpServer, { ...githubToolDeps, reviewsRepo });
   registerGetMyPrsTool(mcpServer, githubToolDeps);
   registerHealthCheckTool(mcpServer, { logger, connectionManager } as any);
   registerListConnectionsTool(mcpServer, { logger, connectionManager } as any);
@@ -317,6 +344,12 @@ export async function createServer(
   httpApp.get("/api/reviews/stats", async (c) => {
     const stats = await reviewsRepo.getStats();
     return c.json(stats);
+  });
+
+  // GET /api/reviews/in-progress — reviews currently being analyzed by Claude
+  httpApp.get("/api/reviews/in-progress", async (c) => {
+    const inProgress = await reviewsRepo.findInProgress();
+    return c.json(inProgress);
   });
 
   // ── My PRs dashboard endpoints ──────────────────────────────────────

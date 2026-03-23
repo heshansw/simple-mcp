@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GitHubService } from "../../services/github.service.js";
+import type { ReviewsRepository } from "../../db/repositories/reviews.repository.js";
 import { isErr, domainErrorMessage } from "@shared/result.js";
 
 export const GetPrDiffInputSchema = z.object({
@@ -17,6 +18,7 @@ export type GetPrDiffInput = z.infer<typeof GetPrDiffInputSchema>;
 
 export type GetPrDiffToolDeps = {
   githubService: GitHubService;
+  reviewsRepo: ReviewsRepository;
   logger: {
     info(obj: unknown, msg?: string): void;
     error(obj: unknown, msg?: string): void;
@@ -80,6 +82,9 @@ export function registerGetPrDiffTool(
         const pr = prResult.value;
         const files = filesResult.value;
 
+        const totalAdditions = files.reduce((s, f) => s + f.additions, 0);
+        const totalDeletions = files.reduce((s, f) => s + f.deletions, 0);
+
         // Build comprehensive diff output for Claude to analyze
         const fileDiffs = files.map((f) => {
           const patch = f.patch ?? "(binary file or too large to display)";
@@ -107,10 +112,30 @@ export function registerGetPrDiffTool(
           "",
           pr.body || "(no description provided)",
           "",
-          `## Changed Files (${files.length} files, +${files.reduce((s, f) => s + f.additions, 0)} -${files.reduce((s, f) => s + f.deletions, 0)})`,
+          `## Changed Files (${files.length} files, +${totalAdditions} -${totalDeletions})`,
           "",
           ...fileDiffs,
         ].join("\n");
+
+        // Estimate input tokens (rough: chars / 4)
+        const inputTokensEstimate = Math.ceil(output.length / 4);
+
+        // Record an in-progress review in the DB
+        try {
+          await deps.reviewsRepo.createInProgress({
+            owner: input.owner,
+            repo: input.repo,
+            prNumber: input.prNumber,
+            prTitle: pr.title,
+            prAuthor: pr.user.login,
+            filesChanged: files.length,
+            additions: totalAdditions,
+            deletions: totalDeletions,
+            inputTokensEstimate,
+          });
+        } catch (dbErr) {
+          deps.logger.error({ error: dbErr }, "Failed to persist in-progress review");
+        }
 
         deps.logger.info(
           { owner: input.owner, repo: input.repo, prNumber: input.prNumber, fileCount: files.length },

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isErr } from "@shared/result.js";
+import type { Result, DomainError } from "@shared/result.js";
 
 export const SearchIssuesInputSchema = z.object({
   jql: z.string().min(1, "JQL query cannot be empty"),
@@ -14,10 +15,7 @@ export type SearchIssuesToolDeps = {
     searchIssues(
       jql: string,
       maxResults: number
-    ): Promise<
-      | { _tag: "Ok"; value: unknown }
-      | { _tag: "Err"; error: { _tag: string; message: string } }
-    >;
+    ): Promise<Result<unknown, DomainError>>;
   };
   connectionManager: {
     getConnection(integrationName: string): unknown;
@@ -47,7 +45,7 @@ export function registerSearchIssuesTool(
         );
 
         if (isErr(result)) {
-          const errorMsg = `Jira search failed: ${result.error.message}`;
+          const errorMsg = `Jira search failed: ${"message" in result.error ? result.error.message : String(result.error)}`;
           deps.logger.error(errorMsg);
           return {
             content: [{ type: "text" as const, text: errorMsg }],
