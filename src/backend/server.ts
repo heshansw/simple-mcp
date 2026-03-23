@@ -38,6 +38,8 @@ import { createSSETransport } from "./transports/sse.transport.js";
 import { registerSearchIssuesTool } from "./tools/jira/search-issues.tool.js";
 import { registerCreateIssueTool } from "./tools/jira/create-issue.tool.js";
 import { registerTransitionIssueTool } from "./tools/jira/transition-issue.tool.js";
+import { registerGetCommentsTool } from "./tools/jira/get-comments.tool.js";
+import { registerAddCommentTool } from "./tools/jira/add-comment.tool.js";
 import { registerListPrsTool } from "./tools/github/list-prs.tool.js";
 import { registerReviewPrTool } from "./tools/github/review-pr.tool.js";
 import { registerSearchCodeTool } from "./tools/github/search-code.tool.js";
@@ -156,6 +158,8 @@ export async function createServer(
   registerSearchIssuesTool(mcpServer, jiraToolDeps);
   registerCreateIssueTool(mcpServer, jiraToolDeps);
   registerTransitionIssueTool(mcpServer, jiraToolDeps);
+  registerGetCommentsTool(mcpServer, jiraToolDeps);
+  registerAddCommentTool(mcpServer, jiraToolDeps);
   registerListPrsTool(mcpServer, githubToolDeps);
   registerReviewPrTool(mcpServer, { ...githubToolDeps, reviewsRepo });
   registerSearchCodeTool(mcpServer, githubToolDeps);
