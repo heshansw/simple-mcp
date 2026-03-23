@@ -1,7 +1,8 @@
 # 2 — Google Calendar Integration Requirements
 
-> **Status:** Pending Implementation
+> **Status:** Implemented
 > **Created:** 2026-03-23
+> **Implemented:** 2026-03-23T22:42:18Z — PR [#4](https://github.com/heshansw/simple-mcp/pull/4)
 
 ---
 
