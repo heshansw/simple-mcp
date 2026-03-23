@@ -58,6 +58,14 @@ export const auditLogTable = sqliteTable("audit_log", {
   createdAt: text("created_at").notNull(),
 });
 
+export const oauthNoncesTable = sqliteTable("oauth_nonces", {
+  id: text("id").primaryKey(),
+  nonce: text("nonce").notNull().unique(),
+  provider: text("provider").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export const reviewsTable = sqliteTable("reviews", {
   id: text("id").primaryKey(),
   owner: text("owner").notNull(),
