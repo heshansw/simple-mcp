@@ -33,6 +33,19 @@ A React 19 web UI for managing the MCP server:
 - **Agents** — Configure pre-built agents (Jira Triage, PR Review, Code Search, Sprint Planning)
 - **Settings** — Server configuration
 
+### Screenshots
+#### Connections
+<img width="1725" height="956" alt="connections" src="https://github.com/user-attachments/assets/9cdcd3b0-4e5f-47ee-9008-bae0f10b7eb3" />
+
+#### My PRs
+<img width="1725" height="956" alt="my-prs" src="https://github.com/user-attachments/assets/4befe419-1180-4843-9aea-c4a7e8c22be6" />
+
+#### Review Insights
+<img width="1725" height="956" alt="review-insights" src="https://github.com/user-attachments/assets/a9a4c3cc-d787-4aa3-94ba-75b27eefae65" />
+
+#### Main Dashboard
+<img width="1725" height="956" alt="main-dashboard" src="https://github.com/user-attachments/assets/619533d7-29e0-431a-95cc-6d9cfebebc09" />
+
 
 ### Pre-built Agents
 
