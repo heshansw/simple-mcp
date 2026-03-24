@@ -47,6 +47,31 @@ export type JiraTransition = {
   to: { name: string; id: string };
 };
 
+export type JiraComment = {
+  id: string;
+  self: string;
+  body: unknown; // ADF document
+  author: {
+    accountId: string;
+    displayName: string;
+    emailAddress?: string;
+  };
+  created: string;
+  updated: string;
+};
+
+export type JiraCommentsResponse = {
+  comments: JiraComment[];
+  startAt: number;
+  maxResults: number;
+  total: number;
+};
+
+export type JiraAddCommentResponse = {
+  id: string;
+  self: string;
+};
+
 export type JiraProjectMetadata = {
   projectKey: string;
   projectName: string;
@@ -101,6 +126,17 @@ export interface JiraServiceResult {
   getProjectMetadata(
     projectKeys: string[]
   ): Promise<Result<JiraProjectMetadata[], DomainError>>;
+
+  getIssueComments(
+    issueKey: string,
+    startAt?: number,
+    maxResults?: number
+  ): Promise<Result<JiraCommentsResponse, DomainError>>;
+
+  addComment(
+    issueKey: string,
+    body: string
+  ): Promise<Result<JiraAddCommentResponse, DomainError>>;
 }
 
 // ── Implementation ─────────────────────────────────────────────────────
@@ -385,6 +421,78 @@ export function createJiraService(
         logger.error({ error }, "Failed to fetch Jira project metadata");
         return err(
           integrationError("jira", "Failed to fetch project metadata: unexpected error")
+        );
+      }
+    },
+
+    async getIssueComments(
+      issueKey: string,
+      startAt = 0,
+      maxResults = 50
+    ): Promise<Result<JiraCommentsResponse, DomainError>> {
+      try {
+        const connResult = await resolveConnection();
+        if (connResult._tag === "Err") return connResult;
+        const { siteUrl, auth } = connResult.value;
+
+        logger.debug({ issueKey, startAt, maxResults }, "Fetching Jira issue comments");
+
+        const params = new URLSearchParams({
+          startAt: String(startAt),
+          maxResults: String(maxResults),
+          orderBy: "-created",
+        });
+
+        return await jiraFetch<JiraCommentsResponse>(
+          siteUrl,
+          auth,
+          `/issue/${encodeURIComponent(issueKey)}/comment?${params.toString()}`,
+          { method: "GET" }
+        );
+      } catch (error) {
+        logger.error({ error, issueKey }, "Failed to fetch Jira issue comments");
+        return err(
+          integrationError("jira", "Failed to fetch comments: unexpected error")
+        );
+      }
+    },
+
+    async addComment(
+      issueKey: string,
+      body: string
+    ): Promise<Result<JiraAddCommentResponse, DomainError>> {
+      try {
+        const connResult = await resolveConnection();
+        if (connResult._tag === "Err") return connResult;
+        const { siteUrl, auth } = connResult.value;
+
+        logger.debug({ issueKey }, "Adding comment to Jira issue");
+
+        // Jira Cloud v3 requires ADF (Atlassian Document Format) for comment body
+        const adfBody = {
+          type: "doc",
+          version: 1,
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: body }],
+            },
+          ],
+        };
+
+        return await jiraFetch<JiraAddCommentResponse>(
+          siteUrl,
+          auth,
+          `/issue/${encodeURIComponent(issueKey)}/comment`,
+          {
+            method: "POST",
+            body: JSON.stringify({ body: adfBody }),
+          }
+        );
+      } catch (error) {
+        logger.error({ error, issueKey }, "Failed to add comment to Jira issue");
+        return err(
+          integrationError("jira", "Failed to add comment: unexpected error")
         );
       }
     },
