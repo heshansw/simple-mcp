@@ -51,6 +51,16 @@ export const EnvSchema = z
       .string()
       .optional()
       .describe("Anthropic API key for AI-powered PR reviews. Can also be stored as a Claude connection credential."),
+
+    GOOGLE_OAUTH_CLIENT_ID: z
+      .string()
+      .optional()
+      .describe("Google OAuth 2.0 client ID for Calendar integration"),
+
+    GOOGLE_OAUTH_CLIENT_SECRET: z
+      .string()
+      .optional()
+      .describe("Google OAuth 2.0 client secret for Calendar integration"),
   })
   .strip();
 

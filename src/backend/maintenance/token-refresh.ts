@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import type { CredentialsRepository } from "../db/repositories/credentials.repository.js";
 import type { EncryptionService } from "../services/encryption.service.js";
+import type { GoogleCalendarServiceResult, GoogleTokenBundle } from "../services/google-calendar.service.js";
 
 const TOKEN_EXPIRY_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes before actual expiry
 
@@ -17,6 +18,7 @@ export interface TokenRefreshDependencies {
   readonly credentialsRepo: CredentialsRepository;
   readonly encryptionService: EncryptionService;
   readonly logger: Logger;
+  readonly googleCalendarService?: GoogleCalendarServiceResult;
 }
 
 export function createTokenRefreshTask(
@@ -42,7 +44,7 @@ export function createTokenRefreshTask(
           continue;
         }
 
-        const credential = deps.credentialsRepo.findByConnectionId(
+        const credential = await deps.credentialsRepo.findByConnectionId(
           connection.id
         );
         if (!credential) {
@@ -54,14 +56,72 @@ export function createTokenRefreshTask(
           continue;
         }
 
-        // TODO: Implement actual OAuth2 token refresh logic
-        // Currently using placeholder logic: check if token is older than threshold
+        // Handle Google Calendar OAuth2 token refresh
+        if (
+          connection.integrationType === "google-calendar" &&
+          deps.googleCalendarService
+        ) {
+          try {
+            const raw = deps.encryptionService.decrypt(
+              credential.encryptedData,
+              credential.iv
+            );
+            const tokens = JSON.parse(raw) as GoogleTokenBundle;
+
+            if (!tokens.access_token || !tokens.refresh_token || !tokens.expiry) {
+              deps.logger.warn(
+                { connectionId: connection.id },
+                "Invalid Google token bundle, skipping"
+              );
+              skippedCount++;
+              continue;
+            }
+
+            const expiry = new Date(tokens.expiry).getTime();
+            const now = Date.now();
+
+            if (expiry - now < TOKEN_EXPIRY_THRESHOLD_MS) {
+              deps.logger.info(
+                { connectionId: connection.id, connectionName: connection.name },
+                "Google token near expiry, refreshing"
+              );
+
+              const result = await deps.googleCalendarService.refreshTokenIfNeeded(
+                connection.id,
+                tokens
+              );
+
+              if (result._tag === "Err") {
+                deps.logger.error(
+                  { connectionId: connection.id, error: result.error },
+                  "Google token refresh failed"
+                );
+                errorCount++;
+              } else {
+                refreshedCount++;
+              }
+            } else {
+              deps.logger.debug(
+                { connectionId: connection.id },
+                "Google token still valid"
+              );
+            }
+          } catch (parseError) {
+            deps.logger.error(
+              { connectionId: connection.id, error: parseError },
+              "Failed to parse Google token bundle"
+            );
+            errorCount++;
+          }
+          continue;
+        }
+
+        // Generic OAuth2 placeholder for other integrations
         const updatedAtTime = new Date(connection.updatedAt).getTime();
         const now = Date.now();
         const ageMs = now - updatedAtTime;
 
         if (ageMs > TOKEN_EXPIRY_THRESHOLD_MS) {
-          // Token would be considered near expiry
           deps.logger.debug(
             {
               connectionId: connection.id,
@@ -75,8 +135,6 @@ export function createTokenRefreshTask(
           // TODO: Call integration-specific refresh endpoint
           // - For Jira: POST /oauth/token with refresh_token grant
           // - For GitHub: POST https://github.com/login/oauth/access_token
-          // - Parse response, decrypt old credential, encrypt new token
-          // - Update credential via credentialsRepo.update()
 
           refreshedCount++;
         } else {

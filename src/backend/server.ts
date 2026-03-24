@@ -13,11 +13,14 @@ import { createAgentConfigsRepository } from "./db/repositories/agent-configs.re
 import { createServerSettingsRepository } from "./db/repositories/server-settings.repository.js";
 import { createSyncMetadataRepository } from "./db/repositories/sync-metadata.repository.js";
 import { createReviewsRepository } from "./db/repositories/reviews.repository.js";
+import { createOAuthNoncesRepository } from "./db/repositories/oauth-nonces.repository.js";
 
 import { createEncryptionService } from "./services/encryption.service.js";
 import { createConnectionManagerService } from "./services/connection-manager.service.js";
 import { createJiraService } from "./services/jira.service.js";
 import { createGitHubService } from "./services/github.service.js";
+import { createGoogleCalendarService } from "./services/google-calendar.service.js";
+import type { GoogleTokenBundle } from "./services/google-calendar.service.js";
 
 import { createLogger, loggingMiddleware } from "./middleware/logging.middleware.js";
 import { errorHandlerMiddleware } from "./middleware/error-handler.middleware.js";
@@ -38,6 +41,8 @@ import { createSSETransport } from "./transports/sse.transport.js";
 import { registerSearchIssuesTool } from "./tools/jira/search-issues.tool.js";
 import { registerCreateIssueTool } from "./tools/jira/create-issue.tool.js";
 import { registerTransitionIssueTool } from "./tools/jira/transition-issue.tool.js";
+import { registerGetCommentsTool } from "./tools/jira/get-comments.tool.js";
+import { registerAddCommentTool } from "./tools/jira/add-comment.tool.js";
 import { registerListPrsTool } from "./tools/github/list-prs.tool.js";
 import { registerReviewPrTool } from "./tools/github/review-pr.tool.js";
 import { registerSearchCodeTool } from "./tools/github/search-code.tool.js";
@@ -45,10 +50,15 @@ import { registerGetPrDiffTool } from "./tools/github/get-pr-diff.tool.js";
 import { registerGetMyPrsTool } from "./tools/github/get-my-prs.tool.js";
 import { registerHealthCheckTool } from "./tools/system/health-check.tool.js";
 import { registerListConnectionsTool } from "./tools/system/list-connections.tool.js";
+import { registerListEventsTool } from "./tools/google-calendar/list-events.tool.js";
+import { registerCreateEventTool } from "./tools/google-calendar/create-event.tool.js";
+import { registerCheckAvailabilityTool } from "./tools/google-calendar/check-availability.tool.js";
+import { registerListAvailableRoomsTool } from "./tools/google-calendar/list-available-rooms.tool.js";
 
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
 
+import { randomBytes } from "node:crypto";
 import { isErr, domainErrorMessage } from "@shared/result.js";
 import type { MaintenanceScheduler } from "./maintenance/scheduler.js";
 
@@ -78,6 +88,7 @@ export async function createServer(
   const agentConfigsRepo = createAgentConfigsRepository(db);
   const serverSettingsRepo = createServerSettingsRepository(db);
   const reviewsRepo = createReviewsRepository(db);
+  const oauthNoncesRepo = createOAuthNoncesRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -140,6 +151,42 @@ export async function createServer(
     },
   });
 
+  // Google Calendar service — only created if OAuth credentials are configured
+  const googleCalendarService = config.GOOGLE_OAUTH_CLIENT_ID && config.GOOGLE_OAUTH_CLIENT_SECRET
+    ? createGoogleCalendarService({
+        logger,
+        clientId: config.GOOGLE_OAUTH_CLIENT_ID,
+        clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET,
+        getConnectionInfo: async () => {
+          const allConns = await connectionsRepo.findAll();
+          const gcalConn = allConns.find(
+            (c) => c.integrationType === "google-calendar" && c.status === "connected"
+          );
+          if (!gcalConn) return null;
+          const cred = await credentialsRepo.findByConnectionId(gcalConn.id);
+          if (!cred) return null;
+          try {
+            const raw = encryptionService.decrypt(cred.encryptedData, cred.iv);
+            const tokens = JSON.parse(raw) as GoogleTokenBundle;
+            if (!tokens.access_token || !tokens.refresh_token || !tokens.expiry) return null;
+            return { connectionId: gcalConn.id, tokens };
+          } catch {
+            return null;
+          }
+        },
+        storeUpdatedTokens: async (connectionId: string, tokens: GoogleTokenBundle) => {
+          const tokenJson = JSON.stringify(tokens);
+          const { encryptedData, iv } = encryptionService.encrypt(tokenJson);
+          const existing = await credentialsRepo.findByConnectionId(connectionId);
+          if (existing) {
+            await credentialsRepo.update(existing.id, { encryptedData, iv });
+          } else {
+            await credentialsRepo.create({ connectionId, encryptedData, iv });
+          }
+        },
+      })
+    : null;
+
   // Create MCP server
   console.error("[startup] Creating MCP server...");
   const mcpServer = new McpServer({
@@ -156,6 +203,8 @@ export async function createServer(
   registerSearchIssuesTool(mcpServer, jiraToolDeps);
   registerCreateIssueTool(mcpServer, jiraToolDeps);
   registerTransitionIssueTool(mcpServer, jiraToolDeps);
+  registerGetCommentsTool(mcpServer, jiraToolDeps);
+  registerAddCommentTool(mcpServer, jiraToolDeps);
   registerListPrsTool(mcpServer, githubToolDeps);
   registerReviewPrTool(mcpServer, { ...githubToolDeps, reviewsRepo });
   registerSearchCodeTool(mcpServer, githubToolDeps);
@@ -163,6 +212,19 @@ export async function createServer(
   registerGetMyPrsTool(mcpServer, githubToolDeps);
   registerHealthCheckTool(mcpServer, { logger, connectionManager } as any);
   registerListConnectionsTool(mcpServer, { logger, connectionManager } as any);
+
+  // Google Calendar tools — only register if service is available
+  if (googleCalendarService) {
+    const gcalToolDeps = { googleCalendarService, logger };
+    registerListEventsTool(mcpServer, gcalToolDeps);
+    registerCreateEventTool(mcpServer, gcalToolDeps);
+    registerCheckAvailabilityTool(mcpServer, gcalToolDeps);
+    registerListAvailableRoomsTool(mcpServer, gcalToolDeps);
+    logger.info("Google Calendar MCP tools registered");
+  } else {
+    logger.info("Google Calendar tools skipped — GOOGLE_OAUTH_CLIENT_ID/SECRET not configured");
+  }
+
   console.error("[startup] Tools registered");
 
   logger.info("All MCP tools registered");
@@ -405,6 +467,145 @@ export async function createServer(
       reviewRequested: isErr(reviewResult) ? [] : reviewResult.value,
       created: isErr(createdResult) ? [] : createdResult.value,
     });
+  });
+
+  // ── Google Calendar OAuth endpoints ───────────────────────────────────
+
+  httpApp.get("/api/connections/google-calendar/oauth/start", async (c) => {
+    if (!config.GOOGLE_OAUTH_CLIENT_ID || !config.GOOGLE_OAUTH_CLIENT_SECRET) {
+      return c.json(
+        { error: "Google OAuth client credentials not configured" },
+        { status: 400 }
+      );
+    }
+
+    // Generate a CSRF state nonce
+    const nonce = randomBytes(32).toString("hex");
+    const NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+    await oauthNoncesRepo.create(nonce, "google-calendar", NONCE_TTL_MS);
+
+    // Clean up expired nonces periodically
+    await oauthNoncesRepo.deleteExpired();
+
+    const redirectUri = `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}/api/connections/google-calendar/oauth/callback`;
+
+    const scopes = [
+      "https://www.googleapis.com/auth/calendar.readonly",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/admin.directory.resource.calendar.readonly",
+    ];
+
+    const params = new URLSearchParams({
+      client_id: config.GOOGLE_OAUTH_CLIENT_ID,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: scopes.join(" "),
+      state: nonce,
+      access_type: "offline",
+      prompt: "consent",
+    });
+
+    const consentUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+    return c.json({ url: consentUrl });
+  });
+
+  httpApp.get("/api/connections/google-calendar/oauth/callback", async (c) => {
+    const code = c.req.query("code");
+    const state = c.req.query("state");
+
+    if (!code || !state) {
+      return c.json({ error: "Missing code or state parameter" }, { status: 400 });
+    }
+
+    // Validate CSRF nonce
+    const nonceRecord = await oauthNoncesRepo.findByNonce(state);
+    if (!nonceRecord) {
+      return c.json({ error: "Invalid or expired state nonce" }, { status: 400 });
+    }
+
+    // Delete consumed nonce
+    await oauthNoncesRepo.deleteByNonce(state);
+
+    if (!config.GOOGLE_OAUTH_CLIENT_ID || !config.GOOGLE_OAUTH_CLIENT_SECRET) {
+      return c.json({ error: "Google OAuth client credentials not configured" }, { status: 500 });
+    }
+
+    const redirectUri = `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}/api/connections/google-calendar/oauth/callback`;
+
+    // Exchange code for tokens
+    try {
+      const tokenBody = new URLSearchParams({
+        code,
+        client_id: config.GOOGLE_OAUTH_CLIENT_ID,
+        client_secret: config.GOOGLE_OAUTH_CLIENT_SECRET,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      });
+
+      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: tokenBody.toString(),
+      });
+
+      if (!tokenResponse.ok) {
+        const errorBody = await tokenResponse.text().catch(() => "");
+        logger.error({ status: tokenResponse.status, body: errorBody.slice(0, 300) }, "Google OAuth token exchange failed");
+        return c.json({ error: "Failed to exchange authorization code" }, { status: 502 });
+      }
+
+      const tokenData = (await tokenResponse.json()) as {
+        access_token: string;
+        refresh_token?: string;
+        expires_in: number;
+      };
+
+      if (!tokenData.access_token) {
+        return c.json({ error: "No access token received from Google" }, { status: 502 });
+      }
+
+      const tokens: GoogleTokenBundle = {
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token ?? "",
+        expiry: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+      };
+
+      // Find or create the Google Calendar connection
+      const allConns = await connectionsRepo.findAll();
+      let gcalConn = allConns.find((conn) => conn.integrationType === "google-calendar");
+
+      if (!gcalConn) {
+        gcalConn = await connectionsRepo.create({
+          name: "Google Calendar",
+          integrationType: "google-calendar",
+          baseUrl: "https://www.googleapis.com/calendar/v3",
+          authMethod: "oauth2",
+          status: "connected",
+        });
+      } else {
+        await connectionsRepo.update(gcalConn.id, { status: "connected" });
+      }
+
+      // Encrypt and store token bundle
+      const tokenJson = JSON.stringify(tokens);
+      const { encryptedData, iv } = encryptionService.encrypt(tokenJson);
+
+      const existingCred = await credentialsRepo.findByConnectionId(gcalConn.id);
+      if (existingCred) {
+        await credentialsRepo.update(existingCred.id, { encryptedData, iv });
+      } else {
+        await credentialsRepo.create({ connectionId: gcalConn.id, encryptedData, iv });
+      }
+
+      logger.info("Google Calendar OAuth flow completed successfully");
+
+      // Redirect to admin panel connections page
+      return c.redirect(`http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}/connections`);
+    } catch (error) {
+      logger.error({ error }, "Google OAuth callback error");
+      return c.json({ error: "OAuth callback processing failed" }, { status: 500 });
+    }
   });
 
   // Generic agent routes (wildcard :id — MUST come after named routes above)
