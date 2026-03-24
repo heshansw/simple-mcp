@@ -74,6 +74,13 @@ async function createTables(
       details TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS oauth_nonces (
+      id TEXT PRIMARY KEY,
+      nonce TEXT NOT NULL UNIQUE,
+      provider TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       owner TEXT NOT NULL,

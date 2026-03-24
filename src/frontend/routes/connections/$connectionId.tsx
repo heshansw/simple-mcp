@@ -7,6 +7,7 @@ import {
   useStoreCredentials,
   useRemoveCredentials,
   useTestConnection,
+  useGoogleCalendarOAuthStart,
 } from "@frontend/api/connections.api";
 import { StatusBadge } from "@frontend/components/status-badge";
 import { LoadingSpinner } from "@frontend/components/loading-spinner";
@@ -24,6 +25,7 @@ export function ConnectionDetailPage() {
   const storeCredentials = useStoreCredentials();
   const removeCredentials = useRemoveCredentials();
   const testConnection = useTestConnection();
+  const googleOAuth = useGoogleCalendarOAuthStart();
   const [isEditing, setIsEditing] = useState(false);
   const [token, setToken] = useState("");
   const [jiraEmail, setJiraEmail] = useState("");
@@ -93,6 +95,16 @@ export function ConnectionDetailPage() {
   };
 
   const isJira = connection?.integrationType === "jira";
+  const isGoogleCalendar = connection?.integrationType === "google-calendar";
+
+  const handleGoogleReAuth = async () => {
+    try {
+      const result = await googleOAuth.mutateAsync();
+      window.location.href = result.url;
+    } catch {
+      // Error displayed by googleOAuth.error
+    }
+  };
 
   const handleSaveToken = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,6 +202,13 @@ export function ConnectionDetailPage() {
         <ErrorDisplay
           error={storeCredentials.error}
           message="Failed to save credentials"
+        />
+      )}
+
+      {googleOAuth.error && (
+        <ErrorDisplay
+          error={googleOAuth.error}
+          message="Failed to start Google OAuth flow"
         />
       )}
 
@@ -389,254 +408,359 @@ export function ConnectionDetailPage() {
           }}
         >
           <h2 style={{ marginTop: "0", fontSize: "1.125rem", marginBottom: "1rem" }}>
-            Credentials / Access Token
+            {isGoogleCalendar ? "Google OAuth Authentication" : "Credentials / Access Token"}
           </h2>
 
-          {credStatus?.hasCredentials ? (
+          {isGoogleCalendar ? (
+            /* ── Google Calendar OAuth credentials card ─────────────── */
             <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "1rem",
-                  backgroundColor: "#ecfdf5",
-                  borderRadius: "0.375rem",
-                  marginBottom: "1rem",
-                  border: "1px solid #a7f3d0",
-                }}
-              >
-                <span style={{ color: "#059669", fontWeight: "500" }}>
-                  Access token is configured
-                </span>
-              </div>
-              <div style={{ display: "flex", gap: "1rem" }}>
-                <button
-                  onClick={handleRemoveToken}
-                  disabled={removeCredentials.isPending}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    backgroundColor: "#ef4444",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "0.375rem",
-                    fontSize: "0.875rem",
-                    cursor: "pointer",
-                    opacity: removeCredentials.isPending ? 0.6 : 1,
-                  }}
-                >
-                  {removeCredentials.isPending ? "Removing..." : "Remove Token"}
-                </button>
-              </div>
-
-              {/* Replace existing credentials */}
-              <form onSubmit={handleSaveToken} style={{ marginTop: "1rem" }}>
-                <label style={labelStyle}>
-                  Replace with new credentials
-                </label>
-                {isJira ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                    <input
-                      id="replaceJiraEmail"
-                      type="email"
-                      value={jiraEmail}
-                      onChange={(e) => setJiraEmail(e.target.value)}
-                      placeholder="Atlassian account email"
-                      style={inputStyle}
-                    />
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <input
-                        id="replaceJiraApiToken"
-                        type="password"
-                        value={jiraApiToken}
-                        onChange={(e) => setJiraApiToken(e.target.value)}
-                        placeholder="Jira API token"
-                        style={{ ...inputStyle, flex: 1 }}
-                      />
-                      <button
-                        type="submit"
-                        disabled={storeCredentials.isPending || !jiraEmail.trim() || !jiraApiToken.trim()}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          backgroundColor: "#3b82f6",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "0.375rem",
-                          fontSize: "0.875rem",
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                          opacity: storeCredentials.isPending || !jiraEmail.trim() || !jiraApiToken.trim() ? 0.6 : 1,
-                        }}
-                      >
-                        {storeCredentials.isPending ? "Saving..." : "Update"}
-                      </button>
-                    </div>
+              {credStatus?.hasCredentials ? (
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "1rem",
+                      backgroundColor: "#ecfdf5",
+                      borderRadius: "0.375rem",
+                      marginBottom: "1rem",
+                      border: "1px solid #a7f3d0",
+                    }}
+                  >
+                    <span style={{ color: "#059669", fontWeight: "500" }}>
+                      Google account is connected via OAuth 2.0
+                    </span>
                   </div>
-                ) : (
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <input
-                      id="replaceToken"
-                      type="password"
-                      value={token}
-                      onChange={(e) => setToken(e.target.value)}
-                      placeholder="Paste new access token..."
-                      style={{ ...inputStyle, flex: 1 }}
-                    />
+                  <p style={{ margin: "0 0 1rem 0", fontSize: "0.8rem", color: "#666" }}>
+                    Tokens are refreshed automatically. Re-authenticate if you need to change the
+                    Google account or grant additional scopes.
+                  </p>
+                  <div style={{ display: "flex", gap: "1rem" }}>
                     <button
-                      type="submit"
-                      disabled={storeCredentials.isPending || !token.trim()}
+                      type="button"
+                      onClick={handleGoogleReAuth}
+                      disabled={googleOAuth.isPending}
                       style={{
                         padding: "0.5rem 1rem",
-                        backgroundColor: "#3b82f6",
+                        backgroundColor: "#4285f4",
                         color: "#fff",
                         border: "none",
                         borderRadius: "0.375rem",
                         fontSize: "0.875rem",
                         cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        opacity: storeCredentials.isPending || !token.trim() ? 0.6 : 1,
+                        opacity: googleOAuth.isPending ? 0.6 : 1,
                       }}
                     >
-                      {storeCredentials.isPending ? "Saving..." : "Update"}
+                      {googleOAuth.isPending ? "Redirecting..." : "Re-authenticate with Google"}
+                    </button>
+                    <button
+                      onClick={handleRemoveToken}
+                      disabled={removeCredentials.isPending}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        backgroundColor: "#ef4444",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "0.375rem",
+                        fontSize: "0.875rem",
+                        cursor: "pointer",
+                        opacity: removeCredentials.isPending ? 0.6 : 1,
+                      }}
+                    >
+                      {removeCredentials.isPending ? "Disconnecting..." : "Disconnect"}
                     </button>
                   </div>
-                )}
-              </form>
+                </div>
+              ) : (
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "1rem",
+                      backgroundColor: "#fef3c7",
+                      borderRadius: "0.375rem",
+                      marginBottom: "1rem",
+                      border: "1px solid #fcd34d",
+                    }}
+                  >
+                    <span style={{ color: "#d97706", fontWeight: "500" }}>
+                      Not authenticated — click below to connect your Google account
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoogleReAuth}
+                    disabled={googleOAuth.isPending}
+                    style={{
+                      padding: "0.75rem 1.5rem",
+                      backgroundColor: "#4285f4",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "0.375rem",
+                      fontSize: "1rem",
+                      fontWeight: "500",
+                      cursor: "pointer",
+                      opacity: googleOAuth.isPending ? 0.6 : 1,
+                    }}
+                  >
+                    {googleOAuth.isPending ? "Redirecting..." : "Authenticate with Google"}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
+            /* ── Standard token/credential card (Jira, GitHub, etc.) ── */
             <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "1rem",
-                  backgroundColor: "#fef3c7",
-                  borderRadius: "0.375rem",
-                  marginBottom: "1rem",
-                  border: "1px solid #fcd34d",
-                }}
-              >
-                <span style={{ color: "#d97706", fontWeight: "500" }}>
-                  No access token configured — connection is disconnected
-                </span>
-              </div>
+              {credStatus?.hasCredentials ? (
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "1rem",
+                      backgroundColor: "#ecfdf5",
+                      borderRadius: "0.375rem",
+                      marginBottom: "1rem",
+                      border: "1px solid #a7f3d0",
+                    }}
+                  >
+                    <span style={{ color: "#059669", fontWeight: "500" }}>
+                      Access token is configured
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: "1rem" }}>
+                    <button
+                      onClick={handleRemoveToken}
+                      disabled={removeCredentials.isPending}
+                      style={{
+                        padding: "0.5rem 1rem",
+                        backgroundColor: "#ef4444",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "0.375rem",
+                        fontSize: "0.875rem",
+                        cursor: "pointer",
+                        opacity: removeCredentials.isPending ? 0.6 : 1,
+                      }}
+                    >
+                      {removeCredentials.isPending ? "Removing..." : "Remove Token"}
+                    </button>
+                  </div>
 
-              <form onSubmit={handleSaveToken}>
-                {isJira ? (
-                  <>
-                    <label style={labelStyle}>Jira Cloud Credentials</label>
-                    <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.8rem", color: "#666" }}>
-                      Enter your Atlassian account email and an API token generated at{" "}
-                      <a
-                        href="https://id.atlassian.com/manage-profile/security/api-tokens"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Atlassian API Tokens
-                      </a>
-                    </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                      <input
-                        id="newJiraEmail"
-                        type="email"
-                        value={jiraEmail}
-                        onChange={(e) => setJiraEmail(e.target.value)}
-                        placeholder="you@company.com"
-                        required
-                        style={inputStyle}
-                      />
+                  {/* Replace existing credentials */}
+                  <form onSubmit={handleSaveToken} style={{ marginTop: "1rem" }}>
+                    <label style={labelStyle}>
+                      Replace with new credentials
+                    </label>
+                    {isJira ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                        <input
+                          id="replaceJiraEmail"
+                          type="email"
+                          value={jiraEmail}
+                          onChange={(e) => setJiraEmail(e.target.value)}
+                          placeholder="Atlassian account email"
+                          style={inputStyle}
+                        />
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <input
+                            id="replaceJiraApiToken"
+                            type="password"
+                            value={jiraApiToken}
+                            onChange={(e) => setJiraApiToken(e.target.value)}
+                            placeholder="Jira API token"
+                            style={{ ...inputStyle, flex: 1 }}
+                          />
+                          <button
+                            type="submit"
+                            disabled={storeCredentials.isPending || !jiraEmail.trim() || !jiraApiToken.trim()}
+                            style={{
+                              padding: "0.5rem 1rem",
+                              backgroundColor: "#3b82f6",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "0.375rem",
+                              fontSize: "0.875rem",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                              opacity: storeCredentials.isPending || !jiraEmail.trim() || !jiraApiToken.trim() ? 0.6 : 1,
+                            }}
+                          >
+                            {storeCredentials.isPending ? "Saving..." : "Update"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
                       <div style={{ display: "flex", gap: "0.5rem" }}>
                         <input
-                          id="newJiraApiToken"
+                          id="replaceToken"
                           type="password"
-                          value={jiraApiToken}
-                          onChange={(e) => setJiraApiToken(e.target.value)}
-                          placeholder="Jira API token"
-                          required
+                          value={token}
+                          onChange={(e) => setToken(e.target.value)}
+                          placeholder="Paste new access token..."
                           style={{ ...inputStyle, flex: 1 }}
                         />
                         <button
                           type="submit"
-                          disabled={storeCredentials.isPending || !jiraEmail.trim() || !jiraApiToken.trim()}
+                          disabled={storeCredentials.isPending || !token.trim()}
                           style={{
                             padding: "0.5rem 1rem",
-                            backgroundColor: "#10b981",
+                            backgroundColor: "#3b82f6",
                             color: "#fff",
                             border: "none",
                             borderRadius: "0.375rem",
                             fontSize: "0.875rem",
                             cursor: "pointer",
                             whiteSpace: "nowrap",
-                            opacity: storeCredentials.isPending || !jiraEmail.trim() || !jiraApiToken.trim() ? 0.6 : 1,
+                            opacity: storeCredentials.isPending || !token.trim() ? 0.6 : 1,
                           }}
                         >
-                          {storeCredentials.isPending ? "Saving..." : "Save Credentials"}
+                          {storeCredentials.isPending ? "Saving..." : "Update"}
                         </button>
                       </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <label htmlFor="newToken" style={labelStyle}>
-                      {connection.authMethod === "personal_access_token"
-                        ? "Personal Access Token"
-                        : connection.authMethod === "api_token"
-                        ? "API Token"
-                        : "Access Token"}
-                    </label>
-                    <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.8rem", color: "#666" }}>
-                      {connection.integrationType === "github"
-                        ? "Generate at GitHub > Settings > Developer settings > Personal access tokens"
-                        : "Enter your access token for this integration"}
-                    </p>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <input
-                        id="newToken"
-                        type="password"
-                        value={token}
-                        onChange={(e) => setToken(e.target.value)}
-                        placeholder="Paste your access token here..."
-                        required
-                        style={{ ...inputStyle, flex: 1 }}
-                      />
-                      <button
-                        type="submit"
-                        disabled={storeCredentials.isPending || !token.trim()}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          backgroundColor: "#10b981",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "0.375rem",
-                          fontSize: "0.875rem",
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                          opacity: storeCredentials.isPending || !token.trim() ? 0.6 : 1,
-                        }}
-                      >
-                        {storeCredentials.isPending ? "Saving..." : "Save Token"}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </form>
-            </div>
-          )}
+                    )}
+                  </form>
+                </div>
+              ) : (
+                <div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      padding: "1rem",
+                      backgroundColor: "#fef3c7",
+                      borderRadius: "0.375rem",
+                      marginBottom: "1rem",
+                      border: "1px solid #fcd34d",
+                    }}
+                  >
+                    <span style={{ color: "#d97706", fontWeight: "500" }}>
+                      No access token configured — connection is disconnected
+                    </span>
+                  </div>
 
-          {tokenSaved && (
-            <div
-              style={{
-                marginTop: "1rem",
-                padding: "0.75rem",
-                backgroundColor: "#ecfdf5",
-                borderRadius: "0.375rem",
-                color: "#059669",
-                fontSize: "0.875rem",
-                border: "1px solid #a7f3d0",
-              }}
-            >
-              Token saved and connection marked as connected.
+                  <form onSubmit={handleSaveToken}>
+                    {isJira ? (
+                      <>
+                        <label style={labelStyle}>Jira Cloud Credentials</label>
+                        <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.8rem", color: "#666" }}>
+                          Enter your Atlassian account email and an API token generated at{" "}
+                          <a
+                            href="https://id.atlassian.com/manage-profile/security/api-tokens"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Atlassian API Tokens
+                          </a>
+                        </p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                          <input
+                            id="newJiraEmail"
+                            type="email"
+                            value={jiraEmail}
+                            onChange={(e) => setJiraEmail(e.target.value)}
+                            placeholder="you@company.com"
+                            required
+                            style={inputStyle}
+                          />
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <input
+                              id="newJiraApiToken"
+                              type="password"
+                              value={jiraApiToken}
+                              onChange={(e) => setJiraApiToken(e.target.value)}
+                              placeholder="Jira API token"
+                              required
+                              style={{ ...inputStyle, flex: 1 }}
+                            />
+                            <button
+                              type="submit"
+                              disabled={storeCredentials.isPending || !jiraEmail.trim() || !jiraApiToken.trim()}
+                              style={{
+                                padding: "0.5rem 1rem",
+                                backgroundColor: "#10b981",
+                                color: "#fff",
+                                border: "none",
+                                borderRadius: "0.375rem",
+                                fontSize: "0.875rem",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                                opacity: storeCredentials.isPending || !jiraEmail.trim() || !jiraApiToken.trim() ? 0.6 : 1,
+                              }}
+                            >
+                              {storeCredentials.isPending ? "Saving..." : "Save Credentials"}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <label htmlFor="newToken" style={labelStyle}>
+                          {connection.authMethod === "personal_access_token"
+                            ? "Personal Access Token"
+                            : connection.authMethod === "api_token"
+                            ? "API Token"
+                            : "Access Token"}
+                        </label>
+                        <p style={{ margin: "0 0 0.75rem 0", fontSize: "0.8rem", color: "#666" }}>
+                          {connection.integrationType === "github"
+                            ? "Generate at GitHub > Settings > Developer settings > Personal access tokens"
+                            : "Enter your access token for this integration"}
+                        </p>
+                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                          <input
+                            id="newToken"
+                            type="password"
+                            value={token}
+                            onChange={(e) => setToken(e.target.value)}
+                            placeholder="Paste your access token here..."
+                            required
+                            style={{ ...inputStyle, flex: 1 }}
+                          />
+                          <button
+                            type="submit"
+                            disabled={storeCredentials.isPending || !token.trim()}
+                            style={{
+                              padding: "0.5rem 1rem",
+                              backgroundColor: "#10b981",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "0.375rem",
+                              fontSize: "0.875rem",
+                              cursor: "pointer",
+                              whiteSpace: "nowrap",
+                              opacity: storeCredentials.isPending || !token.trim() ? 0.6 : 1,
+                            }}
+                          >
+                            {storeCredentials.isPending ? "Saving..." : "Save Token"}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </form>
+                </div>
+              )}
+
+              {tokenSaved && (
+                <div
+                  style={{
+                    marginTop: "1rem",
+                    padding: "0.75rem",
+                    backgroundColor: "#ecfdf5",
+                    borderRadius: "0.375rem",
+                    color: "#059669",
+                    fontSize: "0.875rem",
+                    border: "1px solid #a7f3d0",
+                  }}
+                >
+                  Token saved and connection marked as connected.
+                </div>
+              )}
             </div>
           )}
         </div>
