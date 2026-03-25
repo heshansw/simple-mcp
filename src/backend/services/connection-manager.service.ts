@@ -29,7 +29,7 @@ export interface ConnectionManagerService {
   getConnection(id: string): Promise<Result<Connection, DomainError>>;
   createConnection(data: {
     name: string;
-    integrationType: "jira" | "github" | "google-calendar";
+    integrationType: "jira" | "github" | "google-calendar" | "local-filesystem";
     baseUrl?: string;
     authMethod: "oauth2" | "api_token" | "personal_access_token";
   }): Promise<Result<Connection, DomainError>>;
@@ -94,7 +94,7 @@ export function createConnectionManagerService(
 
     async createConnection(data: {
       name: string;
-      integrationType: "jira" | "github" | "google-calendar";
+      integrationType: "jira" | "github" | "google-calendar" | "local-filesystem";
       baseUrl?: string;
       authMethod: "oauth2" | "api_token" | "personal_access_token";
     }): Promise<Result<Connection, DomainError>> {
@@ -106,10 +106,10 @@ export function createConnectionManagerService(
           );
         }
 
-        if (!["jira", "github", "google-calendar"].includes(data.integrationType)) {
+        if (!["jira", "github", "google-calendar", "local-filesystem"].includes(data.integrationType)) {
           return err(
             validationError("Invalid integration type", {
-              integrationType: "Must be 'jira', 'github', or 'google-calendar'",
+              integrationType: "Must be 'jira', 'github', 'google-calendar', or 'local-filesystem'",
             })
           );
         }

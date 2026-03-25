@@ -13,6 +13,7 @@ export type ApiClientMethods = {
   get<T>(path: string): Promise<T>;
   post<T>(path: string, body: unknown): Promise<T>;
   put<T>(path: string, body: unknown): Promise<T>;
+  patch<T>(path: string, body: unknown): Promise<T>;
   del<T>(path: string): Promise<T>;
 };
 
@@ -42,6 +43,11 @@ function createApiClient(): ApiClientMethods {
       throw new ApiError(response.status, response.statusText);
     }
 
+    // 204 No Content — return undefined
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
       throw new ApiError(response.status, response.statusText, "Invalid response type");
@@ -59,6 +65,9 @@ function createApiClient(): ApiClientMethods {
     },
     put<T>(path: string, body: unknown): Promise<T> {
       return request<T>("PUT", path, body);
+    },
+    patch<T>(path: string, body: unknown): Promise<T> {
+      return request<T>("PATCH", path, body);
     },
     del<T>(path: string): Promise<T> {
       return request<T>("DELETE", path);

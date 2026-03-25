@@ -29,8 +29,19 @@ export function createIntegrationName(value: string): IntegrationName {
   return value as IntegrationName;
 }
 
+export type FolderAccessId = Brand<string, "FolderAccessId">;
+export type RepoWorkspaceId = Brand<string, "RepoWorkspaceId">;
+
+export function createFolderAccessId(value: string): FolderAccessId {
+  return value as FolderAccessId;
+}
+
+export function createRepoWorkspaceId(value: string): RepoWorkspaceId {
+  return value as RepoWorkspaceId;
+}
+
 // Integration type literal
-export type IntegrationType = "jira" | "github";
+export type IntegrationType = "jira" | "github" | "google-calendar" | "local-filesystem";
 
 // Utility types
 export type Prettify<T> = {

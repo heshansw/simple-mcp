@@ -14,6 +14,9 @@ import { createServerSettingsRepository } from "./db/repositories/server-setting
 import { createSyncMetadataRepository } from "./db/repositories/sync-metadata.repository.js";
 import { createReviewsRepository } from "./db/repositories/reviews.repository.js";
 import { createOAuthNoncesRepository } from "./db/repositories/oauth-nonces.repository.js";
+import { createConfluenceActivityRepository } from "./db/repositories/confluence-activity.repository.js";
+import { createFolderAccessRepository } from "./db/repositories/folder-access.repository.js";
+import { createRepoWorkspacesRepository } from "./db/repositories/repo-workspaces.repository.js";
 
 import { createEncryptionService } from "./services/encryption.service.js";
 import { createConnectionManagerService } from "./services/connection-manager.service.js";
@@ -21,6 +24,8 @@ import { createJiraService } from "./services/jira.service.js";
 import { createGitHubService } from "./services/github.service.js";
 import { createGoogleCalendarService } from "./services/google-calendar.service.js";
 import type { GoogleTokenBundle } from "./services/google-calendar.service.js";
+import { createLocalFilesystemService } from "./services/local-filesystem.service.js";
+import { createConfluenceService } from "./services/confluence.service.js";
 
 import { createLogger, loggingMiddleware } from "./middleware/logging.middleware.js";
 import { errorHandlerMiddleware } from "./middleware/error-handler.middleware.js";
@@ -32,6 +37,8 @@ import {
   prReviewAgent,
   codeSearchAgent,
   sprintPlanningAgent,
+  localRepoAnalysisAgent,
+  confluenceReaderAgent,
 } from "./agents/index.js";
 
 import { createMaintenanceScheduler } from "./maintenance/scheduler.js";
@@ -54,6 +61,17 @@ import { registerListEventsTool } from "./tools/google-calendar/list-events.tool
 import { registerCreateEventTool } from "./tools/google-calendar/create-event.tool.js";
 import { registerCheckAvailabilityTool } from "./tools/google-calendar/check-availability.tool.js";
 import { registerListAvailableRoomsTool } from "./tools/google-calendar/list-available-rooms.tool.js";
+import { registerFsListDirectoryTool } from "./tools/local-filesystem/fs-list-directory.tool.js";
+import { registerFsReadFileTool } from "./tools/local-filesystem/fs-read-file.tool.js";
+import { registerFsSearchFilesTool } from "./tools/local-filesystem/fs-search-files.tool.js";
+import { registerFsGetFileTreeTool } from "./tools/local-filesystem/fs-get-file-tree.tool.js";
+import { registerFsWorkspaceSearchTool } from "./tools/local-filesystem/fs-workspace-search.tool.js";
+import { registerFsWorkspaceTreeTool } from "./tools/local-filesystem/fs-workspace-tree.tool.js";
+import { registerFsListFoldersTool } from "./tools/local-filesystem/fs-list-folders.tool.js";
+import { registerFsListWorkspacesTool } from "./tools/local-filesystem/fs-list-workspaces.tool.js";
+import { registerConfluenceSearchPagesTool } from "./tools/confluence/confluence-search-pages.tool.js";
+import { registerConfluenceGetPageTool } from "./tools/confluence/confluence-get-page.tool.js";
+import { registerConfluenceListSpacesTool } from "./tools/confluence/confluence-list-spaces.tool.js";
 
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
@@ -89,6 +107,9 @@ export async function createServer(
   const serverSettingsRepo = createServerSettingsRepository(db);
   const reviewsRepo = createReviewsRepository(db);
   const oauthNoncesRepo = createOAuthNoncesRepository(db);
+  const confluenceActivityRepo = createConfluenceActivityRepository(db);
+  const folderAccessRepo = createFolderAccessRepository(db);
+  const workspacesRepo = createRepoWorkspacesRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -103,29 +124,31 @@ export async function createServer(
     logger,
   });
 
+  // Shared Jira/Confluence connection info resolver — same Atlassian credentials
+  const getJiraConnectionInfo = async () => {
+    const allConns = await connectionsRepo.findAll();
+    const jiraConn = allConns.find(
+      (c) => c.integrationType === "jira" && c.status === "connected"
+    );
+    if (!jiraConn) return null;
+    const cred = await credentialsRepo.findByConnectionId(jiraConn.id);
+    if (!cred) return null;
+    try {
+      const raw = encryptionService.decrypt(cred.encryptedData, cred.iv);
+      const parsed = JSON.parse(raw) as { email?: string; apiToken?: string };
+      if (!parsed.email || !parsed.apiToken) return null;
+      return {
+        siteUrl: jiraConn.baseUrl,
+        credentials: { email: parsed.email, apiToken: parsed.apiToken },
+      };
+    } catch {
+      return null;
+    }
+  };
+
   const jiraService = createJiraService({
     logger,
-    getConnectionInfo: async () => {
-      const allConns = await connectionsRepo.findAll();
-      const jiraConn = allConns.find(
-        (c) => c.integrationType === "jira" && c.status === "connected"
-      );
-      if (!jiraConn) return null;
-      const cred = await credentialsRepo.findByConnectionId(jiraConn.id);
-      if (!cred) return null;
-      try {
-        const raw = encryptionService.decrypt(cred.encryptedData, cred.iv);
-        // Credentials are stored as JSON: { email, apiToken }
-        const parsed = JSON.parse(raw) as { email?: string; apiToken?: string };
-        if (!parsed.email || !parsed.apiToken) return null;
-        return {
-          siteUrl: jiraConn.baseUrl,
-          credentials: { email: parsed.email, apiToken: parsed.apiToken },
-        };
-      } catch {
-        return null;
-      }
-    },
+    getConnectionInfo: getJiraConnectionInfo,
   });
 
   // GitHub service resolves its token from the first connected GitHub connection
@@ -187,6 +210,29 @@ export async function createServer(
       })
     : null;
 
+  // Local filesystem service
+  const localFilesystemService = createLocalFilesystemService({
+    logger,
+    folderAccessRepo,
+    workspacesRepo,
+  });
+
+  // Confluence service — reuses Jira connection info
+  const confluenceService = createConfluenceService({
+    logger,
+    getConnectionInfo: getJiraConnectionInfo,
+    getAllowedSpaceKeys: async () => {
+      const raw = await serverSettingsRepo.get("confluence.allowed_space_keys");
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? (parsed as string[]).map((k) => k.toUpperCase()) : [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
   // Create MCP server
   console.error("[startup] Creating MCP server...");
   const mcpServer = new McpServer({
@@ -225,6 +271,76 @@ export async function createServer(
     logger.info("Google Calendar tools skipped — GOOGLE_OAUTH_CLIENT_ID/SECRET not configured");
   }
 
+  // Local filesystem tools — always registered (operations are gated by folder registration)
+  const fsToolDeps = { fsService: localFilesystemService, logger };
+  registerFsListDirectoryTool(mcpServer, fsToolDeps);
+  registerFsReadFileTool(mcpServer, fsToolDeps);
+  registerFsSearchFilesTool(mcpServer, fsToolDeps);
+  registerFsGetFileTreeTool(mcpServer, fsToolDeps);
+  registerFsWorkspaceSearchTool(mcpServer, fsToolDeps);
+  registerFsWorkspaceTreeTool(mcpServer, fsToolDeps);
+  registerFsListFoldersTool(mcpServer, { folderAccessRepo, logger });
+  registerFsListWorkspacesTool(mcpServer, { workspacesRepo, folderAccessRepo, logger });
+  logger.info("Local filesystem MCP tools registered");
+
+  // Confluence tools — always registered (gated by Jira connection at invocation)
+  // Wrap the service to record activity for every call
+  const trackedConfluenceService: typeof confluenceService = {
+    async searchPages(cql, maxResults) {
+      const start = Date.now();
+      const result = await confluenceService.searchPages(cql, maxResults);
+      const duration = Date.now() - start;
+      const isOk = result._tag === "Ok";
+      confluenceActivityRepo.record({
+        toolName: "confluence_search_pages",
+        cql,
+        resultCount: isOk ? result.value.results.length : 0,
+        contentSizeBytes: isOk ? JSON.stringify(result.value).length : 0,
+        durationMs: duration,
+        success: isOk ? 1 : 0,
+        errorTag: !isOk ? result.error._tag : null,
+      }).catch((e) => logger.error({ error: e }, "Failed to record confluence activity"));
+      return result;
+    },
+    async getPage(pageId) {
+      const start = Date.now();
+      const result = await confluenceService.getPage(pageId);
+      const duration = Date.now() - start;
+      const isOk = result._tag === "Ok";
+      confluenceActivityRepo.record({
+        toolName: "confluence_get_page",
+        pageId,
+        spaceKey: isOk ? result.value.spaceKey : null,
+        resultCount: isOk ? 1 : 0,
+        contentSizeBytes: isOk ? result.value.contentMarkdown.length : 0,
+        durationMs: duration,
+        success: isOk ? 1 : 0,
+        errorTag: !isOk ? result.error._tag : null,
+      }).catch((e) => logger.error({ error: e }, "Failed to record confluence activity"));
+      return result;
+    },
+    async listSpaces(type, maxResults) {
+      const start = Date.now();
+      const result = await confluenceService.listSpaces(type, maxResults);
+      const duration = Date.now() - start;
+      const isOk = result._tag === "Ok";
+      confluenceActivityRepo.record({
+        toolName: "confluence_list_spaces",
+        resultCount: isOk ? result.value.spaces.length : 0,
+        contentSizeBytes: isOk ? JSON.stringify(result.value).length : 0,
+        durationMs: duration,
+        success: isOk ? 1 : 0,
+        errorTag: !isOk ? result.error._tag : null,
+      }).catch((e) => logger.error({ error: e }, "Failed to record confluence activity"));
+      return result;
+    },
+  };
+  const confluenceToolDeps = { confluenceService: trackedConfluenceService, logger };
+  registerConfluenceSearchPagesTool(mcpServer, confluenceToolDeps);
+  registerConfluenceGetPageTool(mcpServer, confluenceToolDeps);
+  registerConfluenceListSpacesTool(mcpServer, confluenceToolDeps);
+  logger.info("Confluence MCP tools registered");
+
   console.error("[startup] Tools registered");
 
   logger.info("All MCP tools registered");
@@ -235,6 +351,8 @@ export async function createServer(
   agentRegistry.register(prReviewAgent);
   agentRegistry.register(codeSearchAgent);
   agentRegistry.register(sprintPlanningAgent);
+  agentRegistry.register(localRepoAnalysisAgent);
+  agentRegistry.register(confluenceReaderAgent);
 
   logger.info(
     { agentCount: agentRegistry.getAll().length },
@@ -606,6 +724,228 @@ export async function createServer(
       logger.error({ error }, "Google OAuth callback error");
       return c.json({ error: "OAuth callback processing failed" }, { status: 500 });
     }
+  });
+
+  // ── Confluence Settings ─────────────────────────────────────────────
+
+  httpApp.get("/api/confluence/settings", async (c) => {
+    const raw = await serverSettingsRepo.get("confluence.allowed_space_keys");
+    let allowedSpaceKeys: string[] = [];
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) allowedSpaceKeys = parsed as string[];
+      } catch { /* empty */ }
+    }
+    return c.json({ allowedSpaceKeys });
+  });
+
+  httpApp.put("/api/confluence/settings", async (c) => {
+    const body = await c.req.json();
+    if (!body.allowedSpaceKeys || !Array.isArray(body.allowedSpaceKeys)) {
+      return c.json({ error: "allowedSpaceKeys must be an array" }, { status: 400 });
+    }
+    if (body.allowedSpaceKeys.length > 50) {
+      return c.json({ error: "Maximum 50 space keys allowed" }, { status: 400 });
+    }
+    const keys = (body.allowedSpaceKeys as string[]).map((k: string) =>
+      String(k).toUpperCase().trim()
+    ).filter((k: string) => k.length > 0);
+
+    await serverSettingsRepo.upsert(
+      "confluence.allowed_space_keys",
+      JSON.stringify(keys)
+    );
+
+    return c.json({ allowedSpaceKeys: keys });
+  });
+
+  // ── Confluence Activity / Insights ──────────────────────────────────
+
+  httpApp.get("/api/confluence/activity", async (c) => {
+    const limit = Number(c.req.query("limit") ?? "50");
+    const activity = await confluenceActivityRepo.findRecent(limit);
+    return c.json(activity);
+  });
+
+  httpApp.get("/api/confluence/insights", async (c) => {
+    const stats = await confluenceActivityRepo.getStats();
+    return c.json(stats);
+  });
+
+  // ── Folder Access CRUD ──────────────────────────────────────────────
+
+  httpApp.get("/api/folder-access", async (c) => {
+    const folders = await folderAccessRepo.findAll();
+    return c.json(folders);
+  });
+
+  httpApp.post("/api/folder-access", async (c) => {
+    const body = await c.req.json();
+
+    if (!body.name || typeof body.name !== "string" || body.name.trim().length === 0) {
+      return c.json({ error: "name is required" }, { status: 400 });
+    }
+    if (!body.absolutePath || typeof body.absolutePath !== "string" || !body.absolutePath.startsWith("/")) {
+      return c.json({ error: "absolutePath must be an absolute path starting with /" }, { status: 400 });
+    }
+
+    const { resolve } = await import("node:path");
+    const canonicalPath = resolve(body.absolutePath);
+
+    // Check for duplicate path
+    const existing = await folderAccessRepo.findByPath(canonicalPath);
+    if (existing) {
+      return c.json({ error: "A folder with this path is already registered" }, { status: 409 });
+    }
+
+    // Check if path exists on disk
+    let status: "active" | "path_not_found" = "active";
+    try {
+      const { access: fsAccess } = await import("node:fs/promises");
+      const { constants: fsConstants } = await import("node:fs");
+      await fsAccess(canonicalPath, fsConstants.R_OK);
+    } catch {
+      status = "path_not_found";
+    }
+
+    const created = await folderAccessRepo.create({
+      name: body.name.trim(),
+      absolutePath: canonicalPath,
+      allowedExtensions: JSON.stringify(body.allowedExtensions ?? []),
+      maxFileSizeKb: body.maxFileSizeKb ?? 512,
+      recursive: body.recursive === false ? 0 : 1,
+      status,
+    });
+
+    return c.json(created, { status: 201 });
+  });
+
+  httpApp.patch("/api/folder-access/:id", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+
+    const existing = await folderAccessRepo.findById(id);
+    if (!existing) {
+      return c.json({ error: "Folder access not found" }, { status: 404 });
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.allowedExtensions !== undefined) updateData.allowedExtensions = JSON.stringify(body.allowedExtensions);
+    if (body.maxFileSizeKb !== undefined) updateData.maxFileSizeKb = body.maxFileSizeKb;
+    if (body.recursive !== undefined) updateData.recursive = body.recursive ? 1 : 0;
+    if (body.status !== undefined) updateData.status = body.status;
+
+    const updated = await folderAccessRepo.update(id, updateData);
+    if (!updated) {
+      return c.json({ error: "Folder access not found" }, { status: 404 });
+    }
+    return c.json(updated);
+  });
+
+  httpApp.delete("/api/folder-access/:id", async (c) => {
+    const id = c.req.param("id");
+
+    const existing = await folderAccessRepo.findById(id);
+    if (!existing) {
+      return c.json({ error: "Folder access not found" }, { status: 404 });
+    }
+
+    // Remove folder from all workspaces; auto-delete workspaces that drop below 2
+    const removedWorkspaceIds = await workspacesRepo.removeFolderIdFromAll(id);
+
+    await folderAccessRepo.delete(id);
+
+    if (removedWorkspaceIds.length > 0) {
+      c.header("X-Workspace-Removed", removedWorkspaceIds.join(","));
+    }
+    return c.body(null, 204);
+  });
+
+  httpApp.post("/api/folder-access/:id/verify", async (c) => {
+    const id = c.req.param("id");
+    const result = await localFilesystemService.verifyPath(id);
+    if (isErr(result)) {
+      return c.json({ error: domainErrorMessage(result.error) }, { status: 404 });
+    }
+    return c.json(result.value);
+  });
+
+  // ── Repo Workspaces CRUD ───────────────────────────────────────────
+
+  httpApp.get("/api/repo-workspaces", async (c) => {
+    const workspaces = await workspacesRepo.findAll();
+    return c.json(workspaces);
+  });
+
+  httpApp.post("/api/repo-workspaces", async (c) => {
+    const body = await c.req.json();
+
+    if (!body.name || typeof body.name !== "string" || body.name.trim().length === 0) {
+      return c.json({ error: "name is required" }, { status: 400 });
+    }
+    if (!Array.isArray(body.folderIds) || body.folderIds.length < 2) {
+      return c.json({ error: "folderIds must contain at least 2 folder access IDs" }, { status: 400 });
+    }
+
+    // Check duplicate name
+    const existingName = await workspacesRepo.findByName(body.name.trim());
+    if (existingName) {
+      return c.json({ error: "A workspace with this name already exists" }, { status: 409 });
+    }
+
+    // Validate all folder IDs exist
+    for (const folderId of body.folderIds) {
+      const folder = await folderAccessRepo.findById(folderId);
+      if (!folder) {
+        return c.json({ error: `Folder access ${folderId} not found` }, { status: 400 });
+      }
+    }
+
+    const created = await workspacesRepo.create({
+      name: body.name.trim(),
+      description: body.description ?? "",
+      folderIds: JSON.stringify(body.folderIds),
+    });
+
+    return c.json(created, { status: 201 });
+  });
+
+  httpApp.patch("/api/repo-workspaces/:id", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+
+    const existing = await workspacesRepo.findById(id);
+    if (!existing) {
+      return c.json({ error: "Workspace not found" }, { status: 404 });
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.folderIds !== undefined) {
+      if (!Array.isArray(body.folderIds) || body.folderIds.length < 2) {
+        return c.json({ error: "folderIds must contain at least 2 folder access IDs" }, { status: 400 });
+      }
+      updateData.folderIds = JSON.stringify(body.folderIds);
+    }
+
+    const updated = await workspacesRepo.update(id, updateData);
+    if (!updated) {
+      return c.json({ error: "Workspace not found" }, { status: 404 });
+    }
+    return c.json(updated);
+  });
+
+  httpApp.delete("/api/repo-workspaces/:id", async (c) => {
+    const id = c.req.param("id");
+    const existing = await workspacesRepo.findById(id);
+    if (!existing) {
+      return c.json({ error: "Workspace not found" }, { status: 404 });
+    }
+    await workspacesRepo.delete(id);
+    return c.body(null, 204);
   });
 
   // Generic agent routes (wildcard :id — MUST come after named routes above)

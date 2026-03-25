@@ -26,7 +26,9 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.39.3",
+    "fast-glob": "^3.3.3",
     "hono": "^4.7.5",
+    "node-html-markdown": "^2.0.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
     "zod": "^3.24.2"

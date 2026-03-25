@@ -58,11 +58,46 @@ export const auditLogTable = sqliteTable("audit_log", {
   createdAt: text("created_at").notNull(),
 });
 
+export const folderAccessTable = sqliteTable("folder_access", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  absolutePath: text("absolute_path").notNull().unique(),
+  allowedExtensions: text("allowed_extensions").notNull().default("[]"),
+  maxFileSizeKb: integer("max_file_size_kb").notNull().default(512),
+  recursive: integer("recursive").notNull().default(1),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const repoWorkspacesTable = sqliteTable("repo_workspaces", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description").notNull().default(""),
+  folderIds: text("folder_ids").notNull().default("[]"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const oauthNoncesTable = sqliteTable("oauth_nonces", {
   id: text("id").primaryKey(),
   nonce: text("nonce").notNull().unique(),
   provider: text("provider").notNull(),
   expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const confluenceActivityTable = sqliteTable("confluence_activity", {
+  id: text("id").primaryKey(),
+  toolName: text("tool_name").notNull(), // confluence_search_pages | confluence_get_page | confluence_list_spaces
+  spaceKey: text("space_key"), // nullable — not always applicable
+  pageId: text("page_id"), // nullable — only for get_page
+  cql: text("cql"), // nullable — only for search
+  resultCount: integer("result_count").notNull().default(0),
+  contentSizeBytes: integer("content_size_bytes").notNull().default(0),
+  durationMs: integer("duration_ms").notNull().default(0),
+  success: integer("success").notNull().default(1), // 0 = error, 1 = success
+  errorTag: text("error_tag"), // nullable
   createdAt: text("created_at").notNull(),
 });
 

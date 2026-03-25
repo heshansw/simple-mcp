@@ -30,6 +30,22 @@ export const reviewKeys = {
   stats: () => [...reviewKeys.all, "stats"] as const,
 };
 
+export const folderAccessKeys = {
+  all: ["folder-access"] as const,
+  lists: () => [...folderAccessKeys.all, "list"] as const,
+  list: () => folderAccessKeys.lists(),
+  details: () => [...folderAccessKeys.all, "detail"] as const,
+  detail: (id: string) => [...folderAccessKeys.details(), id] as const,
+};
+
+export const workspaceKeys = {
+  all: ["workspaces"] as const,
+  lists: () => [...workspaceKeys.all, "list"] as const,
+  list: () => workspaceKeys.lists(),
+  details: () => [...workspaceKeys.all, "detail"] as const,
+  detail: (id: string) => [...workspaceKeys.details(), id] as const,
+};
+
 export const githubKeys = {
   all: ["github"] as const,
   me: () => [...githubKeys.all, "me"] as const,
