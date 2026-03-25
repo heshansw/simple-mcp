@@ -43,6 +43,8 @@ export function Root() {
           <NavLink to="/reviews">Review Insights</NavLink>
           <NavLink to="/connections">Connections</NavLink>
           <NavLink to="/agents">Agents</NavLink>
+          <NavLink to="/local-repos">Local Repos</NavLink>
+          <NavLink to="/confluence">Confluence</NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </ul>
       </nav>

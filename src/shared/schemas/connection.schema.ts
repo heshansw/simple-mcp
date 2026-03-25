@@ -20,7 +20,7 @@ export type AuthMethod = z.infer<typeof AuthMethodSchema>;
 export const ConnectionConfigSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  integrationType: z.enum(["jira", "github", "google-calendar"]),
+  integrationType: z.enum(["jira", "github", "google-calendar", "local-filesystem"]),
   baseUrl: z.string().url().optional(),
   authMethod: AuthMethodSchema,
   status: ConnectionStatusSchema,

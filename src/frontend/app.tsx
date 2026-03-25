@@ -15,6 +15,8 @@ import { AgentDetailPage } from "@frontend/routes/agents/$agentId";
 import { SettingsPage } from "@frontend/routes/settings/index";
 import { MyPRsPage } from "@frontend/routes/my-prs/index";
 import { ReviewsPage } from "@frontend/routes/reviews/index";
+import { LocalReposPage } from "@frontend/routes/local-repos/index";
+import { ConfluencePage } from "@frontend/routes/confluence/index";
 import { useState } from "react";
 
 // Create root route
@@ -61,6 +63,20 @@ const agentDetailRoute = new Route({
   component: AgentDetailPage,
 });
 
+// Local Repos route
+const localReposRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/local-repos",
+  component: LocalReposPage,
+});
+
+// Confluence route
+const confluenceRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/confluence",
+  component: ConfluencePage,
+});
+
 // Settings route
 const settingsRoute = new Route({
   getParentRoute: () => rootRoute,
@@ -92,6 +108,8 @@ const routeTree = rootRoute.addChildren([
   connectionDetailRoute,
   agentsIndexRoute,
   agentDetailRoute,
+  localReposRoute,
+  confluenceRoute,
   settingsRoute,
 ]);
 

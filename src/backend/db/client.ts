@@ -74,11 +74,43 @@ async function createTables(
       details TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS folder_access (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      absolute_path TEXT NOT NULL UNIQUE,
+      allowed_extensions TEXT NOT NULL DEFAULT '[]',
+      max_file_size_kb INTEGER NOT NULL DEFAULT 512,
+      recursive INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS repo_workspaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL DEFAULT '',
+      folder_ids TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS oauth_nonces (
       id TEXT PRIMARY KEY,
       nonce TEXT NOT NULL UNIQUE,
       provider TEXT NOT NULL,
       expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS confluence_activity (
+      id TEXT PRIMARY KEY,
+      tool_name TEXT NOT NULL,
+      space_key TEXT,
+      page_id TEXT,
+      cql TEXT,
+      result_count INTEGER NOT NULL DEFAULT 0,
+      content_size_bytes INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      success INTEGER NOT NULL DEFAULT 1,
+      error_tag TEXT,
       created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS reviews (
