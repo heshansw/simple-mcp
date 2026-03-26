@@ -224,23 +224,36 @@ function PermissionEditor({ permissions, onChange }: PermissionEditorProps) {
 
 type ConnectionCardProps = {
   conn: DatabaseConnectionEntry;
-  onTest: (id: string) => void;
   onDelete: (id: string) => void;
   onSavePermissions: (id: string, permissions: DbPermissions) => void;
   onSaveCredentials: (id: string, credentials: DbCredentials) => void;
-  isTesting: boolean;
   isDeleting: boolean;
 };
 
-function ConnectionCard({ conn, onTest, onDelete, onSavePermissions, onSaveCredentials, isTesting, isDeleting }: ConnectionCardProps) {
+function ConnectionCard({ conn, onDelete, onSavePermissions, onSaveCredentials, isDeleting }: ConnectionCardProps) {
   const [showCreds, setShowCreds] = useState(false);
   const [showPerms, setShowPerms] = useState(false);
   const [permissions, setPermissions] = useState<DbPermissions>(() => parsePermissions(conn.dbPermissions));
   const [credMethod, setCredMethod] = useState<"username_password" | "connection_string">("username_password");
   const [credForm, setCredForm] = useState({ host: "127.0.0.1", port: "3306", database: "", username: "", password: "", connectionString: "" });
+  const [testMessage, setTestMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const testMutation = useTestDatabaseConnection();
   const { bg, fg } = statusColor(conn.status);
   const updatePerms = useUpdateDatabasePermissions();
+
+  function handleTest() {
+    setTestMessage(null);
+    testMutation.mutate(conn.id, {
+      onSuccess: (data) => {
+        setTestMessage({ type: "success", text: `Connected (${data.dialect}, ${data.latency_ms}ms)` });
+      },
+      onError: (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        setTestMessage({ type: "error", text: msg });
+      },
+    });
+  }
 
   return (
     <div style={{
@@ -299,17 +312,30 @@ function ConnectionCard({ conn, onTest, onDelete, onSavePermissions, onSaveCrede
         </div>
       )}
 
+      {/* Test result feedback */}
+      {testMessage && (
+        <div style={{
+          marginBottom: "0.75rem", padding: "0.5rem 0.75rem", borderRadius: "0.25rem",
+          fontSize: "0.8rem", fontWeight: 500,
+          backgroundColor: testMessage.type === "success" ? "#dcfce7" : "#fef2f2",
+          color: testMessage.type === "success" ? "#166534" : "#991b1b",
+          border: `1px solid ${testMessage.type === "success" ? "#bbf7d0" : "#fecaca"}`,
+        }}>
+          {testMessage.type === "success" ? "Connected" : "Failed"}: {testMessage.text}
+        </div>
+      )}
+
       {/* Actions */}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <button
-          onClick={() => onTest(conn.id)}
-          disabled={isTesting}
+          onClick={handleTest}
+          disabled={testMutation.isPending}
           style={{
             padding: "0.4rem 0.75rem", fontSize: "0.8rem", cursor: "pointer",
             backgroundColor: "#10b981", color: "#fff", border: "none", borderRadius: "0.25rem",
           }}
         >
-          {isTesting ? "Testing..." : "Test Connection"}
+          {testMutation.isPending ? "Testing..." : "Test Connection"}
         </button>
         <button
           onClick={() => setShowCreds((v) => !v)}
@@ -683,7 +709,6 @@ function InsightsSection() {
 
 export function DatabasesPage() {
   const connectionsQuery = useDatabaseConnectionsList();
-  const testMutation = useTestDatabaseConnection();
   const deleteMutation = useDeleteDatabaseConnection();
   const updatePermsMutation = useUpdateDatabasePermissions();
   const storeCredsMutation = useStoreDatabaseCredentials();
@@ -745,7 +770,6 @@ export function DatabasesPage() {
                 <ConnectionCard
                   key={conn.id}
                   conn={conn}
-                  onTest={(id) => testMutation.mutate(id)}
                   onDelete={(id) => {
                     if (window.confirm(`Delete connection "${conn.name}"?`)) {
                       deleteMutation.mutate(id);
@@ -753,7 +777,6 @@ export function DatabasesPage() {
                   }}
                   onSavePermissions={(id, permissions) => updatePermsMutation.mutate({ id, permissions })}
                   onSaveCredentials={(id, credentials) => storeCredsMutation.mutate({ id, credentials })}
-                  isTesting={testMutation.isPending}
                   isDeleting={deleteMutation.isPending}
                 />
               ))}

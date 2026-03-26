@@ -335,8 +335,9 @@ export function createDatabaseQueryService(
         const result = await driver.testConnection();
         if (result._tag === "Err") return result;
         return ok({ dialect: conn.dialect, latencyMs: result.value.latencyMs });
-      } catch {
-        return err(integrationError(conn.dialect, "Connection test failed"));
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        return err(integrationError(conn.dialect, `Connection test failed: ${msg}`));
       }
     },
 

@@ -72,8 +72,10 @@ export function createMysqlDriver(
         conn = await pool.getConnection();
         await conn.query(`SET SESSION MAX_EXECUTION_TIME = ${options.timeoutMs}`);
 
-        const cappedSql = `${sql} LIMIT ${options.maxRows + 1}`;
-        const [rows] = await conn.query<RowDataPacket[]>(cappedSql, params);
+        // Only append LIMIT if the query doesn't already have one
+        const hasLimit = /\bLIMIT\s+\d+/i.test(sql);
+        const execSql = hasLimit ? sql : `${sql} LIMIT ${options.maxRows + 1}`;
+        const [rows] = await conn.query<RowDataPacket[]>(execSql, params);
 
         const truncated = rows.length > options.maxRows;
         const resultRows = truncated ? rows.slice(0, options.maxRows) : rows;
@@ -229,8 +231,13 @@ export function createMysqlDriver(
         await pool.query("SELECT 1");
         return ok({ latencyMs: Date.now() - start });
       } catch (error) {
+        // Surface the actual driver error — strip credentials from the message
+        const rawMsg = error instanceof Error ? error.message : String(error);
+        const safeMsg = rawMsg
+          .replace(/password[=:]\s*\S+/gi, "password=***")
+          .replace(/user[=:]\s*\S+/gi, "user=***");
         return err(
-          integrationError("mysql", "Connection failed")
+          integrationError("mysql", `Connection failed: ${safeMsg}`)
         );
       }
     },

@@ -59,8 +59,10 @@ export function createPostgresDriver(
         client = await pool.connect();
         await client.query(`SET statement_timeout = ${options.timeoutMs}`);
 
-        const cappedSql = `${sql} LIMIT ${options.maxRows + 1}`;
-        const result = await client.query(cappedSql, params);
+        // Only append LIMIT if the query doesn't already have one
+        const hasLimit = /\bLIMIT\s+\d+/i.test(sql);
+        const execSql = hasLimit ? sql : `${sql} LIMIT ${options.maxRows + 1}`;
+        const result = await client.query(execSql, params);
 
         const allRows = result.rows as Record<string, unknown>[];
         const truncated = allRows.length > options.maxRows;
@@ -245,8 +247,12 @@ export function createPostgresDriver(
       try {
         await pool.query("SELECT 1");
         return ok({ latencyMs: Date.now() - start });
-      } catch {
-        return err(integrationError("postgres", "Connection failed"));
+      } catch (error) {
+        const rawMsg = error instanceof Error ? error.message : String(error);
+        const safeMsg = rawMsg
+          .replace(/password[=:]\s*\S+/gi, "password=***")
+          .replace(/user[=:]\s*\S+/gi, "user=***");
+        return err(integrationError("postgres", `Connection failed: ${safeMsg}`));
       }
     },
 
