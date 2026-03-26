@@ -1,11 +1,15 @@
 export class ApiError extends Error {
+  public serverError: string | undefined;
+
   constructor(
     public status: number,
     public statusText: string,
-    message?: string
+    message?: string,
+    serverError?: string
   ) {
-    super(message || `API Error: ${status} ${statusText}`);
+    super(message || serverError || `API Error: ${status} ${statusText}`);
     this.name = "ApiError";
+    this.serverError = serverError;
   }
 }
 
@@ -40,7 +44,18 @@ function createApiClient(): ApiClientMethods {
     const response = await fetch(url, options);
 
     if (!response.ok) {
-      throw new ApiError(response.status, response.statusText);
+      // Try to read the error body for a meaningful message
+      let serverError: string | undefined;
+      try {
+        const ct = response.headers.get("content-type");
+        if (ct && ct.includes("application/json")) {
+          const errorBody = await response.json() as { error?: string; message?: string };
+          serverError = errorBody.error || errorBody.message;
+        }
+      } catch {
+        // Ignore parse failures — fall through to generic message
+      }
+      throw new ApiError(response.status, response.statusText, undefined, serverError);
     }
 
     // 204 No Content — return undefined

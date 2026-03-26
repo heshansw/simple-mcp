@@ -17,6 +17,7 @@ import { createOAuthNoncesRepository } from "./db/repositories/oauth-nonces.repo
 import { createConfluenceActivityRepository } from "./db/repositories/confluence-activity.repository.js";
 import { createFolderAccessRepository } from "./db/repositories/folder-access.repository.js";
 import { createRepoWorkspacesRepository } from "./db/repositories/repo-workspaces.repository.js";
+import { createDbQueryActivityRepository } from "./db/repositories/db-query-activity.repository.js";
 
 import { createEncryptionService } from "./services/encryption.service.js";
 import { createConnectionManagerService } from "./services/connection-manager.service.js";
@@ -26,6 +27,8 @@ import { createGoogleCalendarService } from "./services/google-calendar.service.
 import type { GoogleTokenBundle } from "./services/google-calendar.service.js";
 import { createLocalFilesystemService } from "./services/local-filesystem.service.js";
 import { createConfluenceService } from "./services/confluence.service.js";
+import { createDatabaseQueryService } from "./services/database-query.service.js";
+import { DbCredentialsSchema, DbPermissionsSchema } from "@shared/schemas/database-connection.schema.js";
 
 import { createLogger, loggingMiddleware } from "./middleware/logging.middleware.js";
 import { errorHandlerMiddleware } from "./middleware/error-handler.middleware.js";
@@ -39,6 +42,7 @@ import {
   sprintPlanningAgent,
   localRepoAnalysisAgent,
   confluenceReaderAgent,
+  databaseExplorerAgent,
 } from "./agents/index.js";
 
 import { createMaintenanceScheduler } from "./maintenance/scheduler.js";
@@ -72,6 +76,10 @@ import { registerFsListWorkspacesTool } from "./tools/local-filesystem/fs-list-w
 import { registerConfluenceSearchPagesTool } from "./tools/confluence/confluence-search-pages.tool.js";
 import { registerConfluenceGetPageTool } from "./tools/confluence/confluence-get-page.tool.js";
 import { registerConfluenceListSpacesTool } from "./tools/confluence/confluence-list-spaces.tool.js";
+import { registerDbListSchemasTool } from "./tools/local-database/db-list-schemas.tool.js";
+import { registerDbListTablesTool } from "./tools/local-database/db-list-tables.tool.js";
+import { registerDbDescribeTableTool } from "./tools/local-database/db-describe-table.tool.js";
+import { registerDbQueryTool } from "./tools/local-database/db-query.tool.js";
 
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
@@ -110,6 +118,7 @@ export async function createServer(
   const confluenceActivityRepo = createConfluenceActivityRepository(db);
   const folderAccessRepo = createFolderAccessRepository(db);
   const workspacesRepo = createRepoWorkspacesRepository(db);
+  const dbQueryActivityRepo = createDbQueryActivityRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -233,6 +242,78 @@ export async function createServer(
     },
   });
 
+  // Database query service — resolves connections from the existing connections/credentials tables
+  const databaseQueryService = createDatabaseQueryService({
+    logger,
+    resolveConnection: async (connectionId) => {
+      const conn = await connectionsRepo.findById(connectionId);
+      if (!conn) {
+        return { _tag: "Err", error: { _tag: "NotFoundError", resource: "Connection", id: connectionId } };
+      }
+      if (conn.integrationType !== "mysql" && conn.integrationType !== "postgres") {
+        return {
+          _tag: "Err",
+          error: { _tag: "ValidationError", message: `Connection '${conn.name}' is not a database connection (type: ${conn.integrationType})`, details: undefined },
+        };
+      }
+      const cred = await credentialsRepo.findByConnectionId(connectionId);
+      if (!cred) {
+        return { _tag: "Err", error: { _tag: "NotFoundError", resource: "Credential", id: connectionId } };
+      }
+      let decrypted: string;
+      try {
+        decrypted = encryptionService.decrypt(cred.encryptedData, cred.iv);
+      } catch {
+        return {
+          _tag: "Err",
+          error: { _tag: "IntegrationError", integration: conn.integrationType, message: "Failed to decrypt credentials", statusCode: undefined },
+        };
+      }
+      let parsedCreds: unknown;
+      try {
+        parsedCreds = JSON.parse(decrypted);
+      } catch {
+        return {
+          _tag: "Err",
+          error: { _tag: "ValidationError", message: "Stored credentials are not valid JSON", details: undefined },
+        };
+      }
+      const credResult = DbCredentialsSchema.safeParse(parsedCreds);
+      if (!credResult.success) {
+        return {
+          _tag: "Err",
+          error: { _tag: "ValidationError", message: "Stored credentials do not match expected schema", details: undefined },
+        };
+      }
+
+      let permissions: import("@shared/schemas/database-connection.schema.js").DbPermissions;
+      try {
+        const raw = conn.dbPermissions && conn.dbPermissions !== "{}" ? JSON.parse(conn.dbPermissions) : {};
+        const parsed = DbPermissionsSchema.safeParse(raw);
+        permissions = parsed.success ? parsed.data : { allowedSchemas: [], allowWrites: false };
+      } catch {
+        permissions = { allowedSchemas: [], allowWrites: false };
+      }
+
+      // Override allowWrites from the column-level flag as well
+      if (conn.allowWrites === 1) {
+        permissions = { ...permissions, allowWrites: true };
+      }
+
+      return {
+        _tag: "Ok",
+        value: {
+          id: conn.id,
+          name: conn.name,
+          dialect: conn.integrationType as "mysql" | "postgres",
+          status: conn.status,
+          permissions,
+          credentials: credResult.data,
+        },
+      };
+    },
+  });
+
   // Create MCP server
   console.error("[startup] Creating MCP server...");
   const mcpServer = new McpServer({
@@ -341,6 +422,14 @@ export async function createServer(
   registerConfluenceListSpacesTool(mcpServer, confluenceToolDeps);
   logger.info("Confluence MCP tools registered");
 
+  // Local database tools — always registered (gated by connection resolution at invocation)
+  const dbToolDeps = { dbQueryService: databaseQueryService, dbQueryActivityRepo, logger };
+  registerDbListSchemasTool(mcpServer, dbToolDeps);
+  registerDbListTablesTool(mcpServer, dbToolDeps);
+  registerDbDescribeTableTool(mcpServer, dbToolDeps);
+  registerDbQueryTool(mcpServer, dbToolDeps);
+  logger.info("Local database MCP tools registered");
+
   console.error("[startup] Tools registered");
 
   logger.info("All MCP tools registered");
@@ -353,6 +442,7 @@ export async function createServer(
   agentRegistry.register(sprintPlanningAgent);
   agentRegistry.register(localRepoAnalysisAgent);
   agentRegistry.register(confluenceReaderAgent);
+  agentRegistry.register(databaseExplorerAgent);
 
   logger.info(
     { agentCount: agentRegistry.getAll().length },
@@ -773,6 +863,150 @@ export async function createServer(
     return c.json(stats);
   });
 
+  // ── Database Connections ────────────────────────────────────────────
+
+  // Create a database connection (MySQL or PostgreSQL)
+  httpApp.post("/api/database-connections", async (c) => {
+    const body = await c.req.json();
+
+    if (!body.name || typeof body.name !== "string" || body.name.trim().length === 0) {
+      return c.json({ error: "name is required" }, { status: 400 });
+    }
+    if (!["mysql", "postgres"].includes(body.dialect)) {
+      return c.json({ error: "dialect must be 'mysql' or 'postgres'" }, { status: 400 });
+    }
+
+    // Validate permissions if provided
+    let permissions: import("@shared/schemas/database-connection.schema.js").DbPermissions = { allowedSchemas: [], allowWrites: false };
+    if (body.permissions) {
+      const parsed = DbPermissionsSchema.safeParse(body.permissions);
+      if (!parsed.success) {
+        return c.json({ error: "Invalid permissions schema", details: parsed.error.flatten() }, { status: 400 });
+      }
+      permissions = parsed.data;
+    }
+
+    const authMethod = body.authMethod || "username_password";
+    if (!["username_password", "connection_string"].includes(authMethod)) {
+      return c.json({ error: "authMethod must be 'username_password' or 'connection_string'" }, { status: 400 });
+    }
+
+    const result = await connectionManager.createConnection({
+      name: body.name.trim(),
+      integrationType: body.dialect,
+      baseUrl: "",
+      authMethod,
+      databaseDialect: body.dialect,
+      allowWrites: permissions.allowWrites ? 1 : 0,
+      dbPermissions: JSON.stringify(permissions),
+    });
+
+    if (isErr(result)) {
+      throw result.error;
+    }
+    return c.json(result.value, { status: 201 });
+  });
+
+  // Get all database connections
+  httpApp.get("/api/database-connections", async (c) => {
+    const result = await connectionManager.getAllConnections();
+    if (isErr(result)) {
+      throw result.error;
+    }
+    const dbConns = result.value.filter(
+      (conn) => conn.integrationType === "mysql" || conn.integrationType === "postgres"
+    );
+    return c.json(dbConns);
+  });
+
+  // Update database connection permissions
+  httpApp.patch("/api/database-connections/:id/permissions", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+
+    const conn = await connectionsRepo.findById(id);
+    if (!conn) {
+      return c.json({ error: "Connection not found" }, { status: 404 });
+    }
+    if (conn.integrationType !== "mysql" && conn.integrationType !== "postgres") {
+      return c.json({ error: "Not a database connection" }, { status: 400 });
+    }
+
+    const parsed = DbPermissionsSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: "Invalid permissions", details: parsed.error.flatten() }, { status: 400 });
+    }
+
+    const updated = await connectionsRepo.update(id, {
+      allowWrites: parsed.data.allowWrites ? 1 : 0,
+      dbPermissions: JSON.stringify(parsed.data),
+    });
+
+    if (!updated) {
+      return c.json({ error: "Connection not found" }, { status: 404 });
+    }
+    return c.json(updated);
+  });
+
+  // Store database credentials
+  httpApp.post("/api/database-connections/:id/credentials", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+
+    const conn = await connectionsRepo.findById(id);
+    if (!conn) {
+      return c.json({ error: "Connection not found" }, { status: 404 });
+    }
+    if (conn.integrationType !== "mysql" && conn.integrationType !== "postgres") {
+      return c.json({ error: "Not a database connection" }, { status: 400 });
+    }
+
+    const credResult = DbCredentialsSchema.safeParse(body);
+    if (!credResult.success) {
+      return c.json({ error: "Invalid credentials", details: credResult.error.flatten() }, { status: 400 });
+    }
+
+    const storeResult = await connectionManager.storeCredentials(id, JSON.stringify(credResult.data));
+    if (isErr(storeResult)) {
+      throw storeResult.error;
+    }
+    await connectionManager.updateConnection(id, { status: "disconnected" });
+    return c.body(null, 204);
+  });
+
+  // Test a database connection
+  httpApp.post("/api/database-connections/:id/test", async (c) => {
+    const id = c.req.param("id");
+
+    const testResult = await databaseQueryService.testConnection(id);
+    if (isErr(testResult)) {
+      // Update status to error
+      await connectionManager.updateConnection(id, { status: "error" });
+      return c.json({ status: "error", error: domainErrorMessage(testResult.error) }, { status: 503 });
+    }
+
+    await connectionManager.updateConnection(id, { status: "connected" });
+    return c.json({ status: "connected", dialect: testResult.value.dialect, latency_ms: testResult.value.latencyMs });
+  });
+
+  // ── Database Query Insights ───────────────────────────────────────
+
+  httpApp.get("/api/database-insights/activity", async (c) => {
+    const limit = Number(c.req.query("limit") ?? "50");
+    const connectionId = c.req.query("connection_id");
+    if (connectionId) {
+      const activity = await dbQueryActivityRepo.findByConnectionId(connectionId, limit);
+      return c.json(activity);
+    }
+    const activity = await dbQueryActivityRepo.findRecent(limit);
+    return c.json(activity);
+  });
+
+  httpApp.get("/api/database-insights/stats", async (c) => {
+    const stats = await dbQueryActivityRepo.getStats();
+    return c.json(stats);
+  });
+
   // ── Folder Access CRUD ──────────────────────────────────────────────
 
   httpApp.get("/api/folder-access", async (c) => {
@@ -1046,6 +1280,7 @@ export async function createServer(
   const cleanup = async (): Promise<void> => {
     logger.info("Shutting down server");
     scheduler.stop();
+    await databaseQueryService.closeAll();
     logger.info("Server shutdown complete");
   };
 

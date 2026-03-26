@@ -17,6 +17,7 @@ import { MyPRsPage } from "@frontend/routes/my-prs/index";
 import { ReviewsPage } from "@frontend/routes/reviews/index";
 import { LocalReposPage } from "@frontend/routes/local-repos/index";
 import { ConfluencePage } from "@frontend/routes/confluence/index";
+import { DatabasesPage } from "@frontend/routes/databases/index";
 import { useState } from "react";
 
 // Create root route
@@ -77,6 +78,13 @@ const confluenceRoute = new Route({
   component: ConfluencePage,
 });
 
+// Databases route
+const databasesRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/databases",
+  component: DatabasesPage,
+});
+
 // Settings route
 const settingsRoute = new Route({
   getParentRoute: () => rootRoute,
@@ -110,6 +118,7 @@ const routeTree = rootRoute.addChildren([
   agentDetailRoute,
   localReposRoute,
   confluenceRoute,
+  databasesRoute,
   settingsRoute,
 ]);
 

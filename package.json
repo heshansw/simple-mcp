@@ -28,7 +28,9 @@
     "drizzle-orm": "^0.39.3",
     "fast-glob": "^3.3.3",
     "hono": "^4.7.5",
+    "mysql2": "^3.20.0",
     "node-html-markdown": "^2.0.0",
+    "pg": "^8.20.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
     "zod": "^3.24.2"
@@ -40,6 +42,7 @@
     "@tanstack/router-devtools": "^1.114.3",
     "@tanstack/router-plugin": "^1.114.2",
     "@types/node": "^22.13.10",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",

@@ -29,9 +29,12 @@ export interface ConnectionManagerService {
   getConnection(id: string): Promise<Result<Connection, DomainError>>;
   createConnection(data: {
     name: string;
-    integrationType: "jira" | "github" | "google-calendar" | "local-filesystem";
+    integrationType: "jira" | "github" | "google-calendar" | "local-filesystem" | "mysql" | "postgres";
     baseUrl?: string;
-    authMethod: "oauth2" | "api_token" | "personal_access_token";
+    authMethod: "oauth2" | "api_token" | "personal_access_token" | "connection_string" | "username_password";
+    databaseDialect?: string;
+    allowWrites?: number;
+    dbPermissions?: string;
   }): Promise<Result<Connection, DomainError>>;
   updateConnection(
     id: string,
@@ -94,9 +97,12 @@ export function createConnectionManagerService(
 
     async createConnection(data: {
       name: string;
-      integrationType: "jira" | "github" | "google-calendar" | "local-filesystem";
+      integrationType: "jira" | "github" | "google-calendar" | "local-filesystem" | "mysql" | "postgres";
       baseUrl?: string;
-      authMethod: "oauth2" | "api_token" | "personal_access_token";
+      authMethod: "oauth2" | "api_token" | "personal_access_token" | "connection_string" | "username_password";
+      databaseDialect?: string;
+      allowWrites?: number;
+      dbPermissions?: string;
     }): Promise<Result<Connection, DomainError>> {
       try {
         // Validate input
@@ -106,23 +112,20 @@ export function createConnectionManagerService(
           );
         }
 
-        if (!["jira", "github", "google-calendar", "local-filesystem"].includes(data.integrationType)) {
+        const validTypes = ["jira", "github", "google-calendar", "local-filesystem", "mysql", "postgres"];
+        if (!validTypes.includes(data.integrationType)) {
           return err(
             validationError("Invalid integration type", {
-              integrationType: "Must be 'jira', 'github', 'google-calendar', or 'local-filesystem'",
+              integrationType: `Must be one of: ${validTypes.join(", ")}`,
             })
           );
         }
 
-        if (
-          !["oauth2", "api_token", "personal_access_token"].includes(
-            data.authMethod
-          )
-        ) {
+        const validAuthMethods = ["oauth2", "api_token", "personal_access_token", "connection_string", "username_password"];
+        if (!validAuthMethods.includes(data.authMethod)) {
           return err(
             validationError("Invalid auth method", {
-              authMethod:
-                "Must be 'oauth2', 'api_token', or 'personal_access_token'",
+              authMethod: `Must be one of: ${validAuthMethods.join(", ")}`,
             })
           );
         }
@@ -133,6 +136,9 @@ export function createConnectionManagerService(
           baseUrl: data.baseUrl || "",
           authMethod: data.authMethod,
           status: "disconnected",
+          databaseDialect: data.databaseDialect,
+          allowWrites: data.allowWrites ?? 0,
+          dbPermissions: data.dbPermissions ?? "{}",
         });
 
         return ok(created);

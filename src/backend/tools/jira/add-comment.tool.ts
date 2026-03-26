@@ -5,7 +5,9 @@ import type { Result, DomainError } from "@shared/result.js";
 
 export const AddCommentInputSchema = z.object({
   issueKey: z.string().min(1, "Issue key is required"),
-  body: z.string().min(1, "Comment body cannot be empty"),
+  body: z.string().min(1, "Comment body cannot be empty").describe(
+    "Comment body in markdown format. Supports: headings (#), bullet lists (- or *), ordered lists (1.), code blocks (```lang), blockquotes (>), inline **bold**, *italic*, ~~strikethrough~~, `code`, [links](url). Automatically converted to Jira's ADF format."
+  ),
 });
 
 export type AddCommentInput = z.infer<typeof AddCommentInputSchema>;
@@ -32,7 +34,7 @@ export function registerAddCommentTool(
 ): void {
   server.tool(
     "jira_add_comment",
-    "Add a comment to a Jira issue",
+    "Add a comment to a Jira issue. The body accepts markdown which is automatically converted to Jira's Atlassian Document Format (ADF) — supports headings, lists, code blocks, bold, italic, links, and more.",
     AddCommentInputSchema.shape,
     async (args) => {
       try {
