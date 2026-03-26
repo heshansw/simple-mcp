@@ -232,7 +232,7 @@ export function NewConnectionPage() {
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      authMethod: AuthMethodSchema.parse(e.target.value),
+                      authMethod: AuthMethodSchema.parse(e.target.value) as "oauth2" | "api_token" | "personal_access_token",
                     })
                   }
                   style={inputStyle}

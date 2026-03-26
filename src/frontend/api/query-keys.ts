@@ -46,6 +46,20 @@ export const workspaceKeys = {
   detail: (id: string) => [...workspaceKeys.details(), id] as const,
 };
 
+export const databaseConnectionKeys = {
+  all: ["database-connections"] as const,
+  lists: () => [...databaseConnectionKeys.all, "list"] as const,
+  list: () => databaseConnectionKeys.lists(),
+  details: () => [...databaseConnectionKeys.all, "detail"] as const,
+  detail: (id: string) => [...databaseConnectionKeys.details(), id] as const,
+};
+
+export const databaseInsightsKeys = {
+  all: ["database-insights"] as const,
+  activity: (connectionId?: string) => [...databaseInsightsKeys.all, "activity", connectionId ?? "all"] as const,
+  stats: () => [...databaseInsightsKeys.all, "stats"] as const,
+};
+
 export const githubKeys = {
   all: ["github"] as const,
   me: () => [...githubKeys.all, "me"] as const,

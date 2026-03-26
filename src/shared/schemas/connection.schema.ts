@@ -13,6 +13,8 @@ export const AuthMethodSchema = z.enum([
   "oauth2",
   "api_token",
   "personal_access_token",
+  "connection_string",
+  "username_password",
 ]);
 
 export type AuthMethod = z.infer<typeof AuthMethodSchema>;
@@ -20,7 +22,7 @@ export type AuthMethod = z.infer<typeof AuthMethodSchema>;
 export const ConnectionConfigSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  integrationType: z.enum(["jira", "github", "google-calendar", "local-filesystem"]),
+  integrationType: z.enum(["jira", "github", "google-calendar", "local-filesystem", "mysql", "postgres"]),
   baseUrl: z.string().url().optional(),
   authMethod: AuthMethodSchema,
   status: ConnectionStatusSchema,

@@ -33,6 +33,9 @@ async function createTables(
       base_url TEXT NOT NULL,
       auth_method TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'disconnected',
+      database_dialect TEXT,
+      allow_writes INTEGER NOT NULL DEFAULT 0,
+      db_permissions TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -113,6 +116,23 @@ async function createTables(
       error_tag TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS db_query_activity (
+      id TEXT PRIMARY KEY,
+      connection_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      dialect TEXT NOT NULL,
+      schema_name TEXT,
+      table_name TEXT,
+      sql_query TEXT,
+      row_count INTEGER NOT NULL DEFAULT 0,
+      result_size_bytes INTEGER NOT NULL DEFAULT 0,
+      input_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+      output_tokens_estimate INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      success INTEGER NOT NULL DEFAULT 1,
+      error_tag TEXT,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       owner TEXT NOT NULL,
@@ -136,6 +156,21 @@ async function createTables(
       created_at TEXT NOT NULL
     );
   `);
+
+  // Additive migrations — ALTER TABLE is idempotent-safe with try/catch per column
+  const migrations = [
+    "ALTER TABLE connections ADD COLUMN database_dialect TEXT",
+    "ALTER TABLE connections ADD COLUMN allow_writes INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE connections ADD COLUMN db_permissions TEXT NOT NULL DEFAULT '{}'",
+  ];
+
+  for (const sql of migrations) {
+    try {
+      await client.execute(sql);
+    } catch {
+      // Column already exists — expected for idempotent migrations
+    }
+  }
 }
 
 export function backupDatabase(dbPath: string): void {

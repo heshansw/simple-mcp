@@ -40,8 +40,14 @@ export function createRepoWorkspaceId(value: string): RepoWorkspaceId {
   return value as RepoWorkspaceId;
 }
 
+export type DatabaseConnectionId = Brand<string, "DatabaseConnectionId">;
+
+export function createDatabaseConnectionId(value: string): DatabaseConnectionId {
+  return value as DatabaseConnectionId;
+}
+
 // Integration type literal
-export type IntegrationType = "jira" | "github" | "google-calendar" | "local-filesystem";
+export type IntegrationType = "jira" | "github" | "google-calendar" | "local-filesystem" | "mysql" | "postgres";
 
 // Utility types
 export type Prettify<T> = {

@@ -7,6 +7,9 @@ export const connectionsTable = sqliteTable("connections", {
   baseUrl: text("base_url").notNull(),
   authMethod: text("auth_method").notNull(),
   status: text("status").default("disconnected").notNull(),
+  databaseDialect: text("database_dialect"), // "mysql" | "postgres" — only when integrationType is mysql/postgres
+  allowWrites: integer("allow_writes").default(0).notNull(), // 0 = read-only, 1 = allow INSERT/UPDATE/DELETE
+  dbPermissions: text("db_permissions").default("{}").notNull(), // JSON: { allowedSchemas: [...], allowWrites: false }
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
@@ -95,6 +98,24 @@ export const confluenceActivityTable = sqliteTable("confluence_activity", {
   cql: text("cql"), // nullable — only for search
   resultCount: integer("result_count").notNull().default(0),
   contentSizeBytes: integer("content_size_bytes").notNull().default(0),
+  durationMs: integer("duration_ms").notNull().default(0),
+  success: integer("success").notNull().default(1), // 0 = error, 1 = success
+  errorTag: text("error_tag"), // nullable
+  createdAt: text("created_at").notNull(),
+});
+
+export const dbQueryActivityTable = sqliteTable("db_query_activity", {
+  id: text("id").primaryKey(),
+  connectionId: text("connection_id").notNull(),
+  toolName: text("tool_name").notNull(), // db_list_schemas | db_list_tables | db_describe_table | db_query
+  dialect: text("dialect").notNull(), // mysql | postgres
+  schemaName: text("schema_name"), // nullable
+  tableName: text("table_name"), // nullable
+  sqlQuery: text("sql_query"), // nullable — only for db_query
+  rowCount: integer("row_count").notNull().default(0),
+  resultSizeBytes: integer("result_size_bytes").notNull().default(0),
+  inputTokensEstimate: integer("input_tokens_estimate").notNull().default(0),
+  outputTokensEstimate: integer("output_tokens_estimate").notNull().default(0),
   durationMs: integer("duration_ms").notNull().default(0),
   success: integer("success").notNull().default(1), // 0 = error, 1 = success
   errorTag: text("error_tag"), // nullable
