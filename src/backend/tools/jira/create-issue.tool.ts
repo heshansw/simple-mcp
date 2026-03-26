@@ -7,7 +7,9 @@ export const CreateIssueInputSchema = z.object({
   projectKey: z.string().min(1, "Project key is required"),
   summary: z.string().min(1, "Summary is required"),
   issueType: z.string().default("Task"),
-  description: z.string().optional(),
+  description: z.string().optional().describe(
+    "Issue description in markdown format. Supports: headings (#), bullet lists (- or *), ordered lists (1.), code blocks (```lang), blockquotes (>), inline **bold**, *italic*, ~~strikethrough~~, `code`, [links](url). Automatically converted to Jira's ADF format."
+  ),
 });
 
 export type CreateIssueInput = z.infer<typeof CreateIssueInputSchema>;

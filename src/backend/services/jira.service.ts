@@ -6,6 +6,7 @@ import {
   integrationError,
 } from "../../shared/result.js";
 import type { DomainError } from "../../shared/result.js";
+import { markdownToAdf } from "./markdown-to-adf.js";
 
 // ── Jira API response types ────────────────────────────────────────────
 
@@ -292,17 +293,9 @@ export function createJiraService(
         };
 
         // Jira Cloud v3 uses ADF (Atlassian Document Format) for description
+        // Convert markdown to ADF so agents can send rich-formatted descriptions
         if (description) {
-          fields.description = {
-            type: "doc",
-            version: 1,
-            content: [
-              {
-                type: "paragraph",
-                content: [{ type: "text", text: description }],
-              },
-            ],
-          };
+          fields.description = markdownToAdf(description);
         }
 
         return await jiraFetch<JiraCreateIssueResponse>(siteUrl, auth, "/issue", {
@@ -469,16 +462,8 @@ export function createJiraService(
         logger.debug({ issueKey }, "Adding comment to Jira issue");
 
         // Jira Cloud v3 requires ADF (Atlassian Document Format) for comment body
-        const adfBody = {
-          type: "doc",
-          version: 1,
-          content: [
-            {
-              type: "paragraph",
-              content: [{ type: "text", text: body }],
-            },
-          ],
-        };
+        // Convert markdown to proper ADF so agents can send rich-formatted comments
+        const adfBody = markdownToAdf(body);
 
         return await jiraFetch<JiraAddCommentResponse>(
           siteUrl,
