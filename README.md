@@ -46,6 +46,14 @@ A React 19 web UI for managing the MCP server:
 #### Main Dashboard
 <img width="1725" height="956" alt="main-dashboard" src="https://github.com/user-attachments/assets/619533d7-29e0-431a-95cc-6d9cfebebc09" />
 
+#### Local Repository Management 
+<img width="1800" height="1542" alt="screencapture-localhost-3100-local-repos-2026-04-02-17_15_33" src="https://github.com/user-attachments/assets/291b1027-4b32-4eea-970a-6b8959c035fe" />
+
+#### Local Database Connection and token consumption log
+<img width="1800" height="1158" alt="screencapture-localhost-3100-databases-2026-04-02-17_17_05" src="https://github.com/user-attachments/assets/05f29e28-12d4-408f-b910-fbc1897cd581" />
+
+<img width="1800" height="1532" alt="screencapture-localhost-3100-databases-2026-04-02-17_18_03" src="https://github.com/user-attachments/assets/2d8b1952-dbc5-40fb-a877-a6b3b36b833d" />
+
 
 ### Pre-built Agents
 
