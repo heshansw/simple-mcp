@@ -122,6 +122,37 @@ export const dbQueryActivityTable = sqliteTable("db_query_activity", {
   createdAt: text("created_at").notNull(),
 });
 
+export const agentRunsTable = sqliteTable("agent_runs", {
+  id: text("id").primaryKey(),
+  agentId: text("agent_id").notNull(),
+  goal: text("goal").notNull(),
+  status: text("status").notNull().default("planning"), // planning | executing | completed | failed | cancelled
+  result: text("result"), // JSON serialized AgentRunResult
+  config: text("config").notNull().default("{}"), // JSON serialized AgentRunConfig
+  iterationCount: integer("iteration_count").notNull().default(0),
+  toolCallCount: integer("tool_call_count").notNull().default(0),
+  inputTokensUsed: integer("input_tokens_used").notNull().default(0),
+  outputTokensUsed: integer("output_tokens_used").notNull().default(0),
+  parentRunId: text("parent_run_id"), // nullable, set for delegated runs
+  errorMessage: text("error_message"), // nullable
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"), // nullable
+  createdAt: text("created_at").notNull(),
+});
+
+export const agentTasksTable = sqliteTable("agent_tasks", {
+  id: text("id").primaryKey(),
+  runId: text("run_id").notNull(),
+  description: text("description").notNull(),
+  dependsOn: text("depends_on").notNull().default("[]"), // JSON array of task IDs
+  requiredTools: text("required_tools").notNull().default("[]"), // JSON array of tool names
+  status: text("status").notNull().default("pending"), // pending | in_progress | completed | failed | skipped
+  result: text("result"), // nullable, JSON
+  startedAt: text("started_at"), // nullable
+  completedAt: text("completed_at"), // nullable
+  createdAt: text("created_at").notNull(),
+});
+
 export const reviewsTable = sqliteTable("reviews", {
   id: text("id").primaryKey(),
   owner: text("owner").notNull(),

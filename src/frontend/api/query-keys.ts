@@ -60,6 +60,15 @@ export const databaseInsightsKeys = {
   stats: () => [...databaseInsightsKeys.all, "stats"] as const,
 };
 
+export const agentExecutionKeys = {
+  all: ["agent-executions"] as const,
+  lists: () => [...agentExecutionKeys.all, "list"] as const,
+  list: (filters?: { agentId?: string; limit?: number }) =>
+    [...agentExecutionKeys.lists(), filters] as const,
+  details: () => [...agentExecutionKeys.all, "detail"] as const,
+  detail: (id: string) => [...agentExecutionKeys.details(), id] as const,
+};
+
 export const githubKeys = {
   all: ["github"] as const,
   me: () => [...githubKeys.all, "me"] as const,

@@ -133,6 +133,35 @@ async function createTables(
       error_tag TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS agent_runs (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      goal TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'planning',
+      result TEXT,
+      config TEXT NOT NULL DEFAULT '{}',
+      iteration_count INTEGER NOT NULL DEFAULT 0,
+      tool_call_count INTEGER NOT NULL DEFAULT 0,
+      input_tokens_used INTEGER NOT NULL DEFAULT 0,
+      output_tokens_used INTEGER NOT NULL DEFAULT 0,
+      parent_run_id TEXT,
+      error_message TEXT,
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS agent_tasks (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      description TEXT NOT NULL,
+      depends_on TEXT NOT NULL DEFAULT '[]',
+      required_tools TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'pending',
+      result TEXT,
+      started_at TEXT,
+      completed_at TEXT,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       owner TEXT NOT NULL,

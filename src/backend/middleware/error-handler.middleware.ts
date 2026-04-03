@@ -22,9 +22,12 @@ function mapDomainErrorToStatus(error: DomainError): number {
       return 502;
     case "DatabaseError":
       return 500;
-    default:
+    case "AgentExecutionError":
+      return 500;
+    default: {
       const _exhaustive: never = error;
       return _exhaustive;
+    }
   }
 }
 
@@ -40,9 +43,12 @@ function mapDomainErrorToCode(error: DomainError): string {
       return "INTEGRATION_ERROR";
     case "DatabaseError":
       return "DATABASE_ERROR";
-    default:
+    case "AgentExecutionError":
+      return "AGENT_EXECUTION_ERROR";
+    default: {
       const _exhaustive: never = error;
       return _exhaustive;
+    }
   }
 }
 
@@ -95,9 +101,13 @@ export function errorHandlerMiddleware(logger: pino.Logger) {
           case "DatabaseError":
             message = error.message;
             break;
-          default:
+          case "AgentExecutionError":
+            message = `Agent ${error.agentId} failed during ${error.phase}: ${error.message}`;
+            break;
+          default: {
             const _exhaustive: never = error;
             return _exhaustive;
+          }
         }
 
         const response: ErrorResponse = {
@@ -108,7 +118,7 @@ export function errorHandlerMiddleware(logger: pino.Logger) {
           },
         };
 
-        return c.json(response, status as 400 | 401 | 404 | 500 | 502);
+        return c.json(response, status as 400 | 401 | 404 | 500 | 502 | 503);
       }
 
       // Unexpected error
