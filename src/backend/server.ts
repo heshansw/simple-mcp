@@ -843,9 +843,11 @@ export async function createServer(
   });
 
   // ── Agent Execution API ──────────────────────────────────────────────
+  // Uses /api/agent-runs (NOT /api/agents/runs) to avoid Hono route
+  // conflict with the /api/agents/:id wildcard route below.
 
-  // POST /api/agents/execute — start an agent execution
-  httpApp.post("/api/agents/execute", async (c) => {
+  // POST /api/agent-runs/execute — start an agent execution
+  httpApp.post("/api/agent-runs/execute", async (c) => {
     const body = await c.req.json();
     const { agentId, goal, config: configOverrides } = body;
     if (!agentId || !goal) {
@@ -863,15 +865,15 @@ export async function createServer(
     return c.json(result.value, { status: 200 });
   });
 
-  // GET /api/agents/runs — list recent agent runs
-  httpApp.get("/api/agents/runs", async (c) => {
+  // GET /api/agent-runs — list recent agent runs
+  httpApp.get("/api/agent-runs", async (c) => {
     const limit = Number(c.req.query("limit") ?? "50");
     const runs = await agentRunsRepo.findRecent(limit);
     return c.json(runs);
   });
 
-  // GET /api/agents/runs/:id — get a specific run's status
-  httpApp.get("/api/agents/runs/:id", async (c) => {
+  // GET /api/agent-runs/:id — get a specific run's status
+  httpApp.get("/api/agent-runs/:id", async (c) => {
     const runId = c.req.param("id");
     const { createAgentRunId: makeRunId } = await import("@shared/types.js");
     const result = await executionEngine.getRunStatus(makeRunId(runId));
@@ -881,8 +883,8 @@ export async function createServer(
     return c.json(result.value);
   });
 
-  // POST /api/agents/runs/:id/cancel — cancel a running agent
-  httpApp.post("/api/agents/runs/:id/cancel", async (c) => {
+  // POST /api/agent-runs/:id/cancel — cancel a running agent
+  httpApp.post("/api/agent-runs/:id/cancel", async (c) => {
     const runId = c.req.param("id");
     const { createAgentRunId: makeRunId } = await import("@shared/types.js");
     const result = await executionEngine.cancelRun(makeRunId(runId));

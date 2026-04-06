@@ -74,7 +74,7 @@ export function useAgentExecutions(filters?: { agentId?: string; limit?: number 
       if (agentId) {
         params.set("agentId", agentId);
       }
-      return apiClient.get<AgentRunListItem[]>(`/agents/runs?${params.toString()}`);
+      return apiClient.get<AgentRunListItem[]>(`/agent-runs?${params.toString()}`);
     },
   });
 }
@@ -82,7 +82,7 @@ export function useAgentExecutions(filters?: { agentId?: string; limit?: number 
 export function useAgentExecution(runId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: agentExecutionKeys.detail(runId),
-    queryFn: () => apiClient.get<AgentRunDetail>(`/agents/runs/${runId}`),
+    queryFn: () => apiClient.get<AgentRunDetail>(`/agent-runs/${runId}`),
     enabled: options?.enabled ?? true,
     refetchInterval: (query) => {
       const data = query.state.data;
@@ -101,7 +101,7 @@ export function useExecuteAgent() {
 
   return useMutation({
     mutationFn: (input: ExecuteAgentInput) =>
-      apiClient.post<AgentRunResult>("/agents/execute", input),
+      apiClient.post<AgentRunResult>("/agent-runs/execute", input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: agentExecutionKeys.lists() });
     },
@@ -113,7 +113,7 @@ export function useCancelAgentRun() {
 
   return useMutation({
     mutationFn: (runId: string) =>
-      apiClient.post<{ success: boolean }>(`/agents/runs/${runId}/cancel`, {}),
+      apiClient.post<{ success: boolean }>(`/agent-runs/${runId}/cancel`, {}),
     onSuccess: (_data, runId) => {
       queryClient.invalidateQueries({ queryKey: agentExecutionKeys.detail(runId) });
       queryClient.invalidateQueries({ queryKey: agentExecutionKeys.lists() });
