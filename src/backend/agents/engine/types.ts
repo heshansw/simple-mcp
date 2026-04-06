@@ -1,4 +1,4 @@
-import type { AgentId, AgentRunId, AgentTaskId } from "@shared/types";
+import type { AgentId, AgentRunId, AgentTaskId, AgentRunStepId } from "@shared/types";
 
 // ── Execution state machine (discriminated union) ──────────────────────
 
@@ -14,6 +14,37 @@ export type AgentRunState =
   | { readonly _tag: "Cancelled"; readonly reason: string };
 
 export type ExecutionPhase = "planning" | "execution" | "reflection" | "delegation";
+
+// ── Step tracking types ─────────────────────────────────────────────
+
+export const STEP_TYPES = {
+  LLM_CALL: "llm_call",
+  TOOL_CALL: "tool_call",
+  DELEGATION: "delegation",
+  PLAN: "plan",
+  ERROR: "error",
+  GUARDRAIL: "guardrail",
+} as const;
+
+export type StepType = (typeof STEP_TYPES)[keyof typeof STEP_TYPES];
+
+export type AgentRunStep = {
+  readonly id: AgentRunStepId;
+  readonly runId: AgentRunId;
+  readonly stepIndex: number;
+  readonly stepType: StepType;
+  readonly toolName: string | null;
+  readonly toolArgs: string | null;
+  readonly toolResult: string | null;
+  readonly toolIsError: boolean | null;
+  readonly delegateTargetAgentId: string | null;
+  readonly delegateChildRunId: string | null;
+  readonly reasoning: string | null;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly durationMs: number;
+  readonly createdAt: string;
+};
 
 // ── Run configuration ──────────────────────────────────────────────────
 
@@ -33,7 +64,7 @@ export const DEFAULT_RUN_CONFIG: AgentRunConfig = {
   maxTokens: 200_000,
   timeoutMs: 5 * 60 * 1000, // 5 minutes
   model: "claude-sonnet-4-20250514",
-  maxDelegationDepth: 2,
+  maxDelegationDepth: 3,
   observationSummaryThreshold: 4000,
 } as const;
 

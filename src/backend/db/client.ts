@@ -162,6 +162,23 @@ async function createTables(
       completed_at TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS agent_run_steps (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      step_index INTEGER NOT NULL DEFAULT 0,
+      step_type TEXT NOT NULL,
+      tool_name TEXT,
+      tool_args TEXT,
+      tool_result TEXT,
+      tool_is_error INTEGER,
+      delegate_target_agent_id TEXT,
+      delegate_child_run_id TEXT,
+      reasoning TEXT,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       owner TEXT NOT NULL,

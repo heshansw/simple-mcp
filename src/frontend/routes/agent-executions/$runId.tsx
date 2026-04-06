@@ -1,9 +1,19 @@
+import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { useAgentExecution, useCancelAgentRun } from "@frontend/api/agent-executions.api";
+import {
+  useAgentExecution,
+  useCancelAgentRun,
+  useAgentRunSteps,
+  useDelegationTree,
+} from "@frontend/api/agent-executions.api";
 import { useAgents } from "@frontend/api/agents.api";
 import { LoadingSpinner } from "@frontend/components/loading-spinner";
 import { ErrorDisplay } from "@frontend/components/error-display";
 import { RunStatusBadge } from "@frontend/components/run-status-badge";
+import { StepTimeline } from "@frontend/components/step-timeline";
+import { ToolCallLog } from "@frontend/components/tool-call-log";
+import { DelegationTree } from "@frontend/components/delegation-tree";
+import { TokenUsageChart } from "@frontend/components/token-usage-chart";
 
 function formatDateTime(dateString: string): string {
   return new Date(dateString).toLocaleString();
@@ -62,19 +72,43 @@ function StatCard({ label, value }: StatCardProps) {
   );
 }
 
+const TAB_IDS = ["steps", "tools", "delegation", "tokens"] as const;
+type TabId = (typeof TAB_IDS)[number];
+
+const TAB_LABELS: Record<TabId, string> = {
+  steps: "Steps",
+  tools: "Tool Calls",
+  delegation: "Delegation",
+  tokens: "Token Usage",
+};
+
 export function AgentExecutionDetailPage() {
   const { runId } = useParams({ strict: false }) as { runId: string };
   const { data: run, isLoading, error } = useAgentExecution(runId);
   const { data: agents } = useAgents();
   const cancelRun = useCancelAgentRun();
+  const [activeTab, setActiveTab] = useState<TabId>("steps");
+
+  const active = run ? isActiveState(run.state) : false;
+
+  const { data: stepsData } = useAgentRunSteps(runId, {
+    enabled: true,
+    refetchInterval: active ? 3000 : false,
+  });
+
+  const { data: delegationTree } = useDelegationTree(runId, {
+    enabled: activeTab === "delegation",
+  });
 
   const agentName = agents?.find((a) => a.id === run?.agentId)?.name ?? run?.agentId ?? "Unknown";
-  const active = run ? isActiveState(run.state) : false;
 
   const handleCancel = async () => {
     if (!run) return;
     await cancelRun.mutateAsync(run.runId);
   };
+
+  // Determine if delegation tab should be visible
+  const hasDelegation = stepsData?.steps.some((s) => s.stepType === "delegation") ?? false;
 
   if (isLoading) {
     return <LoadingSpinner message="Loading execution details..." />;
@@ -371,6 +405,81 @@ export function AgentExecutionDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Tabbed Step Views */}
+      <div
+        style={{
+          backgroundColor: "#fff",
+          border: "1px solid #e5e7eb",
+          borderRadius: "0.375rem",
+          marginBottom: "1.5rem",
+          overflow: "hidden",
+        }}
+      >
+        {/* Tab Bar */}
+        <div
+          style={{
+            display: "flex",
+            borderBottom: "1px solid #e5e7eb",
+            backgroundColor: "#f9fafb",
+          }}
+        >
+          {TAB_IDS.filter((id) => id !== "delegation" || hasDelegation).map((tabId) => (
+            <button
+              key={tabId}
+              onClick={() => setActiveTab(tabId)}
+              style={{
+                padding: "0.75rem 1.25rem",
+                fontSize: "0.8125rem",
+                fontWeight: activeTab === tabId ? "600" : "400",
+                color: activeTab === tabId ? "#3b82f6" : "#6b7280",
+                backgroundColor: "transparent",
+                border: "none",
+                borderBottom: activeTab === tabId ? "2px solid #3b82f6" : "2px solid transparent",
+                cursor: "pointer",
+                marginBottom: "-1px",
+              }}
+            >
+              {TAB_LABELS[tabId]}
+              {tabId === "steps" && stepsData && (
+                <span style={{ marginLeft: "0.375rem", fontSize: "0.6875rem", color: "#9ca3af" }}>
+                  ({stepsData.total})
+                </span>
+              )}
+              {tabId === "tools" && stepsData && (
+                <span style={{ marginLeft: "0.375rem", fontSize: "0.6875rem", color: "#9ca3af" }}>
+                  ({stepsData.steps.filter((s) => s.stepType === "tool_call").length})
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        <div style={{ padding: "1rem" }}>
+          {activeTab === "steps" && stepsData && (
+            <StepTimeline steps={stepsData.steps} total={stepsData.total} />
+          )}
+          {activeTab === "steps" && !stepsData && (
+            <LoadingSpinner message="Loading steps..." />
+          )}
+
+          {activeTab === "tools" && stepsData && (
+            <ToolCallLog steps={stepsData.steps} />
+          )}
+
+          {activeTab === "delegation" && delegationTree && (
+            <DelegationTree tree={delegationTree} />
+          )}
+          {activeTab === "delegation" && !delegationTree && (
+            <LoadingSpinner message="Loading delegation tree..." />
+          )}
+
+          {activeTab === "tokens" && stepsData && (
+            <TokenUsageChart steps={stepsData.steps} />
+          )}
+        </div>
+      </div>
 
       {/* Run ID */}
       <div

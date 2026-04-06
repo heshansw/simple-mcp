@@ -153,6 +153,24 @@ export const agentTasksTable = sqliteTable("agent_tasks", {
   createdAt: text("created_at").notNull(),
 });
 
+export const agentRunStepsTable = sqliteTable("agent_run_steps", {
+  id: text("id").primaryKey(),
+  runId: text("run_id").notNull(),
+  stepIndex: integer("step_index").notNull().default(0),
+  stepType: text("step_type").notNull(), // llm_call | tool_call | delegation | plan | error | guardrail
+  toolName: text("tool_name"), // nullable
+  toolArgs: text("tool_args"), // nullable, JSON
+  toolResult: text("tool_result"), // nullable, truncated
+  toolIsError: integer("tool_is_error"), // nullable, 0 or 1
+  delegateTargetAgentId: text("delegate_target_agent_id"), // nullable
+  delegateChildRunId: text("delegate_child_run_id"), // nullable
+  reasoning: text("reasoning"), // nullable, for llm_call steps
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  durationMs: integer("duration_ms").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
 export const reviewsTable = sqliteTable("reviews", {
   id: text("id").primaryKey(),
   owner: text("owner").notNull(),

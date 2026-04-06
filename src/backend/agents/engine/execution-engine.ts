@@ -24,8 +24,9 @@ import type {
   AgentRunResult,
   AgentRunStatus,
   ToolInvocation,
+  StepType,
 } from "./types.js";
-import { DEFAULT_RUN_CONFIG } from "./types.js";
+import { DEFAULT_RUN_CONFIG, STEP_TYPES } from "./types.js";
 
 // ── Repository interfaces (minimal, no circular import) ────────────────
 
@@ -66,6 +67,28 @@ export type ConnectionManagerLike = {
   readonly hasTool: (toolName: string) => boolean;
 };
 
+// ── Steps repository interface (minimal) ──────────────────────────────
+
+export type AgentRunStepsRepo = {
+  readonly create: (data: {
+    runId: string;
+    stepIndex: number;
+    stepType: string;
+    toolName?: string | null;
+    toolArgs?: string | null;
+    toolResult?: string | null;
+    toolIsError?: number | null;
+    delegateTargetAgentId?: string | null;
+    delegateChildRunId?: string | null;
+    reasoning?: string | null;
+    inputTokens: number;
+    outputTokens: number;
+    durationMs: number;
+    createdAt: string;
+  }) => Promise<unknown>;
+  readonly getNextStepIndex: (runId: string) => Promise<number>;
+};
+
 // ── Engine dependencies ────────────────────────────────────────────────
 
 export type ExecutionEngineDeps = {
@@ -78,6 +101,7 @@ export type ExecutionEngineDeps = {
   readonly taskPlanner: TaskPlanner;
   readonly delegationHandler: DelegationHandler | null;
   readonly agentRunsRepo: AgentRunsRepo;
+  readonly agentRunStepsRepo: AgentRunStepsRepo | null;
 };
 
 // ── Public interface ───────────────────────────────────────────────────
@@ -113,6 +137,50 @@ export function createExecutionEngine(
 
   // Track active runs for cancellation
   const activeRuns = new Map<string, { cancelled: boolean }>();
+
+  // Fire-and-forget step recording — never blocks the execution loop
+  const stepCounters = new Map<string, number>();
+
+  function emitStep(
+    runId: string,
+    stepType: StepType,
+    data: {
+      toolName?: string;
+      toolArgs?: string;
+      toolResult?: string;
+      toolIsError?: boolean;
+      delegateTargetAgentId?: string;
+      delegateChildRunId?: string;
+      reasoning?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+      durationMs?: number;
+    }
+  ): void {
+    if (!deps.agentRunStepsRepo) return;
+    const idx = stepCounters.get(runId) ?? 0;
+    stepCounters.set(runId, idx + 1);
+    deps.agentRunStepsRepo
+      .create({
+        runId,
+        stepIndex: idx,
+        stepType,
+        toolName: data.toolName ?? null,
+        toolArgs: data.toolArgs ?? null,
+        toolResult: data.toolResult ?? null,
+        toolIsError: data.toolIsError != null ? (data.toolIsError ? 1 : 0) : null,
+        delegateTargetAgentId: data.delegateTargetAgentId ?? null,
+        delegateChildRunId: data.delegateChildRunId ?? null,
+        reasoning: data.reasoning ?? null,
+        inputTokens: data.inputTokens ?? 0,
+        outputTokens: data.outputTokens ?? 0,
+        durationMs: data.durationMs ?? 0,
+        createdAt: new Date().toISOString(),
+      })
+      .catch((error) => {
+        logger.error({ error, runId, stepType }, "Failed to record step");
+      });
+  }
 
   async function getClient(): Promise<Anthropic | null> {
     const apiKey = await deps.getAnthropicApiKey();
@@ -265,19 +333,24 @@ export function createExecutionEngine(
 
       // ── 7. Optional planning phase ────────────────────────────────
       try {
+        const planStart = Date.now();
         const planResult = await taskPlanner.plan(
           goal,
           availableTools.map((t) => t.name)
         );
         if (planResult._tag === "Ok" && planResult.value.tasks.length > 1) {
-          // Add plan context to working memory
           const planSummary = planResult.value.tasks
             .map((t, i) => `${i + 1}. ${t.description}`)
             .join("\n");
+
+          emitStep(runId, STEP_TYPES.PLAN, {
+            reasoning: planSummary,
+            durationMs: Date.now() - planStart,
+          });
+
           workingMemory.addUserMessage(
             `Here is the execution plan:\n${planSummary}\n\nPlease execute these tasks using the available tools.`
           );
-          // Need assistant acknowledgment for message alternation
           workingMemory.addAssistantMessage([
             { type: "text", text: "I'll follow this plan and execute the tasks systematically.", citations: [] } as unknown as Anthropic.ContentBlock,
           ]);
@@ -322,6 +395,9 @@ export function createExecutionEngine(
             { runId, error: guardrailCheck.error.message },
             "Guardrail triggered"
           );
+          emitStep(runId, STEP_TYPES.GUARDRAIL, {
+            reasoning: guardrailCheck.error.message,
+          });
           await safeUpdateRun(runId, {
             status: "failed",
             errorMessage: guardrailCheck.error.message,
@@ -373,6 +449,9 @@ export function createExecutionEngine(
             `Anthropic API error: ${message}`,
             "execution"
           );
+          emitStep(runId, STEP_TYPES.ERROR, {
+            reasoning: `Anthropic API error: ${message}`,
+          });
           await safeUpdateRun(runId, {
             status: "failed",
             errorMessage: execErr.message,
@@ -390,6 +469,18 @@ export function createExecutionEngine(
         inputTokensUsed += response.usage.input_tokens;
         outputTokensUsed += response.usage.output_tokens;
         iteration++;
+
+        // Emit LLM call step
+        const textContent = response.content
+          .filter((b): b is Anthropic.TextBlock => b.type === "text")
+          .map((b) => b.text)
+          .join("\n");
+        emitStep(runId, STEP_TYPES.LLM_CALL, {
+          ...(textContent ? { reasoning: textContent } : {}),
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          durationMs: 0,
+        });
 
         // Add assistant response to memory
         workingMemory.addAssistantMessage(response.content);
@@ -463,6 +554,7 @@ export function createExecutionEngine(
                 context?: string;
               };
 
+              const delegateStart = Date.now();
               const delegationResult = await deps.delegationHandler.delegate({
                 parentRunId: runId,
                 targetAgentId: delegateArgs.targetAgentId as AgentId,
@@ -470,6 +562,27 @@ export function createExecutionEngine(
                 context: delegateArgs.context ?? "",
                 delegationDepth: delegationDepth + 1,
               });
+
+              const delegationStepData: {
+                delegateTargetAgentId: string;
+                toolArgs: string;
+                toolResult: string;
+                toolIsError: boolean;
+                durationMs: number;
+                delegateChildRunId?: string;
+              } = {
+                delegateTargetAgentId: delegateArgs.targetAgentId,
+                toolArgs: JSON.stringify({ subGoal: delegateArgs.subGoal }),
+                toolResult: delegationResult._tag === "Ok"
+                  ? delegationResult.value.answer.substring(0, 500)
+                  : ("message" in delegationResult.error ? delegationResult.error.message : "Unknown error"),
+                toolIsError: delegationResult._tag === "Err",
+                durationMs: Date.now() - delegateStart,
+              };
+              if (delegationResult._tag === "Ok") {
+                delegationStepData.delegateChildRunId = String(delegationResult.value.runId);
+              }
+              emitStep(runId, STEP_TYPES.DELEGATION, delegationStepData);
 
               if (delegationResult._tag === "Ok") {
                 workingMemory.addToolResult(
@@ -492,21 +605,39 @@ export function createExecutionEngine(
             }
 
             // Normal tool invocation
+            const toolStart = Date.now();
             const invocationResult = await toolExecutor.invoke(
               toolUse.name,
               toolUse.input as Record<string, unknown>
             );
 
             if (isErr(invocationResult)) {
+              const errMsg = "message" in invocationResult.error ? invocationResult.error.message : "Unknown error";
+              emitStep(runId, STEP_TYPES.TOOL_CALL, {
+                toolName: toolUse.name,
+                toolArgs: JSON.stringify(toolUse.input),
+                toolResult: errMsg,
+                toolIsError: true,
+                durationMs: Date.now() - toolStart,
+              });
               workingMemory.addToolResult(
                 toolUse.id,
-                `Tool error: ${"message" in invocationResult.error ? invocationResult.error.message : "Unknown error"}`,
+                `Tool error: ${errMsg}`,
                 true
               );
               continue;
             }
 
             const invocation = invocationResult.value;
+
+            emitStep(runId, STEP_TYPES.TOOL_CALL, {
+              toolName: invocation.toolName,
+              toolArgs: JSON.stringify(toolUse.input),
+              toolResult: invocation.result.substring(0, 4000),
+              toolIsError: invocation.isError,
+              durationMs: invocation.durationMs,
+            });
+
             recentToolCalls.push(invocation);
 
             // Keep only last 10 calls for cycle detection

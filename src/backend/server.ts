@@ -43,6 +43,17 @@ import {
   localRepoAnalysisAgent,
   confluenceReaderAgent,
   databaseExplorerAgent,
+  reactFrontendDevAgent,
+  javaBackendDevAgent,
+  databaseArchitectAgent,
+  qaEngineerAgent,
+  businessAnalystAgent,
+  backendPrReviewerAgent,
+  frontendPrReviewerAgent,
+  securityReviewerAgent,
+  frontendOrchestratorAgent,
+  backendOrchestratorAgent,
+  fullstackOrchestratorAgent,
 } from "./agents/index.js";
 
 import {
@@ -57,6 +68,7 @@ import type { ToolHandlerRegistry } from "./agents/engine/index.js";
 
 import { createAgentRunsRepository } from "./db/repositories/agent-runs.repository.js";
 import { createAgentTasksRepository } from "./db/repositories/agent-tasks.repository.js";
+import { createAgentRunStepsRepository } from "./db/repositories/agent-run-steps.repository.js";
 
 import { registerAgentExecuteTool } from "./tools/system/agent-execute.tool.js";
 import { registerAgentStatusTool } from "./tools/system/agent-status.tool.js";
@@ -139,6 +151,7 @@ export async function createServer(
   const agentRunsRepo = createAgentRunsRepository(db);
   const agentTasksRepo = createAgentTasksRepository(db); // Used by task planner persistence
   void agentTasksRepo; // Referenced for future task-level persistence
+  const agentRunStepsRepo = createAgentRunStepsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -464,6 +477,21 @@ export async function createServer(
   agentRegistry.register(confluenceReaderAgent);
   agentRegistry.register(databaseExplorerAgent);
 
+  // Specialist agents (REQ-6.1)
+  agentRegistry.register(reactFrontendDevAgent);
+  agentRegistry.register(javaBackendDevAgent);
+  agentRegistry.register(databaseArchitectAgent);
+  agentRegistry.register(qaEngineerAgent);
+  agentRegistry.register(businessAnalystAgent);
+  agentRegistry.register(backendPrReviewerAgent);
+  agentRegistry.register(frontendPrReviewerAgent);
+  agentRegistry.register(securityReviewerAgent);
+
+  // Orchestrator agents (REQ-6.2)
+  agentRegistry.register(frontendOrchestratorAgent);
+  agentRegistry.register(backendOrchestratorAgent);
+  agentRegistry.register(fullstackOrchestratorAgent);
+
   logger.info(
     { agentCount: agentRegistry.getAll().length },
     "Agent registry populated"
@@ -521,6 +549,26 @@ export async function createServer(
   });
   toolHandlerRegistry.register("github_get_my_prs", "Get pull requests authored by the authenticated user", { type: "object", properties: {} }, async () => {
     const result = await githubService.getMyCreatedPRs();
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("github_create_pr", "Create a new GitHub pull request", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, title: { type: "string" }, head: { type: "string" }, base: { type: "string" }, body: { type: "string" }, draft: { type: "boolean" } }, required: ["owner", "repo", "title", "head", "base"] }, async (args) => {
+    const result = await githubService.createPullRequest({ owner: args.owner as string, repo: args.repo as string, title: args.title as string, head: args.head as string, base: args.base as string, body: (args.body as string) ?? "", draft: (args.draft as boolean) ?? false });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("github_submit_review", "Submit a review on a GitHub pull request", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, prNumber: { type: "number" }, body: { type: "string" }, event: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] } }, required: ["owner", "repo", "prNumber", "body", "event"] }, async (args) => {
+    const result = await githubService.reviewPullRequest({ owner: args.owner as string, repo: args.repo as string, prNumber: args.prNumber as number, body: args.body as string, event: args.event as "APPROVE" | "REQUEST_CHANGES" | "COMMENT" });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("jira_add_comment", "Add a comment to a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, body: { type: "string" } }, required: ["issueKey", "body"] }, async (args) => {
+    const result = await jiraService.addComment(args.issueKey as string, args.body as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("jira_get_comments", "Get comments for a Jira issue", { type: "object", properties: { issueKey: { type: "string" } }, required: ["issueKey"] }, async (args) => {
+    const result = await jiraService.getIssueComments(args.issueKey as string);
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
@@ -648,7 +696,7 @@ export async function createServer(
   // Create delegation handler
   const delegationHandler = createDelegationHandler({
     logger,
-    maxDelegationDepth: 2,
+    maxDelegationDepth: 3,
   });
 
   // Create the execution engine
@@ -668,6 +716,7 @@ export async function createServer(
     taskPlanner,
     delegationHandler,
     agentRunsRepo,
+    agentRunStepsRepo,
   });
 
   // Wire delegation handler back to engine (circular dependency resolution)
@@ -846,6 +895,89 @@ export async function createServer(
   // Uses /api/agent-runs (NOT /api/agents/runs) to avoid Hono route
   // conflict with the /api/agents/:id wildcard route below.
 
+  // GET /api/agent-runs/stats — aggregate execution stats for dashboard
+  httpApp.get("/api/agent-runs/stats", async (c) => {
+    const allRuns = await agentRunsRepo.findRecent(10000);
+    const totalRuns = allRuns.length;
+    const activeRuns = allRuns.filter(
+      (r) => r.status === "planning" || r.status === "executing"
+    ).length;
+    const completedRuns = allRuns.filter((r) => r.status === "completed").length;
+    const successRate = totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0;
+    const totalTokens = allRuns.reduce(
+      (sum, r) => sum + r.inputTokensUsed + r.outputTokensUsed,
+      0
+    );
+
+    const completedWithTime = allRuns.filter(
+      (r) => r.status === "completed" && r.startedAt && r.completedAt
+    );
+    const avgDurationMs =
+      completedWithTime.length > 0
+        ? Math.round(
+            completedWithTime.reduce((sum, r) => {
+              const start = new Date(r.startedAt).getTime();
+              const end = new Date(r.completedAt!).getTime();
+              return sum + (end - start);
+            }, 0) / completedWithTime.length
+          )
+        : 0;
+
+    // Per-agent usage stats
+    const agentMap = new Map<
+      string,
+      {
+        agentId: string;
+        totalRuns: number;
+        completed: number;
+        totalTokens: number;
+        totalDurationMs: number;
+        completedWithTime: number;
+        lastRunAt: string;
+      }
+    >();
+    for (const run of allRuns) {
+      const entry = agentMap.get(run.agentId) ?? {
+        agentId: run.agentId,
+        totalRuns: 0,
+        completed: 0,
+        totalTokens: 0,
+        totalDurationMs: 0,
+        completedWithTime: 0,
+        lastRunAt: run.createdAt,
+      };
+      entry.totalRuns++;
+      entry.totalTokens += run.inputTokensUsed + run.outputTokensUsed;
+      if (run.status === "completed") entry.completed++;
+      if (run.status === "completed" && run.startedAt && run.completedAt) {
+        entry.completedWithTime++;
+        entry.totalDurationMs +=
+          new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime();
+      }
+      if (run.createdAt > entry.lastRunAt) entry.lastRunAt = run.createdAt;
+      agentMap.set(run.agentId, entry);
+    }
+
+    const agentUsage = Array.from(agentMap.values()).map((a) => ({
+      agentId: a.agentId,
+      agentName: agentRegistry.getById(a.agentId as import("@shared/types").AgentId)?.name ?? a.agentId,
+      totalRuns: a.totalRuns,
+      successRate: a.totalRuns > 0 ? Math.round((a.completed / a.totalRuns) * 100) : 0,
+      avgDurationMs: a.completedWithTime > 0 ? Math.round(a.totalDurationMs / a.completedWithTime) : 0,
+      avgTokensPerRun: a.totalRuns > 0 ? Math.round(a.totalTokens / a.totalRuns) : 0,
+      lastRunAt: a.lastRunAt,
+    }));
+
+    return c.json({
+      totalRuns,
+      activeRuns,
+      successRate,
+      avgDurationMs,
+      totalTokens,
+      agentUsage,
+    });
+  });
+
   // POST /api/agent-runs/execute — start an agent execution
   httpApp.post("/api/agent-runs/execute", async (c) => {
     const body = await c.req.json();
@@ -870,6 +1002,65 @@ export async function createServer(
     const limit = Number(c.req.query("limit") ?? "50");
     const runs = await agentRunsRepo.findRecent(limit);
     return c.json(runs);
+  });
+
+  // GET /api/agent-runs/:id/steps — paginated steps for a run
+  httpApp.get("/api/agent-runs/:id/steps", async (c) => {
+    const runId = c.req.param("id");
+    const offset = Number(c.req.query("offset") ?? "0");
+    const limit = Number(c.req.query("limit") ?? "100");
+    const result = await agentRunStepsRepo.findByRunId(runId, { offset, limit });
+    return c.json(result);
+  });
+
+  // GET /api/agent-runs/:id/delegation-tree — recursive delegation hierarchy
+  httpApp.get("/api/agent-runs/:id/delegation-tree", async (c) => {
+    const runId = c.req.param("id");
+
+    type DelegationNode = {
+      run: {
+        id: string;
+        agentId: string;
+        goal: string;
+        status: string;
+        startedAt: string;
+        completedAt: string | null;
+      };
+      children: DelegationNode[];
+    };
+
+    async function buildTree(id: string): Promise<DelegationNode | null> {
+      const run = await agentRunsRepo.findById(id);
+      if (!run) return null;
+
+      // Find children by parentRunId
+      const allRuns = await agentRunsRepo.findRecent(1000);
+      const children = allRuns.filter((r) => r.parentRunId === id);
+
+      const childNodes: DelegationNode[] = [];
+      for (const child of children) {
+        const childNode = await buildTree(child.id);
+        if (childNode) childNodes.push(childNode);
+      }
+
+      return {
+        run: {
+          id: run.id,
+          agentId: run.agentId,
+          goal: run.goal,
+          status: run.status,
+          startedAt: run.startedAt,
+          completedAt: run.completedAt ?? null,
+        },
+        children: childNodes,
+      };
+    }
+
+    const tree = await buildTree(runId);
+    if (!tree) {
+      return c.json({ error: "Run not found" }, { status: 404 });
+    }
+    return c.json(tree);
   });
 
   // GET /api/agent-runs/:id — get a specific run's status

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useAgentExecutions } from "@frontend/api/agent-executions.api";
+import { useAgentExecutions, useAgentExecutionStats } from "@frontend/api/agent-executions.api";
 import { useAgents } from "@frontend/api/agents.api";
 import { LoadingSpinner } from "@frontend/components/loading-spinner";
 import { ErrorDisplay } from "@frontend/components/error-display";
 import { RunStatusBadge } from "@frontend/components/run-status-badge";
 import { ExecuteAgentForm } from "@frontend/components/execute-agent-form";
+import { ExecutionStatsCard } from "@frontend/components/execution-stats-card";
 import type { AgentRunResult } from "@frontend/api/agent-executions.api";
 
 function formatRelativeTime(dateString: string): string {
@@ -49,6 +50,7 @@ export function AgentExecutionsListPage() {
   const [showExecuteForm, setShowExecuteForm] = useState(false);
   const { data: runs, isLoading, error } = useAgentExecutions({ limit: 50 });
   const { data: agents } = useAgents();
+  const { data: stats } = useAgentExecutionStats();
   const navigate = useNavigate();
 
   const agentNameMap = new Map(
@@ -107,6 +109,9 @@ export function AgentExecutionsListPage() {
           onCancel={() => setShowExecuteForm(false)}
         />
       )}
+
+      {/* Stats Card */}
+      {stats && <ExecutionStatsCard stats={stats} />}
 
       {/* Empty State */}
       {runs && runs.length === 0 ? (

@@ -48,6 +48,7 @@ export function createDatabaseConnectionId(value: string): DatabaseConnectionId 
 
 export type AgentRunId = Brand<string, "AgentRunId">;
 export type AgentTaskId = Brand<string, "AgentTaskId">;
+export type AgentRunStepId = Brand<string, "AgentRunStepId">;
 
 export function createAgentRunId(value: string): AgentRunId {
   return value as AgentRunId;
@@ -55,6 +56,10 @@ export function createAgentRunId(value: string): AgentRunId {
 
 export function createAgentTaskId(value: string): AgentTaskId {
   return value as AgentTaskId;
+}
+
+export function createAgentRunStepId(value: string): AgentRunStepId {
+  return value as AgentRunStepId;
 }
 
 // Integration type literal

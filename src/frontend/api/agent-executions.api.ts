@@ -60,6 +60,58 @@ export type ExecuteAgentInput = {
   };
 };
 
+export type AgentRunStepItem = {
+  id: string;
+  runId: string;
+  stepIndex: number;
+  stepType: string;
+  toolName: string | null;
+  toolArgs: string | null;
+  toolResult: string | null;
+  toolIsError: number | null;
+  delegateTargetAgentId: string | null;
+  delegateChildRunId: string | null;
+  reasoning: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  durationMs: number;
+  createdAt: string;
+};
+
+export type AgentRunStepsResponse = {
+  steps: AgentRunStepItem[];
+  total: number;
+};
+
+export type DelegationNode = {
+  run: {
+    id: string;
+    agentId: string;
+    goal: string;
+    status: string;
+    startedAt: string;
+    completedAt: string | null;
+  };
+  children: DelegationNode[];
+};
+
+export type AgentExecutionStats = {
+  totalRuns: number;
+  activeRuns: number;
+  successRate: number;
+  avgDurationMs: number;
+  totalTokens: number;
+  agentUsage: Array<{
+    agentId: string;
+    agentName: string;
+    totalRuns: number;
+    successRate: number;
+    avgDurationMs: number;
+    avgTokensPerRun: number;
+    lastRunAt: string;
+  }>;
+};
+
 // ── Query Hooks ─────────────────────────────────────────────────────
 
 export function useAgentExecutions(filters?: { agentId?: string; limit?: number }) {
@@ -91,6 +143,39 @@ export function useAgentExecution(runId: string, options?: { enabled?: boolean }
       }
       return false;
     },
+  });
+}
+
+export function useAgentRunSteps(
+  runId: string,
+  options?: { offset?: number; limit?: number; enabled?: boolean; refetchInterval?: number | false }
+) {
+  const offset = options?.offset ?? 0;
+  const limit = options?.limit ?? 200;
+
+  return useQuery({
+    queryKey: agentExecutionKeys.steps(runId, offset),
+    queryFn: () =>
+      apiClient.get<AgentRunStepsResponse>(
+        `/agent-runs/${runId}/steps?offset=${offset}&limit=${limit}`
+      ),
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refetchInterval ?? false,
+  });
+}
+
+export function useDelegationTree(runId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: agentExecutionKeys.delegationTree(runId),
+    queryFn: () => apiClient.get<DelegationNode>(`/agent-runs/${runId}/delegation-tree`),
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useAgentExecutionStats() {
+  return useQuery({
+    queryKey: agentExecutionKeys.stats(),
+    queryFn: () => apiClient.get<AgentExecutionStats>("/agent-runs/stats"),
   });
 }
 

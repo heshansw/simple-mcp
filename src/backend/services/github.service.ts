@@ -70,6 +70,16 @@ export interface GitHubReviewPullRequestParams {
   comments?: GitHubReviewComment[] | undefined;
 }
 
+export type GitHubCreatePullRequestParams = {
+  owner: string;
+  repo: string;
+  title: string;
+  head: string;
+  base: string;
+  body?: string;
+  draft?: boolean;
+};
+
 export interface GitHubSearchCodeParams {
   query: string;
 }
@@ -94,6 +104,10 @@ export interface GitHubService {
   reviewPullRequest(
     params: GitHubReviewPullRequestParams
   ): Promise<Result<GitHubReview, DomainError>>;
+
+  createPullRequest(
+    params: GitHubCreatePullRequestParams
+  ): Promise<Result<GitHubPullRequest, DomainError>>;
 
   searchCode(
     params: GitHubSearchCodeParams
@@ -272,6 +286,49 @@ export function createGitHubService(
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         logger.error({ error: msg, params }, "Failed to submit PR review");
+        return err(integrationError("github", msg));
+      }
+    },
+
+    async createPullRequest(
+      params: GitHubCreatePullRequestParams
+    ): Promise<Result<GitHubPullRequest, DomainError>> {
+      try {
+        const token = await resolveToken();
+        logger.info(
+          {
+            owner: params.owner,
+            repo: params.repo,
+            head: params.head,
+            base: params.base,
+          },
+          "Creating pull request"
+        );
+
+        const pr = await githubFetch<GitHubPullRequest>(
+          `/repos/${params.owner}/${params.repo}/pulls`,
+          token,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: params.title,
+              head: params.head,
+              base: params.base,
+              body: params.body ?? "",
+              draft: params.draft ?? false,
+            }),
+          }
+        );
+
+        logger.info(
+          { prNumber: pr.number, url: pr.html_url },
+          "Pull request created"
+        );
+        return ok(pr);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error({ error: msg, params }, "Failed to create pull request");
         return err(integrationError("github", msg));
       }
     },

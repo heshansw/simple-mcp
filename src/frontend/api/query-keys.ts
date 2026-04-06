@@ -67,6 +67,9 @@ export const agentExecutionKeys = {
     [...agentExecutionKeys.lists(), filters] as const,
   details: () => [...agentExecutionKeys.all, "detail"] as const,
   detail: (id: string) => [...agentExecutionKeys.details(), id] as const,
+  steps: (id: string, offset?: number) => [...agentExecutionKeys.all, "steps", id, offset ?? 0] as const,
+  delegationTree: (id: string) => [...agentExecutionKeys.all, "delegation-tree", id] as const,
+  stats: () => [...agentExecutionKeys.all, "stats"] as const,
 };
 
 export const githubKeys = {
