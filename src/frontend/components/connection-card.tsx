@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { getConnectionTypeLabel } from "@shared/mcp-client.js";
 import type { ConnectionConfig } from "@shared/schemas/connection.schema";
 import { StatusBadge } from "@frontend/components/status-badge";
 
@@ -35,7 +36,7 @@ export function ConnectionCard({
             {connection.name}
           </h3>
           <p style={{ margin: "0", fontSize: "0.875rem", color: "#666" }}>
-            {connection.integrationType.toUpperCase()}
+            {getConnectionTypeLabel(connection)}
           </p>
         </div>
         <StatusBadge status={connection.status} />

@@ -47,17 +47,20 @@ Use `agent_execute` only when you intentionally want the server's built-in Anthr
 
 ## Codex Roles
 
-This repo includes two Codex-oriented role assets under `.codex/`:
+This repo includes Codex-oriented role assets under `.codex/`:
 
+- `business-analyst`: requirements, specification, scope definition, and implementation planning
 - `senior-fullstack-typescript-developer`: implementation, debugging, refactoring, integration, and testing across backend, frontend, and shared modules
 - `typescript-pr-reviewer`: review, audit, regression spotting, architectural scrutiny, and test-gap identification
 
-Use the matching skill when the user intent is clear. If the task spans both, implement first and review second.
+Use the matching skill when the user intent is clear. If the task spans requirements and implementation, define the spec first with `business-analyst`, then implement with `senior-fullstack-typescript-developer`. If the task spans implementation and review, implement first and review second.
 
 Paths:
 
+- `.codex/skills/business-analyst/SKILL.md`
 - `.codex/skills/senior-fullstack-typescript-developer/SKILL.md`
 - `.codex/skills/typescript-pr-reviewer/SKILL.md`
+- `.codex/agents/business-analyst.md`
 - `.codex/agents/senior-fullstack-typescript-developer.md`
 - `.codex/agents/typescript-pr-reviewer.md`
 

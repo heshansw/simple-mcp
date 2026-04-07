@@ -19,7 +19,7 @@ export type PRReviewResult = {
 };
 
 /**
- * Ask Claude (via MCP sampling) to review a PR diff.
+ * Ask the connected MCP client (via sampling) to review a PR diff.
  * Throws if the client does not support sampling or if the request fails.
  */
 export async function requestPRReview(
@@ -29,7 +29,7 @@ export async function requestPRReview(
 ): Promise<PRReviewResult> {
   const { server, logger } = deps;
 
-  // Build the diff content for Claude to review
+  // Build the diff content for the connected MCP client to review
   const diffSections = files
     .map((f) => {
       const patchBlock = f.patch
@@ -80,7 +80,7 @@ Guidelines:
 - If there are no specific inline comments, use an empty array for "comments"
 - Be specific and constructive — explain WHY something is a problem and HOW to fix it`;
 
-  logger.info({ prNumber: pr.number, files: files.length }, "Sending PR to Claude for review via sampling");
+  logger.info({ prNumber: pr.number, files: files.length }, "Sending PR to MCP client for review via sampling");
 
   const result = await server.createMessage({
     messages: [
@@ -100,7 +100,7 @@ Guidelines:
   const rawText =
     result.content.type === "text" ? result.content.text : "";
 
-  logger.debug({ rawText }, "Raw sampling response from Claude");
+  logger.debug({ rawText }, "Raw sampling response from MCP client");
 
   // Parse the JSON response
   let parsed: {
@@ -110,14 +110,14 @@ Guidelines:
   };
 
   try {
-    // Strip markdown code fences if Claude wrapped it anyway
+    // Strip markdown code fences if the client wrapped it anyway
     const cleaned = rawText
       .replace(/^```(?:json)?\s*/m, "")
       .replace(/\s*```\s*$/m, "")
       .trim();
     parsed = JSON.parse(cleaned) as typeof parsed;
   } catch (parseError) {
-    logger.warn({ rawText, parseError }, "Could not parse Claude sampling response as JSON — using raw as summary");
+    logger.warn({ rawText, parseError }, "Could not parse MCP client sampling response as JSON — using raw as summary");
     return {
       verdict: "COMMENT",
       summary: rawText || "AI review completed.",

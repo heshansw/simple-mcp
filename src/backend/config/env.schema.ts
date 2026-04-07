@@ -50,7 +50,7 @@ export const EnvSchema = z
     ANTHROPIC_API_KEY: z
       .string()
       .optional()
-      .describe("Anthropic API key for AI-powered PR reviews. Can also be stored as a Claude connection credential."),
+      .describe("Anthropic API key for AI-powered PR reviews. Can also be stored on an Anthropic-backed connection credential."),
 
     GOOGLE_OAUTH_CLIENT_ID: z
       .string()

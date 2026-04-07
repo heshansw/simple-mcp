@@ -1,0 +1,4 @@
+interface:
+  display_name: "Business Analyst"
+  short_description: "Define requirements, scope, and implementation-ready specs for this repo"
+  default_prompt: "Use $business-analyst to produce implementation-ready requirements, business rules, scope boundaries, phased delivery guidance, and acceptance criteria for work in this repository."

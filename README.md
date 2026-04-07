@@ -220,6 +220,14 @@ Codex can use the same MCP server process exposed by this repository.
 
 Codex uses the root [`AGENTS.md`](/Users/heshan.kithuldora/Code/Learning/claude_mcp/AGENTS.md) file for repository-scoped instructions. This project now includes one with TypeScript, MCP, and agent-run guidance tailored for Codex.
 
+Codex-specific role assets live under [`.codex/agents/`](/Users/heshan.kithuldora/Code/Learning/claude_mcp/.codex/agents):
+
+- `business-analyst` for requirements, scope definition, and implementation-ready specs
+- `senior-fullstack-typescript-developer` for implementation and integration work
+- `typescript-pr-reviewer` for review and regression-focused validation
+
+Use the matching skill under [`.codex/skills/`](/Users/heshan.kithuldora/Code/Learning/claude_mcp/.codex/skills) for the current task. For work that starts as specification and then moves into code, define the requirements first with `business-analyst` and then implement with `senior-fullstack-typescript-developer`.
+
 ### MCP connection
 
 Reuse the existing project [`.mcp.json`](/Users/heshan.kithuldora/Code/Learning/claude_mcp/.mcp.json) server entry:
@@ -251,6 +259,8 @@ For agentic development driven by Codex, use the tracked run tools instead of th
 6. Call `agent_complete_run` when done
 
 This keeps execution history, task progress, and final results visible in the admin panel without requiring an Anthropic API key for the run itself.
+
+For the Codex parity requirements that introduced the BA role and workflow guidance, see [7-codex-parity-requirements.md](/Users/heshan.kithuldora/Code/Learning/claude_mcp/docs/ai/instructions/7-codex-parity-requirements.md).
 
 ---
 

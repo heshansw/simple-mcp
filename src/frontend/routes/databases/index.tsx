@@ -19,6 +19,10 @@ import type {
 } from "@frontend/api/database-connections.api";
 import { LoadingSpinner } from "@frontend/components/loading-spinner";
 import { ErrorDisplay } from "@frontend/components/error-display";
+import {
+  DATABASE_CONNECTIONS_DESCRIPTION,
+  DATABASE_PERMISSIONS_DESCRIPTION,
+} from "@shared/mcp-client.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -131,7 +135,7 @@ function PermissionEditor({ permissions, onChange }: PermissionEditorProps) {
     <div style={{ border: "1px solid #e5e7eb", borderRadius: "0.375rem", padding: "1rem", backgroundColor: "#f9fafb" }}>
       <h4 style={{ margin: "0 0 0.75rem 0", fontSize: "0.875rem", fontWeight: 600 }}>Schema & Table Permissions</h4>
       <p style={{ fontSize: "0.75rem", color: "#6b7280", margin: "0 0 0.75rem 0" }}>
-        Only listed schemas/tables are accessible to Claude agents. Leave tables empty to allow all tables in a schema.
+        {DATABASE_PERMISSIONS_DESCRIPTION}
       </p>
 
       {permissions.allowedSchemas.length > 0 && (
@@ -721,7 +725,7 @@ export function DatabasesPage() {
         Local Databases
       </h1>
       <p style={{ color: "#6b7280", margin: "0 0 1.5rem 0", fontSize: "0.875rem" }}>
-        Register MySQL and PostgreSQL connections for Claude agents to explore schemas, describe tables, and run queries.
+        {DATABASE_CONNECTIONS_DESCRIPTION}
         Permissions strictly control which schemas and tables are accessible.
       </p>
 

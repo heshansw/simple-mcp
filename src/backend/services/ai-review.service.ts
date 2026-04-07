@@ -120,7 +120,7 @@ export function createAIReviewService(
       const apiKey = await deps.getAnthropicApiKey();
       if (!apiKey) {
         throw new Error(
-          "No Anthropic API key configured. Set ANTHROPIC_API_KEY environment variable or add a Claude connection with an API key."
+          "No Anthropic API key configured. Set ANTHROPIC_API_KEY or add an Anthropic-backed connection with an API key."
         );
       }
 
@@ -134,7 +134,7 @@ export function createAIReviewService(
           filesCount: files.length,
           promptLength: userPrompt.length,
         },
-        "Sending PR to Claude for AI review"
+        "Sending PR to Anthropic for AI review"
       );
 
       const message = await client.messages.create({
@@ -147,7 +147,7 @@ export function createAIReviewService(
       // Extract text response
       const textBlock = message.content.find((b) => b.type === "text");
       if (!textBlock || textBlock.type !== "text") {
-        throw new Error("No text response from Claude");
+        throw new Error("No text response from Anthropic");
       }
 
       const rawText = textBlock.text.trim();
