@@ -18,6 +18,9 @@ import { ReviewsPage } from "@frontend/routes/reviews/index";
 import { LocalReposPage } from "@frontend/routes/local-repos/index";
 import { ConfluencePage } from "@frontend/routes/confluence/index";
 import { DatabasesPage } from "@frontend/routes/databases/index";
+import { AgentExecutionsListPage } from "@frontend/routes/agent-executions/index";
+import { AgentExecutionDetailPage } from "@frontend/routes/agent-executions/$runId";
+import { TaskProgressPage } from "@frontend/routes/task-progress/index";
 import { useState } from "react";
 
 // Create root route
@@ -62,6 +65,26 @@ const agentDetailRoute = new Route({
   getParentRoute: () => rootRoute,
   path: "/agents/$agentId",
   component: AgentDetailPage,
+});
+
+// Agent Executions routes
+const agentExecutionsIndexRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/agent-executions",
+  component: AgentExecutionsListPage,
+});
+
+const agentExecutionDetailRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/agent-executions/$runId",
+  component: AgentExecutionDetailPage,
+});
+
+// Task Progress route
+const taskProgressRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/task-progress",
+  component: TaskProgressPage,
 });
 
 // Local Repos route
@@ -116,6 +139,9 @@ const routeTree = rootRoute.addChildren([
   connectionDetailRoute,
   agentsIndexRoute,
   agentDetailRoute,
+  agentExecutionsIndexRoute,
+  agentExecutionDetailRoute,
+  taskProgressRoute,
   localReposRoute,
   confluenceRoute,
   databasesRoute,

@@ -76,13 +76,22 @@ export type DatabaseError = {
   readonly operation: string | undefined;
 };
 
+export type AgentExecutionError = {
+  readonly _tag: "AgentExecutionError";
+  readonly agentId: string;
+  readonly runId: string;
+  readonly message: string;
+  readonly phase: "planning" | "execution" | "reflection" | "delegation";
+};
+
 // Union of all domain errors
 export type DomainError =
   | ValidationError
   | NotFoundError
   | AuthorizationError
   | IntegrationError
-  | DatabaseError;
+  | DatabaseError
+  | AgentExecutionError;
 
 // Constructor functions for domain errors
 export function validationError(
@@ -121,6 +130,15 @@ export function databaseError(
   return { _tag: "DatabaseError", message, operation: operation ?? undefined };
 }
 
+export function agentExecutionError(
+  agentId: string,
+  runId: string,
+  message: string,
+  phase: AgentExecutionError["phase"]
+): AgentExecutionError {
+  return { _tag: "AgentExecutionError", agentId, runId, message, phase };
+}
+
 /** Extract a human-readable message from any DomainError variant */
 export function domainErrorMessage(error: DomainError): string {
   switch (error._tag) {
@@ -134,6 +152,8 @@ export function domainErrorMessage(error: DomainError): string {
       return error.message;
     case "DatabaseError":
       return error.message;
+    case "AgentExecutionError":
+      return `Agent ${error.agentId} (run ${error.runId}) failed during ${error.phase}: ${error.message}`;
     default: {
       const _exhaustive: never = error;
       return String(_exhaustive);

@@ -46,6 +46,22 @@ export function createDatabaseConnectionId(value: string): DatabaseConnectionId 
   return value as DatabaseConnectionId;
 }
 
+export type AgentRunId = Brand<string, "AgentRunId">;
+export type AgentTaskId = Brand<string, "AgentTaskId">;
+export type AgentRunStepId = Brand<string, "AgentRunStepId">;
+
+export function createAgentRunId(value: string): AgentRunId {
+  return value as AgentRunId;
+}
+
+export function createAgentTaskId(value: string): AgentTaskId {
+  return value as AgentTaskId;
+}
+
+export function createAgentRunStepId(value: string): AgentRunStepId {
+  return value as AgentRunStepId;
+}
+
 // Integration type literal
 export type IntegrationType = "jira" | "github" | "google-calendar" | "local-filesystem" | "mysql" | "postgres";
 

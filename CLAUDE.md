@@ -333,3 +333,23 @@ export function registerSearchTool(server: McpServer, deps: SearchDeps) {
 - Code should be self-documenting via types and naming.
 - Comments only where logic is non-obvious — explain *why*, not *what*.
 - Zod schemas serve as the documentation for data shapes.
+
+---
+
+## Agent Routing
+
+This project uses automatic agent routing. A `UserPromptSubmit` hook (`.claude/scripts/agent-router.sh`) classifies every message and injects the matching agent persona before you respond. **You do not need to manually switch agents.**
+
+If the hook fires, honour the `[AGENT ROUTER]` context injected into your conversation and activate the named persona. If the hook does not fire (ambiguous intent), use the table below to self-select:
+
+| Intent signals | Agent to activate | Agent file |
+|---|---|---|
+| Requirements, spec, design, architecture, user story, acceptance criteria, "what should we build" | **ba-agent** | `.claude/agents/ba-agent.md` |
+| Implement, build, fix, refactor, debug, create feature, wire up | **senior-fullstack-ts-dev** | `.claude/agents/senior-fullstack-ts-dev.md` |
+| Code review, PR review, "does this look good", audit | **js-reviewer** | `.claude/agents/js-reviewer.md` |
+| Write tests, coverage, regression, e2e, unit test, mock, Vitest | **qa-agent** | `.claude/agents/qa-agent.md` |
+
+**Rules:**
+- Always state which agent you are activating at the start of your response when routing occurs.
+- If a task spans multiple agents (e.g. "spec then implement"), complete the BA spec first, then hand off explicitly: *"Spec complete. Switching to senior-fullstack-ts-dev for implementation."*
+- Never silently blend personas — one agent per response turn.

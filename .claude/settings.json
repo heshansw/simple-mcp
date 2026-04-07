@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/agent-router.sh",
+            "timeout": 10,
+            "statusMessage": "Routing to the right agent..."
+          }
+        ]
+      }
+    ]
+  }
+}

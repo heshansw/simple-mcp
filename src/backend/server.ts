@@ -43,7 +43,40 @@ import {
   localRepoAnalysisAgent,
   confluenceReaderAgent,
   databaseExplorerAgent,
+  reactFrontendDevAgent,
+  javaBackendDevAgent,
+  databaseArchitectAgent,
+  qaEngineerAgent,
+  businessAnalystAgent,
+  backendPrReviewerAgent,
+  frontendPrReviewerAgent,
+  securityReviewerAgent,
+  frontendOrchestratorAgent,
+  backendOrchestratorAgent,
+  fullstackOrchestratorAgent,
 } from "./agents/index.js";
+
+import {
+  createToolHandlerRegistry,
+  createToolExecutor,
+  createObservationSummarizer,
+  createTaskPlanner,
+  createDelegationHandler,
+  createExecutionEngine,
+} from "./agents/engine/index.js";
+import type { ToolHandlerRegistry } from "./agents/engine/index.js";
+
+import { createAgentRunsRepository } from "./db/repositories/agent-runs.repository.js";
+import { createAgentTasksRepository } from "./db/repositories/agent-tasks.repository.js";
+import { createAgentRunStepsRepository } from "./db/repositories/agent-run-steps.repository.js";
+
+import { registerAgentExecuteTool } from "./tools/system/agent-execute.tool.js";
+import { registerAgentStatusTool } from "./tools/system/agent-status.tool.js";
+import { registerAgentListTool } from "./tools/system/agent-list.tool.js";
+import { registerAgentStartRunTool } from "./tools/system/agent-start-run.tool.js";
+import { registerAgentRecordStepTool } from "./tools/system/agent-record-step.tool.js";
+import { registerAgentUpdateTaskTool } from "./tools/system/agent-update-task.tool.js";
+import { registerAgentCompleteRunTool } from "./tools/system/agent-complete-run.tool.js";
 
 import { createMaintenanceScheduler } from "./maintenance/scheduler.js";
 import { createStdioTransport } from "./transports/stdio.transport.js";
@@ -119,6 +152,9 @@ export async function createServer(
   const folderAccessRepo = createFolderAccessRepository(db);
   const workspacesRepo = createRepoWorkspacesRepository(db);
   const dbQueryActivityRepo = createDbQueryActivityRepository(db);
+  const agentRunsRepo = createAgentRunsRepository(db);
+  const agentTasksRepo = createAgentTasksRepository(db);
+  const agentRunStepsRepo = createAgentRunStepsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -444,10 +480,290 @@ export async function createServer(
   agentRegistry.register(confluenceReaderAgent);
   agentRegistry.register(databaseExplorerAgent);
 
+  // Specialist agents (REQ-6.1)
+  agentRegistry.register(reactFrontendDevAgent);
+  agentRegistry.register(javaBackendDevAgent);
+  agentRegistry.register(databaseArchitectAgent);
+  agentRegistry.register(qaEngineerAgent);
+  agentRegistry.register(businessAnalystAgent);
+  agentRegistry.register(backendPrReviewerAgent);
+  agentRegistry.register(frontendPrReviewerAgent);
+  agentRegistry.register(securityReviewerAgent);
+
+  // Orchestrator agents (REQ-6.2)
+  agentRegistry.register(frontendOrchestratorAgent);
+  agentRegistry.register(backendOrchestratorAgent);
+  agentRegistry.register(fullstackOrchestratorAgent);
+
   logger.info(
     { agentCount: agentRegistry.getAll().length },
     "Agent registry populated"
   );
+
+  // ── Agent Execution Engine ────────────────────────────────────────────
+  console.error("[startup] Initializing agent execution engine...");
+
+  // Create tool handler registry — stores in-process tool handlers for the engine
+  const toolHandlerRegistry: ToolHandlerRegistry = createToolHandlerRegistry({ logger });
+
+  // Register tool handlers for the agent engine. These bridge to the same
+  // underlying service functions as the MCP tool handlers.
+  // Use domainErrorMessage for all error formatting.
+
+  const errText = (e: import("@shared/result").DomainError) =>
+    domainErrorMessage(e);
+
+  // Jira tools
+  toolHandlerRegistry.register("jira_search_issues", "Search for Jira issues using JQL", { type: "object", properties: { jql: { type: "string" }, maxResults: { type: "number" } }, required: ["jql"] }, async (args) => {
+    const result = await jiraService.searchIssues(args.jql as string, (args.maxResults as number) ?? 50);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("jira_create_issue", "Create a new Jira issue", { type: "object", properties: { projectKey: { type: "string" }, summary: { type: "string" }, issueType: { type: "string" }, description: { type: "string" } }, required: ["projectKey", "summary", "issueType"] }, async (args) => {
+    const result = await jiraService.createIssue(args.projectKey as string, args.summary as string, args.issueType as string, args.description as string | undefined);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("jira_transition_issue", "Transition a Jira issue to a new status", { type: "object", properties: { issueKey: { type: "string" }, transitionId: { type: "string" } }, required: ["issueKey", "transitionId"] }, async (args) => {
+    const result = await jiraService.transitionIssue(args.issueKey as string, args.transitionId as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+
+  // GitHub tools
+  toolHandlerRegistry.register("github_list_prs", "List pull requests for a GitHub repository", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, state: { type: "string" } }, required: ["owner", "repo"] }, async (args) => {
+    const result = await githubService.listPullRequests({ owner: args.owner as string, repo: args.repo as string, state: (args.state as "open" | "closed" | "all") ?? "open" });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("github_search_code", "Search for code across GitHub repositories", { type: "object", properties: { query: { type: "string" }, owner: { type: "string" }, repo: { type: "string" } }, required: ["query"] }, async (args) => {
+    // searchCode accepts { query } only — embed owner/repo qualifiers into the query string
+    let q = args.query as string;
+    if (args.owner) q += ` org:${args.owner as string}`;
+    if (args.repo && args.owner) q += ` repo:${args.owner as string}/${args.repo as string}`;
+    const result = await githubService.searchCode({ query: q });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("github_get_pr_diff", "Get the files of a GitHub pull request", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, prNumber: { type: "number" } }, required: ["owner", "repo", "prNumber"] }, async (args) => {
+    const result = await githubService.getPullRequestFiles(args.owner as string, args.repo as string, args.prNumber as number);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("github_get_my_prs", "Get pull requests authored by the authenticated user", { type: "object", properties: {} }, async () => {
+    const result = await githubService.getMyCreatedPRs();
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("github_create_pr", "Create a new GitHub pull request", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, title: { type: "string" }, head: { type: "string" }, base: { type: "string" }, body: { type: "string" }, draft: { type: "boolean" } }, required: ["owner", "repo", "title", "head", "base"] }, async (args) => {
+    const result = await githubService.createPullRequest({ owner: args.owner as string, repo: args.repo as string, title: args.title as string, head: args.head as string, base: args.base as string, body: (args.body as string) ?? "", draft: (args.draft as boolean) ?? false });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("github_submit_review", "Submit a review on a GitHub pull request", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, prNumber: { type: "number" }, body: { type: "string" }, event: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] } }, required: ["owner", "repo", "prNumber", "body", "event"] }, async (args) => {
+    const result = await githubService.reviewPullRequest({ owner: args.owner as string, repo: args.repo as string, prNumber: args.prNumber as number, body: args.body as string, event: args.event as "APPROVE" | "REQUEST_CHANGES" | "COMMENT" });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("jira_add_comment", "Add a comment to a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, body: { type: "string" } }, required: ["issueKey", "body"] }, async (args) => {
+    const result = await jiraService.addComment(args.issueKey as string, args.body as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("jira_get_comments", "Get comments for a Jira issue", { type: "object", properties: { issueKey: { type: "string" } }, required: ["issueKey"] }, async (args) => {
+    const result = await jiraService.getIssueComments(args.issueKey as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+
+  // System tools
+  toolHandlerRegistry.register("system_health_check", "Check server health status", { type: "object", properties: {} }, async () => {
+    return { content: [{ type: "text" as const, text: JSON.stringify({ status: "ok", timestamp: new Date().toISOString() }) }] };
+  });
+  toolHandlerRegistry.register("system_list_connections", "List all configured connections", { type: "object", properties: {} }, async () => {
+    const result = await connectionManager.getAllConnections();
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+
+  // Database tools
+  toolHandlerRegistry.register("db_list_schemas", "List database schemas", { type: "object", properties: { connectionId: { type: "string" } }, required: ["connectionId"] }, async (args) => {
+    const result = await databaseQueryService.listSchemas(args.connectionId as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("db_list_tables", "List tables in a database schema", { type: "object", properties: { connectionId: { type: "string" }, schema: { type: "string" } }, required: ["connectionId", "schema"] }, async (args) => {
+    const result = await databaseQueryService.listTables(args.connectionId as string, args.schema as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("db_describe_table", "Describe a database table structure", { type: "object", properties: { connectionId: { type: "string" }, schema: { type: "string" }, table: { type: "string" } }, required: ["connectionId", "schema", "table"] }, async (args) => {
+    const result = await databaseQueryService.describeTable(args.connectionId as string, args.schema as string, args.table as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("db_query", "Execute a SQL query", { type: "object", properties: { connectionId: { type: "string" }, sql: { type: "string" }, maxRows: { type: "number" } }, required: ["connectionId", "sql"] }, async (args) => {
+    const result = await databaseQueryService.query(args.connectionId as string, args.sql as string, [], (args.maxRows as number) ?? 100, 30000);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+
+  // Confluence tools
+  toolHandlerRegistry.register("confluence_search_pages", "Search Confluence pages using CQL", { type: "object", properties: { cql: { type: "string" }, maxResults: { type: "number" } }, required: ["cql"] }, async (args) => {
+    const result = await confluenceService.searchPages(args.cql as string, (args.maxResults as number) ?? 10);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("confluence_get_page", "Get a Confluence page by ID", { type: "object", properties: { pageId: { type: "string" } }, required: ["pageId"] }, async (args) => {
+    const result = await confluenceService.getPage(args.pageId as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("confluence_list_spaces", "List Confluence spaces", { type: "object", properties: { type: { type: "string" }, maxResults: { type: "number" } } }, async (args) => {
+    const result = await confluenceService.listSpaces((args.type as "global" | "personal" | "all") ?? "all", (args.maxResults as number) ?? 50);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+
+  // Local filesystem tools
+  toolHandlerRegistry.register("fs_list_folders", "List registered folder access entries", { type: "object", properties: {} }, async () => {
+    const folders = await folderAccessRepo.findAll();
+    return { content: [{ type: "text" as const, text: JSON.stringify(folders, null, 2) }] };
+  });
+  toolHandlerRegistry.register("fs_list_workspaces", "List registered workspaces", { type: "object", properties: {} }, async () => {
+    const workspaces = await workspacesRepo.findAll();
+    return { content: [{ type: "text" as const, text: JSON.stringify(workspaces, null, 2) }] };
+  });
+  toolHandlerRegistry.register("fs_list_directory", "List directory contents", { type: "object", properties: { folderId: { type: "string" }, relativePath: { type: "string" } }, required: ["folderId"] }, async (args) => {
+    const result = await localFilesystemService.listDirectory(args.folderId as string, (args.relativePath as string) ?? ".", 1);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("fs_read_file", "Read file contents", { type: "object", properties: { folderId: { type: "string" }, relativePath: { type: "string" } }, required: ["folderId", "relativePath"] }, async (args) => {
+    const result = await localFilesystemService.readFile(args.folderId as string, args.relativePath as string, "utf-8");
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: typeof result.value === "string" ? result.value : JSON.stringify(result.value, null, 2) }] };
+  });
+
+  logger.info(
+    { registeredHandlers: toolHandlerRegistry.list().length },
+    "Tool handler registry populated for agent engine"
+  );
+
+  // Create tool executor
+  const toolExecutor = createToolExecutor({ registry: toolHandlerRegistry, logger });
+
+  // Anthropic API key resolver — checks env var first, then Claude connection credentials
+  const getAnthropicApiKey = async (): Promise<string | null> => {
+    if (config.ANTHROPIC_API_KEY) return config.ANTHROPIC_API_KEY;
+    // Check for a Claude/Anthropic connection in the DB
+    const allConns = await connectionsRepo.findAll();
+    const claudeConn = allConns.find(
+      (c) => c.name.toLowerCase().includes("claude") || c.name.toLowerCase().includes("anthropic")
+    );
+    if (!claudeConn) return null;
+    const cred = await credentialsRepo.findByConnectionId(claudeConn.id);
+    if (!cred) return null;
+    try {
+      return encryptionService.decrypt(cred.encryptedData, cred.iv);
+    } catch {
+      return null;
+    }
+  };
+
+  // Create observation summarizer
+  const observationSummarizer = createObservationSummarizer({
+    logger,
+    getClient: async () => {
+      const key = await getAnthropicApiKey();
+      if (!key) return null;
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      return new Anthropic({ apiKey: key });
+    },
+    model: "claude-sonnet-4-20250514",
+    threshold: 4000,
+  });
+
+  // Create task planner
+  const taskPlanner = createTaskPlanner({
+    logger,
+    getClient: async () => {
+      const key = await getAnthropicApiKey();
+      if (!key) return null;
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      return new Anthropic({ apiKey: key });
+    },
+    model: "claude-sonnet-4-20250514",
+  });
+
+  // Create delegation handler
+  const delegationHandler = createDelegationHandler({
+    logger,
+    maxDelegationDepth: 3,
+  });
+
+  // Create the execution engine
+  const executionEngine = createExecutionEngine({
+    logger,
+    getAnthropicApiKey,
+    agentRegistry,
+    connectionManager: {
+      hasConnection: (integration: string) => {
+        // Synchronous check based on tool availability in the handler registry
+        return toolHandlerRegistry.list().some((t) => t.startsWith(integration.replace("-", "_")));
+      },
+      hasTool: (toolName: string) => toolHandlerRegistry.has(toolName),
+    },
+    toolExecutor,
+    observationSummarizer,
+    taskPlanner,
+    delegationHandler,
+    agentRunsRepo,
+    agentRunStepsRepo,
+    agentTasksRepo,
+  });
+
+  // Wire delegation handler back to engine (circular dependency resolution)
+  delegationHandler.setExecuteFn(executionEngine.execute);
+
+  // Register agent execution MCP tools
+  const agentToolDeps = { executionEngine, logger };
+  registerAgentExecuteTool(mcpServer, agentToolDeps);
+  registerAgentStatusTool(mcpServer, agentToolDeps);
+  registerAgentListTool(mcpServer, {
+    agentRegistry,
+    connectionManager: {
+      hasConnection: (integration: string) =>
+        toolHandlerRegistry.list().some((t) => t.startsWith(integration.replace("-", "_"))),
+      hasTool: (toolName: string) => toolHandlerRegistry.has(toolName),
+    },
+    logger,
+  });
+
+  // Register Claude Code-driven agent execution tools
+  // These let Claude Code act as the LLM brain — no Anthropic API key needed
+  registerAgentStartRunTool(mcpServer, {
+    agentRegistry,
+    agentRunsRepo,
+    agentTasksRepo,
+    logger,
+  });
+  registerAgentRecordStepTool(mcpServer, {
+    agentRunStepsRepo,
+    logger,
+  });
+  registerAgentUpdateTaskTool(mcpServer, {
+    agentTasksRepo,
+    logger,
+  });
+  registerAgentCompleteRunTool(mcpServer, {
+    agentRunsRepo,
+    agentRunStepsRepo,
+    logger,
+  });
+
+  console.error("[startup] Agent execution engine initialized");
+  logger.info("Agent execution engine ready");
 
   // Register resources and prompts
   const resourceDeps = {
@@ -599,6 +915,276 @@ export async function createServer(
   httpApp.get("/api/agents", (_c) => {
     const agents = agentRegistry.getAll();
     return _c.json(agents.map(serializeAgent));
+  });
+
+  // ── Agent Execution API ──────────────────────────────────────────────
+  // Uses /api/agent-runs (NOT /api/agents/runs) to avoid Hono route
+  // conflict with the /api/agents/:id wildcard route below.
+
+  // GET /api/agent-runs/stats — aggregate execution stats for dashboard
+  httpApp.get("/api/agent-runs/stats", async (c) => {
+    const allRuns = await agentRunsRepo.findRecent(10000);
+    const totalRuns = allRuns.length;
+    const activeRuns = allRuns.filter(
+      (r) => r.status === "planning" || r.status === "executing"
+    ).length;
+    const completedRuns = allRuns.filter((r) => r.status === "completed").length;
+    const successRate = totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0;
+    const totalTokens = allRuns.reduce(
+      (sum, r) => sum + r.inputTokensUsed + r.outputTokensUsed,
+      0
+    );
+
+    const completedWithTime = allRuns.filter(
+      (r) => r.status === "completed" && r.startedAt && r.completedAt
+    );
+    const avgDurationMs =
+      completedWithTime.length > 0
+        ? Math.round(
+            completedWithTime.reduce((sum, r) => {
+              const start = new Date(r.startedAt).getTime();
+              const end = new Date(r.completedAt!).getTime();
+              return sum + (end - start);
+            }, 0) / completedWithTime.length
+          )
+        : 0;
+
+    // Per-agent usage stats
+    const agentMap = new Map<
+      string,
+      {
+        agentId: string;
+        totalRuns: number;
+        completed: number;
+        totalTokens: number;
+        totalDurationMs: number;
+        completedWithTime: number;
+        lastRunAt: string;
+      }
+    >();
+    for (const run of allRuns) {
+      const entry = agentMap.get(run.agentId) ?? {
+        agentId: run.agentId,
+        totalRuns: 0,
+        completed: 0,
+        totalTokens: 0,
+        totalDurationMs: 0,
+        completedWithTime: 0,
+        lastRunAt: run.createdAt,
+      };
+      entry.totalRuns++;
+      entry.totalTokens += run.inputTokensUsed + run.outputTokensUsed;
+      if (run.status === "completed") entry.completed++;
+      if (run.status === "completed" && run.startedAt && run.completedAt) {
+        entry.completedWithTime++;
+        entry.totalDurationMs +=
+          new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime();
+      }
+      if (run.createdAt > entry.lastRunAt) entry.lastRunAt = run.createdAt;
+      agentMap.set(run.agentId, entry);
+    }
+
+    const agentUsage = Array.from(agentMap.values()).map((a) => ({
+      agentId: a.agentId,
+      agentName: agentRegistry.getById(a.agentId as import("@shared/types").AgentId)?.name ?? a.agentId,
+      totalRuns: a.totalRuns,
+      successRate: a.totalRuns > 0 ? Math.round((a.completed / a.totalRuns) * 100) : 0,
+      avgDurationMs: a.completedWithTime > 0 ? Math.round(a.totalDurationMs / a.completedWithTime) : 0,
+      avgTokensPerRun: a.totalRuns > 0 ? Math.round(a.totalTokens / a.totalRuns) : 0,
+      lastRunAt: a.lastRunAt,
+    }));
+
+    return c.json({
+      totalRuns,
+      activeRuns,
+      successRate,
+      avgDurationMs,
+      totalTokens,
+      agentUsage,
+    });
+  });
+
+  // GET /api/agent-runs/task-progress — orchestrator runs with their task breakdowns
+  httpApp.get("/api/agent-runs/task-progress", async (c) => {
+    const limit = Number(c.req.query("limit") ?? "50");
+    const statusFilter = c.req.query("status"); // optional: active | completed | all
+
+    const allRuns = await agentRunsRepo.findRecent(limit * 2);
+
+    // Filter to top-level (non-delegated) runs only
+    let topLevelRuns = allRuns.filter((r) => !r.parentRunId);
+
+    if (statusFilter === "active") {
+      topLevelRuns = topLevelRuns.filter(
+        (r) => r.status === "planning" || r.status === "executing"
+      );
+    } else if (statusFilter === "completed") {
+      topLevelRuns = topLevelRuns.filter(
+        (r) => r.status === "completed" || r.status === "failed" || r.status === "cancelled"
+      );
+    }
+
+    topLevelRuns = topLevelRuns.slice(0, limit);
+
+    // Fetch tasks for each run in parallel
+    const runsWithTasks = await Promise.all(
+      topLevelRuns.map(async (run) => {
+        const tasks = await agentTasksRepo.findByRunId(run.id);
+        const agentDef = agentRegistry.getById(run.agentId as import("@shared/types").AgentId);
+
+        // Count child (delegated) runs
+        const childRuns = allRuns.filter((r) => r.parentRunId === run.id);
+
+        return {
+          id: run.id,
+          agentId: run.agentId,
+          agentName: agentDef?.name ?? run.agentId,
+          goal: run.goal,
+          status: run.status,
+          iterationCount: run.iterationCount,
+          toolCallCount: run.toolCallCount,
+          inputTokensUsed: run.inputTokensUsed,
+          outputTokensUsed: run.outputTokensUsed,
+          startedAt: run.startedAt,
+          completedAt: run.completedAt ?? null,
+          errorMessage: run.errorMessage ?? null,
+          tasks: tasks.map((t) => ({
+            id: t.id,
+            description: t.description,
+            status: t.status,
+            dependsOn: t.dependsOn,
+            requiredTools: t.requiredTools,
+            startedAt: t.startedAt ?? null,
+            completedAt: t.completedAt ?? null,
+          })),
+          delegatedRuns: childRuns.map((cr) => ({
+            id: cr.id,
+            agentId: cr.agentId,
+            agentName: agentRegistry.getById(cr.agentId as import("@shared/types").AgentId)?.name ?? cr.agentId,
+            goal: cr.goal,
+            status: cr.status,
+            startedAt: cr.startedAt,
+            completedAt: cr.completedAt ?? null,
+          })),
+        };
+      })
+    );
+
+    return c.json(runsWithTasks);
+  });
+
+  // POST /api/agent-runs/execute — start an agent execution
+  httpApp.post("/api/agent-runs/execute", async (c) => {
+    const body = await c.req.json();
+    const { agentId, goal, config: configOverrides } = body;
+    if (!agentId || !goal) {
+      return c.json({ error: "agentId and goal are required" }, { status: 400 });
+    }
+    const { createAgentId: makeId } = await import("@shared/types.js");
+    const result = await executionEngine.execute({
+      agentId: makeId(agentId),
+      goal,
+      config: configOverrides,
+    });
+    if (isErr(result)) {
+      return c.json({ error: domainErrorMessage(result.error) }, { status: 500 });
+    }
+    return c.json(result.value, { status: 200 });
+  });
+
+  // GET /api/agent-runs — list recent agent runs
+  httpApp.get("/api/agent-runs", async (c) => {
+    const limit = Number(c.req.query("limit") ?? "50");
+    const runs = await agentRunsRepo.findRecent(limit);
+    return c.json(runs);
+  });
+
+  // GET /api/agent-runs/:id/tasks — planned tasks for a run
+  httpApp.get("/api/agent-runs/:id/tasks", async (c) => {
+    const runId = c.req.param("id");
+    const tasks = await agentTasksRepo.findByRunId(runId);
+    return c.json(tasks);
+  });
+
+  // GET /api/agent-runs/:id/steps — paginated steps for a run
+  httpApp.get("/api/agent-runs/:id/steps", async (c) => {
+    const runId = c.req.param("id");
+    const offset = Number(c.req.query("offset") ?? "0");
+    const limit = Number(c.req.query("limit") ?? "100");
+    const result = await agentRunStepsRepo.findByRunId(runId, { offset, limit });
+    return c.json(result);
+  });
+
+  // GET /api/agent-runs/:id/delegation-tree — recursive delegation hierarchy
+  httpApp.get("/api/agent-runs/:id/delegation-tree", async (c) => {
+    const runId = c.req.param("id");
+
+    type DelegationNode = {
+      run: {
+        id: string;
+        agentId: string;
+        goal: string;
+        status: string;
+        startedAt: string;
+        completedAt: string | null;
+      };
+      children: DelegationNode[];
+    };
+
+    async function buildTree(id: string): Promise<DelegationNode | null> {
+      const run = await agentRunsRepo.findById(id);
+      if (!run) return null;
+
+      // Find children by parentRunId
+      const allRuns = await agentRunsRepo.findRecent(1000);
+      const children = allRuns.filter((r) => r.parentRunId === id);
+
+      const childNodes: DelegationNode[] = [];
+      for (const child of children) {
+        const childNode = await buildTree(child.id);
+        if (childNode) childNodes.push(childNode);
+      }
+
+      return {
+        run: {
+          id: run.id,
+          agentId: run.agentId,
+          goal: run.goal,
+          status: run.status,
+          startedAt: run.startedAt,
+          completedAt: run.completedAt ?? null,
+        },
+        children: childNodes,
+      };
+    }
+
+    const tree = await buildTree(runId);
+    if (!tree) {
+      return c.json({ error: "Run not found" }, { status: 404 });
+    }
+    return c.json(tree);
+  });
+
+  // GET /api/agent-runs/:id — get a specific run's status
+  httpApp.get("/api/agent-runs/:id", async (c) => {
+    const runId = c.req.param("id");
+    const { createAgentRunId: makeRunId } = await import("@shared/types.js");
+    const result = await executionEngine.getRunStatus(makeRunId(runId));
+    if (isErr(result)) {
+      return c.json({ error: domainErrorMessage(result.error) }, { status: 404 });
+    }
+    return c.json(result.value);
+  });
+
+  // POST /api/agent-runs/:id/cancel — cancel a running agent
+  httpApp.post("/api/agent-runs/:id/cancel", async (c) => {
+    const runId = c.req.param("id");
+    const { createAgentRunId: makeRunId } = await import("@shared/types.js");
+    const result = await executionEngine.cancelRun(makeRunId(runId));
+    if (isErr(result)) {
+      return c.json({ error: domainErrorMessage(result.error) }, { status: 404 });
+    }
+    return c.json({ success: true });
   });
 
   // ── Reviews API ──────────────────────────────────────────────────────
