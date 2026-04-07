@@ -1,0 +1,4 @@
+interface:
+  display_name: "Senior Fullstack TS Developer"
+  short_description: "Implement and integrate TypeScript features in this MCP repo"
+  default_prompt: "Use $senior-fullstack-typescript-developer to implement or fix code in this repository while following its MCP, TypeScript, React, Zod, and repository-layer conventions."

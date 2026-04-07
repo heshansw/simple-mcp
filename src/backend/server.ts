@@ -740,8 +740,8 @@ export async function createServer(
     logger,
   });
 
-  // Register Claude Code-driven agent execution tools
-  // These let Claude Code act as the LLM brain — no Anthropic API key needed
+  // Register client-driven agent execution tools
+  // These let a connected MCP client such as Claude Code or Codex act as the reasoning layer
   registerAgentStartRunTool(mcpServer, {
     agentRegistry,
     agentRunsRepo,

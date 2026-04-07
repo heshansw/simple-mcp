@@ -58,7 +58,7 @@ export function registerAgentCompleteRunTool(
       if (result !== undefined) {
         updateData.result = JSON.stringify({
           answer: result,
-          mode: "claude-code-driven",
+          mode: "client-driven",
         });
       }
 
@@ -80,7 +80,7 @@ export function registerAgentCompleteRunTool(
 
       deps.logger.info(
         { runId, status, durationMs, stepCount },
-        "Claude Code-driven agent run completed"
+        "Client-driven agent run completed"
       );
 
       return {

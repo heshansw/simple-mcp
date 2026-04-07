@@ -79,7 +79,7 @@ Users of simple-mcp tool can track and detect agentic ochestration on task manag
 
 ### Agent Execution Engine
 
-Agents can run **autonomously** — give them a goal and they plan, execute tools, reflect on results, and self-correct until the goal is achieved. The engine uses Claude as the reasoning core with MCP tools as the action layer.
+Agents can run **autonomously** — give them a goal and they plan, execute tools, reflect on results, and self-correct until the goal is achieved. The built-in execution engine uses Anthropic for server-side reasoning, and the same MCP tool layer can also be driven directly by external clients such as Claude Code or Codex.
 
 | MCP Tool | Description |
 |---|---|
@@ -212,6 +212,46 @@ Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/cla
 
 Restart Claude Desktop to connect.
 
+## Using with Codex
+
+Codex can use the same MCP server process exposed by this repository.
+
+### Codex project configuration
+
+Codex uses the root [`AGENTS.md`](/Users/heshan.kithuldora/Code/Learning/claude_mcp/AGENTS.md) file for repository-scoped instructions. This project now includes one with TypeScript, MCP, and agent-run guidance tailored for Codex.
+
+### MCP connection
+
+Reuse the existing project [`.mcp.json`](/Users/heshan.kithuldora/Code/Learning/claude_mcp/.mcp.json) server entry:
+
+```json
+{
+  "mcpServers": {
+    "simple-mcp": {
+      "command": "/Users/heshan.kithuldora/Code/Learning/claude_mcp/run-mcp.sh",
+      "env": {
+        "CLAUDE_MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
+Once Codex loads the project MCP server, it can call the same tools exposed to Claude clients.
+
+### Recommended Codex workflow
+
+For agentic development driven by Codex, use the tracked run tools instead of the server-side Anthropic loop:
+
+1. Call `agent_list`
+2. Call `agent_start_run`
+3. Execute the relevant MCP tools
+4. Call `agent_record_step` during execution
+5. Call `agent_update_task` if the run includes planned tasks
+6. Call `agent_complete_run` when done
+
+This keeps execution history, task progress, and final results visible in the admin panel without requiring an Anthropic API key for the run itself.
+
 ---
 
 ## Project Structure
@@ -252,6 +292,7 @@ claude_mcp/
 │       ├── result.ts             # Result<T, E> type + domain error types
 │       └── schemas/              # Zod schemas (connection, integration)
 ├── .env                          # Environment variables (git-ignored)
+├── AGENTS.md                     # Repository-scoped instructions for Codex
 ├── .mcp.json                     # MCP server config for Claude Code
 ├── run-mcp.sh                    # MCP launcher script
 ├── package.json
@@ -303,7 +344,7 @@ claude_mcp/
 ### Data Flow
 
 ```
-Claude Code / Desktop
+Claude Code / Desktop / Codex
   ↕ stdio (JSON-RPC)
 MCP Server (McpServer)
   → Tools → Services → External APIs (Jira, GitHub)
@@ -408,18 +449,29 @@ The agent execution engine lets agents run autonomously — you provide a goal, 
 
 ---
 
-### Usage: Claude Code CLI (Prompt-based)
+### Usage: Claude Code or Codex (Client-driven)
 
-When the MCP server is connected to Claude Code, you can invoke agents directly in your conversation:
+When the MCP server is connected to Claude Code or Codex, you can invoke agents directly in your conversation.
 
-#### Execute an agent
+#### Execute an agent with the server-side execution engine
 
 ```
 Use the agent_execute tool to run the database-explorer agent with goal:
 "List all tables in the public schema and describe their columns and relationships"
 ```
 
-Claude will call the `agent_execute` MCP tool, which starts the autonomous loop. The agent plans, invokes database tools, and returns a complete answer.
+The connected client calls `agent_execute`, which starts the server-managed autonomous loop. The agent plans, invokes database tools, and returns a complete answer.
+
+#### Execute an agent with a client-driven tracked run
+
+```
+1. Use agent_start_run with agentId "local-repo-analysis" and a concrete goal.
+2. Follow the returned systemPrompt and requiredTools.
+3. Record progress with agent_record_step as you work.
+4. Finish with agent_complete_run.
+```
+
+This mode is recommended for Codex because Codex stays in control of the reasoning loop while the MCP server still tracks execution history in SQLite and the admin UI.
 
 #### Execute with custom limits
 
@@ -465,6 +517,19 @@ Claude Desktop connects to the MCP server in the same way as Claude Code. After 
    > "Run the pr-review agent to review the latest open pull request in the heshansw/simple-mcp repository"
 3. **The agent runs autonomously** — Claude shows you the progress and final result
 4. **Check past runs** by asking Claude to use `agent_status` with a run ID
+
+### Client-Driven Runs for Codex and Claude Code
+
+The MCP server also exposes a client-driven execution path for coding agents that want to own the reasoning loop directly:
+
+| Tool | Purpose |
+|---|---|
+| `agent_start_run` | Create a tracked run and return the selected agent's prompt, tools, and optional tasks |
+| `agent_record_step` | Persist meaningful execution steps for observability |
+| `agent_update_task` | Update task state for tracked plans |
+| `agent_complete_run` | Finalize the run with completed, failed, or cancelled status |
+
+Use this mode when you want Codex or Claude Code to reason locally while still writing execution telemetry into the project database and admin panel.
 
 > **Tip:** Agent execution blocks until completion. For long-running agents, keep the conversation open. The default timeout is 5 minutes.
 
