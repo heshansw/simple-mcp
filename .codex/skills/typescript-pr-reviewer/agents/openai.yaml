@@ -1,0 +1,4 @@
+interface:
+  display_name: "TypeScript PR Reviewer"
+  short_description: "Review this repo's TypeScript changes for bugs and regressions"
+  default_prompt: "Use $typescript-pr-reviewer to review recent changes in this repository and report correctness, architecture, typing, security, performance, and testing findings first."

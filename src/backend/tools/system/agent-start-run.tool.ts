@@ -56,7 +56,7 @@ export function registerAgentStartRunTool(
 ): void {
   server.tool(
     "agent_start_run",
-    "Start a tracked agent run driven by Claude Code. Returns the agent's system prompt, allowed tools, and a runId for tracking. Use this instead of agent_execute when you want Claude Code to drive the execution loop directly (no Anthropic API key needed). After starting, call the agent's tools, record steps with agent_record_step, and finish with agent_complete_run.",
+    "Start a tracked agent run driven by an external MCP client such as Claude Code or Codex. Returns the agent's system prompt, allowed tools, and a runId for tracking. Use this instead of agent_execute when you want the connected client to drive the execution loop directly (no Anthropic API key needed). After starting, call the agent's tools, record steps with agent_record_step, and finish with agent_complete_run.",
     AgentStartRunInputSchema.shape,
     async (args) => {
       const parsed = AgentStartRunInputSchema.safeParse(args);
@@ -81,7 +81,7 @@ export function registerAgentStartRunTool(
       const now = new Date().toISOString();
       const config = JSON.stringify({
         maxIterations: maxIterations ?? 25,
-        mode: "claude-code-driven",
+        mode: "client-driven",
       });
 
       // Create the run record
@@ -111,7 +111,7 @@ export function registerAgentStartRunTool(
 
       deps.logger.info(
         { agentId, runId, goal: goal.substring(0, 100), taskCount: taskRecords.length },
-        "Claude Code-driven agent run started"
+        "Client-driven agent run started"
       );
 
       return {
