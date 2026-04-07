@@ -1,4 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
+import { APP_DISPLAY_NAME } from "@shared/mcp-client.js";
 
 export function Root() {
   return (
@@ -24,7 +25,7 @@ export function Root() {
       >
         <div style={{ padding: "0 1.5rem", marginBottom: "2rem" }}>
           <h1 style={{ margin: "0", fontSize: "1.25rem", fontWeight: "700" }}>
-            Claude MCP
+            {APP_DISPLAY_NAME}
           </h1>
           <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.875rem", opacity: 0.8 }}>
             Admin Panel

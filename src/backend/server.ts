@@ -119,6 +119,12 @@ import { registerPrompts } from "./prompts/index.js";
 
 import { randomBytes } from "node:crypto";
 import { isErr, domainErrorMessage } from "@shared/result.js";
+import {
+  DEFAULT_LOCAL_MCP_CLIENT_CONNECTION_NAME,
+  getMissingDedicatedLocalMcpClientConnectionNames,
+  isAnthropicConnectionCandidate,
+  shouldCreateDefaultLocalMcpClientConnection,
+} from "@shared/mcp-client.js";
 import type { MaintenanceScheduler } from "./maintenance/scheduler.js";
 
 export interface ServerComponents {
@@ -197,7 +203,7 @@ export async function createServer(
   });
 
   // GitHub service resolves its token from the first connected GitHub connection
-  // that actually has stored credentials (skip placeholder connections like "Claude (Local)")
+  // that actually has stored credentials (skip local MCP client placeholders).
   const githubService = createGitHubService({
     logger,
     getToken: async () => {
@@ -653,16 +659,16 @@ export async function createServer(
   // Create tool executor
   const toolExecutor = createToolExecutor({ registry: toolHandlerRegistry, logger });
 
-  // Anthropic API key resolver — checks env var first, then Claude connection credentials
+  // Anthropic API key resolver — checks env var first, then stored Anthropic credentials.
   const getAnthropicApiKey = async (): Promise<string | null> => {
     if (config.ANTHROPIC_API_KEY) return config.ANTHROPIC_API_KEY;
-    // Check for a Claude/Anthropic connection in the DB
+    // Check for an Anthropic-backed connection in the DB.
     const allConns = await connectionsRepo.findAll();
-    const claudeConn = allConns.find(
-      (c) => c.name.toLowerCase().includes("claude") || c.name.toLowerCase().includes("anthropic")
+    const anthropicConn = allConns.find((c) =>
+      isAnthropicConnectionCandidate(c.name)
     );
-    if (!claudeConn) return null;
-    const cred = await credentialsRepo.findByConnectionId(claudeConn.id);
+    if (!anthropicConn) return null;
+    const cred = await credentialsRepo.findByConnectionId(anthropicConn.id);
     if (!cred) return null;
     try {
       return encryptionService.decrypt(cred.encryptedData, cred.iv);
@@ -1202,7 +1208,7 @@ export async function createServer(
     return c.json(stats);
   });
 
-  // GET /api/reviews/in-progress — reviews currently being analyzed by Claude
+  // GET /api/reviews/in-progress — reviews currently being analyzed by the AI reviewer
   httpApp.get("/api/reviews/in-progress", async (c) => {
     const inProgress = await reviewsRepo.findInProgress();
     return c.json(inProgress);
@@ -1819,24 +1825,69 @@ export async function createServer(
     return c.json(setting);
   });
 
-  // Auto-create default Claude connection if it doesn't exist
+  // Auto-create dedicated local MCP client placeholders for Claude and Codex.
   try {
     const existingConnections = await connectionsRepo.findAll();
-    const hasClaudeConnection = existingConnections.some(
-      (c) => c.name === "Claude (Local)" || c.integrationType === "claude" as string
+    const legacyLocalConnection = existingConnections.find(
+      (connection) =>
+        connection.name === DEFAULT_LOCAL_MCP_CLIENT_CONNECTION_NAME
     );
-    if (!hasClaudeConnection) {
+    const missingDedicatedLocalConnections =
+      getMissingDedicatedLocalMcpClientConnectionNames(existingConnections);
+
+    if (
+      legacyLocalConnection &&
+      missingDedicatedLocalConnections.length > 0
+    ) {
+      const [replacementName, ...remainingNames] =
+        missingDedicatedLocalConnections;
+
+      if (replacementName) {
+        await connectionsRepo.update(legacyLocalConnection.id, {
+          name: replacementName,
+        });
+      }
+
+      for (const connectionName of remainingNames) {
+        await connectionsRepo.create({
+          name: connectionName,
+          integrationType: "github", // placeholder — represents local MCP client presence
+          baseUrl: `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}`,
+          authMethod: "api_token",
+          status: "connected",
+        });
+      }
+
+      logger.info(
+        { migratedFrom: DEFAULT_LOCAL_MCP_CLIENT_CONNECTION_NAME },
+        "Migrated legacy local MCP client placeholder to dedicated client rows"
+      );
+    } else if (missingDedicatedLocalConnections.length > 0) {
+      for (const connectionName of missingDedicatedLocalConnections) {
+        await connectionsRepo.create({
+          name: connectionName,
+          integrationType: "github", // placeholder — represents local MCP client presence
+          baseUrl: `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}`,
+          authMethod: "api_token",
+          status: "connected",
+        });
+      }
+      logger.info(
+        { created: missingDedicatedLocalConnections },
+        "Auto-created dedicated local MCP client connections"
+      );
+    } else if (shouldCreateDefaultLocalMcpClientConnection(existingConnections)) {
       await connectionsRepo.create({
-        name: "Claude (Local)",
-        integrationType: "github", // default placeholder — acts as local MCP connection
+        name: DEFAULT_LOCAL_MCP_CLIENT_CONNECTION_NAME,
+        integrationType: "github",
         baseUrl: `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}`,
         authMethod: "api_token",
         status: "connected",
       });
-      logger.info("Auto-created default Claude (Local) connection");
+      logger.info("Auto-created legacy local MCP client connection");
     }
   } catch (error) {
-    logger.warn({ error }, "Failed to auto-create Claude connection (non-fatal)");
+    logger.warn({ error }, "Failed to auto-create local MCP client connection (non-fatal)");
   }
 
   // Create maintenance scheduler
@@ -1897,7 +1948,7 @@ export async function startServer(config: EnvConfig): Promise<void> {
   logger.info("Maintenance scheduler started");
 
   // Start HTTP admin panel server.
-  // In stdio mode Claude Desktop may spawn this process concurrently with an
+  // In stdio mode an MCP client may spawn this process concurrently with an
   // existing instance. If the admin port is already bound, log a warning and
   // continue — the MCP stdio transport works independently of the admin panel.
   const server = serve(
@@ -1916,7 +1967,7 @@ export async function startServer(config: EnvConfig): Promise<void> {
   server.on("error", (error: NodeJS.ErrnoException) => {
     if (error.code === "EADDRINUSE") {
       // Another instance already owns the admin port — this is expected when
-      // Claude Desktop spawns a second process during protocol negotiation.
+      // Some MCP clients spawn a second process during protocol negotiation.
       // Warn and continue; the MCP tools are fully functional without it.
       logger.warn(
         { port: config.CLAUDE_MCP_ADMIN_PORT },

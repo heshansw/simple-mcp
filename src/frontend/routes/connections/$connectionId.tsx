@@ -14,6 +14,11 @@ import { LoadingSpinner } from "@frontend/components/loading-spinner";
 import { ErrorDisplay } from "@frontend/components/error-display";
 import { useState, useEffect } from "react";
 import { AuthMethodSchema } from "@shared/schemas/connection.schema";
+import {
+  getConnectionTypeLabel,
+  isLocalMcpClientConnectionName,
+  LOCAL_MCP_CLIENT_CONNECTION_DESCRIPTION,
+} from "@shared/mcp-client.js";
 
 export function ConnectionDetailPage() {
   const { connectionId } = useParams({ from: "/connections/$connectionId" });
@@ -96,6 +101,7 @@ export function ConnectionDetailPage() {
 
   const isJira = connection?.integrationType === "jira";
   const isGoogleCalendar = connection?.integrationType === "google-calendar";
+  const isLocalMcpClient = isLocalMcpClientConnectionName(connection.name);
 
   const handleGoogleReAuth = async () => {
     try {
@@ -232,7 +238,7 @@ export function ConnectionDetailPage() {
                       Integration Type
                     </p>
                     <p style={{ margin: "0.5rem 0 0 0", fontSize: "1rem", fontWeight: "500" }}>
-                      {connection.integrationType.toUpperCase()}
+                      {getConnectionTypeLabel(connection)}
                     </p>
                   </div>
                   <div>
@@ -244,7 +250,9 @@ export function ConnectionDetailPage() {
                   <div>
                     <p style={{ margin: "0", fontSize: "0.875rem", color: "#666" }}>Auth Method</p>
                     <p style={{ margin: "0.5rem 0 0 0", fontSize: "1rem", fontWeight: "500" }}>
-                      {connection.authMethod.replace(/_/g, " ")}
+                      {isLocalMcpClient
+                        ? "Managed internally"
+                        : connection.authMethod.replace(/_/g, " ")}
                     </p>
                   </div>
                   <div>
@@ -408,10 +416,36 @@ export function ConnectionDetailPage() {
           }}
         >
           <h2 style={{ marginTop: "0", fontSize: "1.125rem", marginBottom: "1rem" }}>
-            {isGoogleCalendar ? "Google OAuth Authentication" : "Credentials / Access Token"}
+            {isLocalMcpClient
+              ? "Local MCP Client"
+              : isGoogleCalendar
+              ? "Google OAuth Authentication"
+              : "Credentials / Access Token"}
           </h2>
 
-          {isGoogleCalendar ? (
+          {isLocalMcpClient ? (
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "1rem",
+                  backgroundColor: "#eff6ff",
+                  borderRadius: "0.375rem",
+                  marginBottom: "1rem",
+                  border: "1px solid #bfdbfe",
+                }}
+              >
+                <span style={{ color: "#1d4ed8", fontWeight: "500" }}>
+                  {LOCAL_MCP_CLIENT_CONNECTION_DESCRIPTION}
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: "0.875rem", color: "#666" }}>
+                Configure Claude or Codex in the local MCP client config. This admin-panel row is only a dedicated local-client marker.
+              </p>
+            </div>
+          ) : isGoogleCalendar ? (
             /* ── Google Calendar OAuth credentials card ─────────────── */
             <div>
               {credStatus?.hasCredentials ? (

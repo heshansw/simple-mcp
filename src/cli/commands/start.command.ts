@@ -68,8 +68,8 @@ export async function executeStartCommand(
       process.exit(1);
     }
   } else {
-    // Foreground / stdio mode — Claude Desktop owns the process lifecycle.
-    // Never check for an existing PID here: Claude Desktop may spawn this
+    // Foreground / stdio mode — the MCP client owns the process lifecycle.
+    // Never check for an existing PID here: an MCP client may spawn this
     // process multiple times during protocol negotiation, and an early exit
     // caused by a stale PID file would tear down the active connection.
     console.error("Starting server...");

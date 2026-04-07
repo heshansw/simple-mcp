@@ -2,6 +2,10 @@ import { useReviews, useReviewStats, useInProgressReviews } from "@frontend/api/
 import type { Review } from "@frontend/api/reviews.api";
 import { LoadingSpinner } from "@frontend/components/loading-spinner";
 import { ErrorDisplay } from "@frontend/components/error-display";
+import {
+  REVIEWS_EMPTY_STATE_PREFIX,
+  REVIEWS_PAGE_DESCRIPTION,
+} from "@shared/mcp-client.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,7 +153,7 @@ export function ReviewsPage() {
     <div>
       <div style={{ marginBottom: "2rem" }}>
         <h1 style={{ margin: "0 0 0.375rem 0", fontSize: "1.5rem", fontWeight: "700" }}>Review Insights</h1>
-        <p style={{ margin: 0, color: "#6b7280", fontSize: "0.875rem" }}>All PR reviews submitted via Claude through MCP tools.</p>
+        <p style={{ margin: 0, color: "#6b7280", fontSize: "0.875rem" }}>{REVIEWS_PAGE_DESCRIPTION}</p>
       </div>
 
       {/* In-progress reviews */}
@@ -207,7 +211,10 @@ export function ReviewsPage() {
           <div style={{ padding: "3rem 2rem", textAlign: "center", color: "#9ca3af" }}>
             <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem" }}>No completed reviews yet</p>
             <p style={{ margin: 0, fontSize: "0.875rem" }}>
-              Ask Claude to review a PR — it will call <code style={{ backgroundColor: "#f3f4f6", padding: "0.1rem 0.4rem", borderRadius: "0.25rem", fontFamily: "monospace" }}>github_get_pr_diff</code> then <code style={{ backgroundColor: "#f3f4f6", padding: "0.1rem 0.4rem", borderRadius: "0.25rem", fontFamily: "monospace" }}>github_submit_review</code>.
+              {REVIEWS_EMPTY_STATE_PREFIX}
+              <code style={{ backgroundColor: "#f3f4f6", padding: "0.1rem 0.4rem", borderRadius: "0.25rem", fontFamily: "monospace" }}>github_get_pr_diff</code>
+              {" then "}
+              <code style={{ backgroundColor: "#f3f4f6", padding: "0.1rem 0.4rem", borderRadius: "0.25rem", fontFamily: "monospace" }}>github_submit_review</code>.
             </p>
           </div>
         ) : (
