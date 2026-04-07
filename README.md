@@ -258,6 +258,51 @@ For agentic development driven by Codex, use the tracked run tools instead of th
 5. Call `agent_update_task` if the run includes planned tasks
 6. Call `agent_complete_run` when done
 
+---
+
+## Releases
+
+This repository uses a fully automated GitHub Actions release pipeline based on `release-please`.
+
+### How it works
+
+- Pull requests and pushes to `main` run the CI workflow in [`.github/workflows/ci.yml`](/Users/heshan.kithuldora/Code/Learning/claude_mcp/.github/workflows/ci.yml)
+- Every push to `main` runs the release workflow in [`.github/workflows/release.yml`](/Users/heshan.kithuldora/Code/Learning/claude_mcp/.github/workflows/release.yml)
+- The release workflow runs `pnpm typecheck`, `pnpm test`, and `pnpm build` before it attempts any release action
+- `release-please` analyzes merged commits and opens or updates a release PR
+- When that release PR is merged, it:
+  - bumps the version in [package.json](/Users/heshan.kithuldora/Code/Learning/claude_mcp/package.json)
+  - updates [CHANGELOG.md](/Users/heshan.kithuldora/Code/Learning/claude_mcp/CHANGELOG.md)
+  - creates a git tag like `v0.1.1`
+  - publishes a GitHub Release
+
+### Commit format
+
+Use Conventional Commits on branches that merge into `main`:
+
+- `fix: correct database connection retry handling`
+- `feat: add tracked agent run completion view`
+- `feat!: change MCP auth configuration format`
+
+Version impact:
+
+- `fix:` -> patch release
+- `feat:` -> minor release
+- `!` or `BREAKING CHANGE:` -> major release
+
+### Release configuration
+
+- [release-please-config.json](/Users/heshan.kithuldora/Code/Learning/claude_mcp/release-please-config.json)
+- [.release-please-manifest.json](/Users/heshan.kithuldora/Code/Learning/claude_mcp/.release-please-manifest.json)
+
+### GitHub setup
+
+No extra secret is required for the default GitHub release flow. The workflow uses the repository `GITHUB_TOKEN`.
+
+In repository settings, make sure GitHub Actions has permission to create and approve pull requests if your org policy restricts it.
+
+For stricter enforcement, add the `CI / validate` check as a required status check in your branch protection rule for `main`.
+
 This keeps execution history, task progress, and final results visible in the admin panel without requiring an Anthropic API key for the run itself.
 
 For the Codex parity requirements that introduced the BA role and workflow guidance, see [7-codex-parity-requirements.md](/Users/heshan.kithuldora/Code/Learning/claude_mcp/docs/ai/instructions/7-codex-parity-requirements.md).
@@ -701,4 +746,3 @@ The execution engine requires an Anthropic API key for Claude reasoning calls. I
 2. Anthropic connection stored in the database (via admin panel)
 
 Set at least one before executing agents.
-
