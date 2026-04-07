@@ -57,6 +57,13 @@ A React 19 web UI for managing the MCP server:
 
 <img width="1800" height="1532" alt="screencapture-localhost-3100-databases-2026-04-02-17_18_03" src="https://github.com/user-attachments/assets/2d8b1952-dbc5-40fb-a877-a6b3b36b833d" />
 
+## Agentic Ochestration
+Users of simple-mcp tool can track and detect agentic ochestration on task management
+
+<img width="1716" height="955" alt="Screenshot 2026-04-07 at 11 51 20" src="https://github.com/user-attachments/assets/b98b49dc-bf1a-40d5-885f-f37c48f24725" />
+
+<img width="1716" height="955" alt="Screenshot 2026-04-07 at 11 51 28" src="https://github.com/user-attachments/assets/98035114-5c8f-4533-a5d6-0e01c3b2ea81" />
+
 
 ### Pre-built Agents
 
