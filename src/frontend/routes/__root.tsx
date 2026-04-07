@@ -39,14 +39,23 @@ export function Root() {
           }}
         >
           <NavLink to="/">Dashboard</NavLink>
+
+          <NavSection label="Orchestration" />
+          <NavLink to="/task-progress">Task Progress</NavLink>
+          <NavLink to="/agent-executions">Executions</NavLink>
+          <NavLink to="/agents">Agents</NavLink>
+
+          <NavSection label="Development" />
           <NavLink to="/my-prs">My PRs</NavLink>
           <NavLink to="/reviews">Review Insights</NavLink>
-          <NavLink to="/connections">Connections</NavLink>
-          <NavLink to="/agents">Agents</NavLink>
-          <NavLink to="/agent-executions">Executions</NavLink>
           <NavLink to="/local-repos">Local Repos</NavLink>
+
+          <NavSection label="Integrations" />
+          <NavLink to="/connections">Connections</NavLink>
           <NavLink to="/confluence">Confluence</NavLink>
           <NavLink to="/databases">Databases</NavLink>
+
+          <NavSection label="System" />
           <NavLink to="/settings">Settings</NavLink>
         </ul>
       </nav>
@@ -81,6 +90,28 @@ export function Root() {
   );
 }
 
+type NavSectionProps = {
+  label: string;
+};
+
+function NavSection({ label }: NavSectionProps) {
+  return (
+    <li
+      style={{
+        padding: "1rem 1.5rem 0.375rem 1.5rem",
+        fontSize: "0.6875rem",
+        fontWeight: "600",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        color: "#9ca3af",
+        userSelect: "none",
+      }}
+    >
+      {label}
+    </li>
+  );
+}
+
 type NavLinkProps = {
   to: string;
   children: string;
@@ -98,10 +129,10 @@ function NavLink({ to, children }: NavLinkProps) {
         }}
         style={{
           display: "block",
-          padding: "0.75rem 1.5rem",
+          padding: "0.625rem 1.5rem",
           color: "#fff",
           textDecoration: "none",
-          fontSize: "0.875rem",
+          fontSize: "0.8125rem",
           transition: "background-color 0.2s",
         }}
         onMouseEnter={(e) => {

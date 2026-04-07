@@ -89,6 +89,25 @@ export type AgentRunStepsRepo = {
   readonly getNextStepIndex: (runId: string) => Promise<number>;
 };
 
+// ── Tasks repository interface (minimal) ──────────────────────────────
+
+export type AgentTasksRepo = {
+  readonly bulkCreate: (
+    tasks: readonly {
+      runId: string;
+      description: string;
+      dependsOn?: string;
+      requiredTools?: string;
+      createdAt: string;
+    }[]
+  ) => Promise<readonly { id: string; runId: string; description: string; status: string }[]>;
+  readonly update: (
+    id: string,
+    data: { status?: string; result?: string | null; startedAt?: string | null; completedAt?: string | null }
+  ) => Promise<unknown>;
+  readonly findByRunId: (runId: string) => Promise<readonly { id: string; runId: string; description: string; dependsOn: string; requiredTools: string; status: string; result: string | null; startedAt: string | null; completedAt: string | null; createdAt: string }[]>;
+};
+
 // ── Engine dependencies ────────────────────────────────────────────────
 
 export type ExecutionEngineDeps = {
@@ -102,6 +121,7 @@ export type ExecutionEngineDeps = {
   readonly delegationHandler: DelegationHandler | null;
   readonly agentRunsRepo: AgentRunsRepo;
   readonly agentRunStepsRepo: AgentRunStepsRepo | null;
+  readonly agentTasksRepo: AgentTasksRepo | null;
 };
 
 // ── Public interface ───────────────────────────────────────────────────
@@ -347,6 +367,29 @@ export function createExecutionEngine(
             reasoning: planSummary,
             durationMs: Date.now() - planStart,
           });
+
+          // Persist planned tasks to database (fire-and-forget)
+          if (deps.agentTasksRepo) {
+            const now = new Date().toISOString();
+            deps.agentTasksRepo
+              .bulkCreate(
+                planResult.value.tasks.map((t) => ({
+                  runId,
+                  description: t.description,
+                  dependsOn: JSON.stringify(
+                    t.dependsOn.map((depId) => {
+                      const depIdx = planResult.value.tasks.findIndex((pt) => pt.id === depId);
+                      return depIdx >= 0 ? depIdx : depId;
+                    })
+                  ),
+                  requiredTools: JSON.stringify(t.requiredTools),
+                  createdAt: now,
+                }))
+              )
+              .catch((error) => {
+                logger.error({ error, runId }, "Failed to persist planned tasks");
+              });
+          }
 
           workingMemory.addUserMessage(
             `Here is the execution plan:\n${planSummary}\n\nPlease execute these tasks using the available tools.`

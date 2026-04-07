@@ -112,6 +112,43 @@ export type AgentExecutionStats = {
   }>;
 };
 
+export type TaskItem = {
+  id: string;
+  description: string;
+  status: string;
+  dependsOn: string;
+  requiredTools: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type DelegatedRunItem = {
+  id: string;
+  agentId: string;
+  agentName: string;
+  goal: string;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+};
+
+export type TaskProgressRun = {
+  id: string;
+  agentId: string;
+  agentName: string;
+  goal: string;
+  status: string;
+  iterationCount: number;
+  toolCallCount: number;
+  inputTokensUsed: number;
+  outputTokensUsed: number;
+  startedAt: string;
+  completedAt: string | null;
+  errorMessage: string | null;
+  tasks: TaskItem[];
+  delegatedRuns: DelegatedRunItem[];
+};
+
 // ── Query Hooks ─────────────────────────────────────────────────────
 
 export function useAgentExecutions(filters?: { agentId?: string; limit?: number }) {
@@ -176,6 +213,27 @@ export function useAgentExecutionStats() {
   return useQuery({
     queryKey: agentExecutionKeys.stats(),
     queryFn: () => apiClient.get<AgentExecutionStats>("/agent-runs/stats"),
+  });
+}
+
+export function useTaskProgress(filters?: { status?: string }) {
+  return useQuery({
+    queryKey: agentExecutionKeys.taskProgress(filters),
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filters?.status) params.set("status", filters.status);
+      const qs = params.toString();
+      return apiClient.get<TaskProgressRun[]>(`/agent-runs/task-progress${qs ? `?${qs}` : ""}`);
+    },
+    refetchInterval: 5000,
+  });
+}
+
+export function useRunTasks(runId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: agentExecutionKeys.tasks(runId),
+    queryFn: () => apiClient.get<TaskItem[]>(`/agent-runs/${runId}/tasks`),
+    enabled: options?.enabled ?? true,
   });
 }
 

@@ -73,6 +73,10 @@ import { createAgentRunStepsRepository } from "./db/repositories/agent-run-steps
 import { registerAgentExecuteTool } from "./tools/system/agent-execute.tool.js";
 import { registerAgentStatusTool } from "./tools/system/agent-status.tool.js";
 import { registerAgentListTool } from "./tools/system/agent-list.tool.js";
+import { registerAgentStartRunTool } from "./tools/system/agent-start-run.tool.js";
+import { registerAgentRecordStepTool } from "./tools/system/agent-record-step.tool.js";
+import { registerAgentUpdateTaskTool } from "./tools/system/agent-update-task.tool.js";
+import { registerAgentCompleteRunTool } from "./tools/system/agent-complete-run.tool.js";
 
 import { createMaintenanceScheduler } from "./maintenance/scheduler.js";
 import { createStdioTransport } from "./transports/stdio.transport.js";
@@ -149,8 +153,7 @@ export async function createServer(
   const workspacesRepo = createRepoWorkspacesRepository(db);
   const dbQueryActivityRepo = createDbQueryActivityRepository(db);
   const agentRunsRepo = createAgentRunsRepository(db);
-  const agentTasksRepo = createAgentTasksRepository(db); // Used by task planner persistence
-  void agentTasksRepo; // Referenced for future task-level persistence
+  const agentTasksRepo = createAgentTasksRepository(db);
   const agentRunStepsRepo = createAgentRunStepsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
@@ -717,6 +720,7 @@ export async function createServer(
     delegationHandler,
     agentRunsRepo,
     agentRunStepsRepo,
+    agentTasksRepo,
   });
 
   // Wire delegation handler back to engine (circular dependency resolution)
@@ -733,6 +737,28 @@ export async function createServer(
         toolHandlerRegistry.list().some((t) => t.startsWith(integration.replace("-", "_"))),
       hasTool: (toolName: string) => toolHandlerRegistry.has(toolName),
     },
+    logger,
+  });
+
+  // Register Claude Code-driven agent execution tools
+  // These let Claude Code act as the LLM brain — no Anthropic API key needed
+  registerAgentStartRunTool(mcpServer, {
+    agentRegistry,
+    agentRunsRepo,
+    agentTasksRepo,
+    logger,
+  });
+  registerAgentRecordStepTool(mcpServer, {
+    agentRunStepsRepo,
+    logger,
+  });
+  registerAgentUpdateTaskTool(mcpServer, {
+    agentTasksRepo,
+    logger,
+  });
+  registerAgentCompleteRunTool(mcpServer, {
+    agentRunsRepo,
+    agentRunStepsRepo,
     logger,
   });
 
@@ -978,6 +1004,75 @@ export async function createServer(
     });
   });
 
+  // GET /api/agent-runs/task-progress — orchestrator runs with their task breakdowns
+  httpApp.get("/api/agent-runs/task-progress", async (c) => {
+    const limit = Number(c.req.query("limit") ?? "50");
+    const statusFilter = c.req.query("status"); // optional: active | completed | all
+
+    const allRuns = await agentRunsRepo.findRecent(limit * 2);
+
+    // Filter to top-level (non-delegated) runs only
+    let topLevelRuns = allRuns.filter((r) => !r.parentRunId);
+
+    if (statusFilter === "active") {
+      topLevelRuns = topLevelRuns.filter(
+        (r) => r.status === "planning" || r.status === "executing"
+      );
+    } else if (statusFilter === "completed") {
+      topLevelRuns = topLevelRuns.filter(
+        (r) => r.status === "completed" || r.status === "failed" || r.status === "cancelled"
+      );
+    }
+
+    topLevelRuns = topLevelRuns.slice(0, limit);
+
+    // Fetch tasks for each run in parallel
+    const runsWithTasks = await Promise.all(
+      topLevelRuns.map(async (run) => {
+        const tasks = await agentTasksRepo.findByRunId(run.id);
+        const agentDef = agentRegistry.getById(run.agentId as import("@shared/types").AgentId);
+
+        // Count child (delegated) runs
+        const childRuns = allRuns.filter((r) => r.parentRunId === run.id);
+
+        return {
+          id: run.id,
+          agentId: run.agentId,
+          agentName: agentDef?.name ?? run.agentId,
+          goal: run.goal,
+          status: run.status,
+          iterationCount: run.iterationCount,
+          toolCallCount: run.toolCallCount,
+          inputTokensUsed: run.inputTokensUsed,
+          outputTokensUsed: run.outputTokensUsed,
+          startedAt: run.startedAt,
+          completedAt: run.completedAt ?? null,
+          errorMessage: run.errorMessage ?? null,
+          tasks: tasks.map((t) => ({
+            id: t.id,
+            description: t.description,
+            status: t.status,
+            dependsOn: t.dependsOn,
+            requiredTools: t.requiredTools,
+            startedAt: t.startedAt ?? null,
+            completedAt: t.completedAt ?? null,
+          })),
+          delegatedRuns: childRuns.map((cr) => ({
+            id: cr.id,
+            agentId: cr.agentId,
+            agentName: agentRegistry.getById(cr.agentId as import("@shared/types").AgentId)?.name ?? cr.agentId,
+            goal: cr.goal,
+            status: cr.status,
+            startedAt: cr.startedAt,
+            completedAt: cr.completedAt ?? null,
+          })),
+        };
+      })
+    );
+
+    return c.json(runsWithTasks);
+  });
+
   // POST /api/agent-runs/execute — start an agent execution
   httpApp.post("/api/agent-runs/execute", async (c) => {
     const body = await c.req.json();
@@ -1002,6 +1097,13 @@ export async function createServer(
     const limit = Number(c.req.query("limit") ?? "50");
     const runs = await agentRunsRepo.findRecent(limit);
     return c.json(runs);
+  });
+
+  // GET /api/agent-runs/:id/tasks — planned tasks for a run
+  httpApp.get("/api/agent-runs/:id/tasks", async (c) => {
+    const runId = c.req.param("id");
+    const tasks = await agentTasksRepo.findByRunId(runId);
+    return c.json(tasks);
   });
 
   // GET /api/agent-runs/:id/steps — paginated steps for a run
