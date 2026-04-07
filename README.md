@@ -702,8 +702,3 @@ The execution engine requires an Anthropic API key for Claude reasoning calls. I
 
 Set at least one before executing agents.
 
----
-
-## License
-
-Private — not published.
