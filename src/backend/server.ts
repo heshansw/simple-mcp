@@ -87,6 +87,8 @@ import { registerCreateIssueTool } from "./tools/jira/create-issue.tool.js";
 import { registerTransitionIssueTool } from "./tools/jira/transition-issue.tool.js";
 import { registerGetCommentsTool } from "./tools/jira/get-comments.tool.js";
 import { registerAddCommentTool } from "./tools/jira/add-comment.tool.js";
+import { registerUpdateIssueDescriptionTool } from "./tools/jira/update-issue-description.tool.js";
+import { registerUpdateIssueTool } from "./tools/jira/update-issue.tool.js";
 import { registerListPrsTool } from "./tools/github/list-prs.tool.js";
 import { registerReviewPrTool } from "./tools/github/review-pr.tool.js";
 import { registerSearchCodeTool } from "./tools/github/search-code.tool.js";
@@ -374,6 +376,8 @@ export async function createServer(
   registerTransitionIssueTool(mcpServer, jiraToolDeps);
   registerGetCommentsTool(mcpServer, jiraToolDeps);
   registerAddCommentTool(mcpServer, jiraToolDeps);
+  registerUpdateIssueDescriptionTool(mcpServer, jiraToolDeps);
+  registerUpdateIssueTool(mcpServer, jiraToolDeps);
   registerListPrsTool(mcpServer, githubToolDeps);
   registerReviewPrTool(mcpServer, { ...githubToolDeps, reviewsRepo });
   registerSearchCodeTool(mcpServer, githubToolDeps);
@@ -525,8 +529,15 @@ export async function createServer(
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
-  toolHandlerRegistry.register("jira_create_issue", "Create a new Jira issue", { type: "object", properties: { projectKey: { type: "string" }, summary: { type: "string" }, issueType: { type: "string" }, description: { type: "string" } }, required: ["projectKey", "summary", "issueType"] }, async (args) => {
-    const result = await jiraService.createIssue(args.projectKey as string, args.summary as string, args.issueType as string, args.description as string | undefined);
+  toolHandlerRegistry.register("jira_create_issue", "Create a new Jira issue", { type: "object", properties: { projectKey: { type: "string" }, summary: { type: "string" }, issueType: { type: "string" }, description: { type: "string" }, descriptionMarkdown: { type: "string" }, descriptionAdf: { type: "object" } }, required: ["projectKey", "summary", "issueType"] }, async (args) => {
+    const result = await jiraService.createIssue({
+      projectKey: args.projectKey as string,
+      summary: args.summary as string,
+      issueType: args.issueType as string,
+      ...(args.description !== undefined ? { description: args.description as string } : {}),
+      ...(args.descriptionMarkdown !== undefined ? { descriptionMarkdown: args.descriptionMarkdown as string } : {}),
+      ...(args.descriptionAdf !== undefined ? { descriptionAdf: args.descriptionAdf as import("@shared/schemas/jira.schema").JiraAdfDocument } : {}),
+    });
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
@@ -571,13 +582,42 @@ export async function createServer(
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
-  toolHandlerRegistry.register("jira_add_comment", "Add a comment to a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, body: { type: "string" } }, required: ["issueKey", "body"] }, async (args) => {
-    const result = await jiraService.addComment(args.issueKey as string, args.body as string);
+  toolHandlerRegistry.register("jira_add_comment", "Add a comment to a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, body: { type: "string" }, bodyMarkdown: { type: "string" }, bodyAdf: { type: "object" } }, required: ["issueKey"] }, async (args) => {
+    const result = await jiraService.addComment({
+      issueKey: args.issueKey as string,
+      ...(args.body !== undefined ? { body: args.body as string } : {}),
+      ...(args.bodyMarkdown !== undefined ? { bodyMarkdown: args.bodyMarkdown as string } : {}),
+      ...(args.bodyAdf !== undefined ? { bodyAdf: args.bodyAdf as import("@shared/schemas/jira.schema").JiraAdfDocument } : {}),
+    });
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
   toolHandlerRegistry.register("jira_get_comments", "Get comments for a Jira issue", { type: "object", properties: { issueKey: { type: "string" } }, required: ["issueKey"] }, async (args) => {
     const result = await jiraService.getIssueComments(args.issueKey as string);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("jira_update_issue_description", "Update the description of a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, description: { type: "string" }, descriptionMarkdown: { type: "string" }, descriptionAdf: { type: "object" } }, required: ["issueKey"] }, async (args) => {
+    const result = await jiraService.updateIssueDescription(args.issueKey as string, {
+      ...(args.description !== undefined ? { description: args.description as string } : {}),
+      ...(args.descriptionMarkdown !== undefined ? { descriptionMarkdown: args.descriptionMarkdown as string } : {}),
+      ...(args.descriptionAdf !== undefined ? { descriptionAdf: args.descriptionAdf as import("@shared/schemas/jira.schema").JiraAdfDocument } : {}),
+    });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("jira_update_issue", "Update editable fields on a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, summary: { type: "string" }, description: { type: "string" }, descriptionMarkdown: { type: "string" }, descriptionAdf: { type: "object" }, labels: { type: "array", items: { type: "string" } }, priority: { type: "string" }, assigneeAccountId: { type: ["string", "null"] }, dueDate: { type: ["string", "null"] } }, required: ["issueKey"] }, async (args) => {
+    const result = await jiraService.updateIssue({
+      issueKey: args.issueKey as string,
+      ...(args.summary !== undefined ? { summary: args.summary as string } : {}),
+      ...(args.description !== undefined ? { description: args.description as string } : {}),
+      ...(args.descriptionMarkdown !== undefined ? { descriptionMarkdown: args.descriptionMarkdown as string } : {}),
+      ...(args.descriptionAdf !== undefined ? { descriptionAdf: args.descriptionAdf as import("@shared/schemas/jira.schema").JiraAdfDocument } : {}),
+      ...(args.labels !== undefined ? { labels: args.labels as string[] } : {}),
+      ...(args.priority !== undefined ? { priority: args.priority as string } : {}),
+      ...(args.assigneeAccountId !== undefined ? { assigneeAccountId: args.assigneeAccountId as string | null } : {}),
+      ...(args.dueDate !== undefined ? { dueDate: args.dueDate as string | null } : {}),
+    });
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
