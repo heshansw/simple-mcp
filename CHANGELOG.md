@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.2.0...simple-mcp-v0.3.0) (2026-04-08)
+
+
+### Features
+
+* **jira:** add issue update and rich ADF support ([#12](https://github.com/heshansw/simple-mcp/issues/12)) ([c6c0777](https://github.com/heshansw/simple-mcp/commit/c6c0777a3aad3540b85c2553e4e588d31fe8aaae))
+
 ## [0.2.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.1.0...simple-mcp-v0.2.0) (2026-04-07)
 
 
