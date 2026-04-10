@@ -2,7 +2,10 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isErr } from "@shared/result.js";
 import type { Result, DomainError } from "@shared/result.js";
-import { JiraAdfDocumentSchema } from "@shared/schemas/jira.schema.js";
+import {
+  JiraAdfDocumentSchema,
+  JiraMentionInputSchema,
+} from "@shared/schemas/jira.schema.js";
 
 const AddCommentInputObjectSchema = z.object({
   issueKey: z.string().min(1, "Issue key is required"),
@@ -14,6 +17,9 @@ const AddCommentInputObjectSchema = z.object({
   ),
   bodyAdf: JiraAdfDocumentSchema.optional().describe(
     "Raw Atlassian Document Format (ADF) document for exact Jira comment rendering, including tables and task lists."
+  ),
+  mentions: z.array(JiraMentionInputSchema).min(1).optional().describe(
+    "Optional mention placeholders to resolve into Jira user mentions. Each placeholder must appear in the body text."
   ),
 });
 
@@ -54,7 +60,7 @@ export function registerAddCommentTool(
 ): void {
   server.tool(
     "jira_add_comment",
-    "Add a comment to a Jira issue. The body accepts markdown which is automatically converted to Jira's Atlassian Document Format (ADF) — supports headings, lists, code blocks, bold, italic, links, and more.",
+    "Add a comment to a Jira issue. Supports markdown or raw ADF, plus optional placeholder-based Jira user mentions.",
     AddCommentInputObjectSchema.shape,
     async (args: unknown) => {
       try {

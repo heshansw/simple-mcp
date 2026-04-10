@@ -19,7 +19,14 @@ export const jiraTriageAgent: AgentDefinition = {
     "Automatically triage and categorize incoming Jira issues based on priority and team assignment",
   version: "1.0.0",
   requiredIntegrations: ["jira"],
-  requiredTools: ["jira:search-issues", "jira:transition-issue"],
+  requiredTools: [
+    "jira_search_issues",
+    "jira_find_users",
+    "jira_assign_issue",
+    "jira_get_transitions",
+    "jira_change_status",
+    "jira_transition_issue",
+  ],
   configSchema: JiraTriageConfigSchema,
   systemPrompt: `You are a Jira triage agent responsible for categorizing and organizing incoming issues.
 Your responsibilities:

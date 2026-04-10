@@ -11,8 +11,12 @@ export const businessAnalystAgent: AgentDefinition = {
   requiredTools: [
     "jira_search_issues",
     "jira_create_issue",
+    "jira_find_users",
+    "jira_assign_issue",
     "jira_add_comment",
     "jira_get_comments",
+    "jira_get_transitions",
+    "jira_change_status",
     "jira_transition_issue",
   ],
   systemPrompt: `You are a senior Business Analyst with deep expertise in:
