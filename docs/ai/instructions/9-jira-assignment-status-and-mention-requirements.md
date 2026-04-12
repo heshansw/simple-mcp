@@ -1,6 +1,6 @@
 # 9 — Jira Assignment, Status, and Mention Requirements
 
-> **Status:** Pending Implementation
+> **Status:** Implemented
 > **Created:** 2026-04-09
 
 ---

@@ -2,23 +2,16 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isErr } from "@shared/result.js";
 import type { Result, DomainError } from "@shared/result.js";
 import {
+  JiraGetTransitionsInputObjectSchema,
   JiraGetTransitionsInputSchema,
-  type JiraGetTransitionsInput,
 } from "@shared/schemas/jira.schema.js";
-
-export type GetTransitionsInput = JiraGetTransitionsInput;
+import { createValidationErrorResponse, type ToolLogger } from "./tool-shared.js";
 
 export type GetTransitionsToolDeps = {
   jiraService: {
     getAvailableTransitions(issueKey: string): Promise<Result<unknown, DomainError>>;
   };
-  connectionManager: {
-    getConnection(integrationName: string): unknown;
-  };
-  logger: {
-    info(msg: string, meta?: unknown): void;
-    error(msg: string, meta?: unknown): void;
-  };
+  logger: ToolLogger;
 };
 
 export function registerGetTransitionsTool(
@@ -28,12 +21,15 @@ export function registerGetTransitionsTool(
   server.tool(
     "jira_get_transitions",
     "List the currently available Jira transitions for an issue, including transition IDs and destination statuses.",
-    {
-      issueKey: JiraGetTransitionsInputSchema.shape.issueKey,
-    },
+    JiraGetTransitionsInputObjectSchema.shape,
     async (args: unknown) => {
+      const parsed = JiraGetTransitionsInputSchema.safeParse(args);
+      if (!parsed.success) {
+        return createValidationErrorResponse(parsed.error);
+      }
+
       try {
-        const input = JiraGetTransitionsInputSchema.parse(args);
+        const input = parsed.data;
         deps.logger.info("Fetching Jira transitions", { issueKey: input.issueKey });
 
         const result = await deps.jiraService.getAvailableTransitions(input.issueKey);

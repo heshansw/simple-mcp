@@ -1,31 +1,19 @@
-import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isErr } from "@shared/result.js";
 import type { Result, DomainError } from "@shared/result.js";
-import { JiraAssignIssueInputSchema } from "@shared/schemas/jira.schema.js";
+import {
+  JiraAssignIssueInputObjectSchema,
+  JiraAssignIssueInputSchema,
+} from "@shared/schemas/jira.schema.js";
 import type { JiraAssignIssueParams } from "../../services/jira.service.js";
+import { createValidationErrorResponse, type ToolLogger } from "./tool-shared.js";
 
 export type AssignIssueToolDeps = {
   jiraService: {
     assignIssue(params: JiraAssignIssueParams): Promise<Result<unknown, DomainError>>;
   };
-  connectionManager: {
-    getConnection(integrationName: string): unknown;
-  };
-  logger: {
-    info(msg: string, meta?: unknown): void;
-    error(msg: string, meta?: unknown): void;
-  };
+  logger: ToolLogger;
 };
-
-const AssignIssueInputObjectSchema = z.object({
-  issueKey: z.string().min(1, "Issue key is required"),
-  assigneeAccountId: z.string().min(1).optional(),
-  assigneeQuery: z.string().min(1).optional(),
-  assigneeDisplayName: z.string().min(1).optional(),
-  assigneeEmailAddress: z.string().email().optional(),
-  unassign: z.boolean().default(false),
-});
 
 export function registerAssignIssueTool(
   server: McpServer,
@@ -34,10 +22,22 @@ export function registerAssignIssueTool(
   server.tool(
     "jira_assign_issue",
     "Assign or unassign a Jira issue using an account ID, query, display name, or email address.",
-    AssignIssueInputObjectSchema.shape,
+    JiraAssignIssueInputObjectSchema.shape,
     async (args: unknown) => {
+      const parsed = JiraAssignIssueInputSchema.safeParse(args);
+      if (!parsed.success) {
+        return createValidationErrorResponse(parsed.error);
+      }
+
       try {
-        const input = JiraAssignIssueInputSchema.parse(args);
+        const input = {
+          issueKey: parsed.data.issueKey,
+          ...(parsed.data.assigneeAccountId !== undefined ? { assigneeAccountId: parsed.data.assigneeAccountId } : {}),
+          ...(parsed.data.assigneeQuery !== undefined ? { assigneeQuery: parsed.data.assigneeQuery } : {}),
+          ...(parsed.data.assigneeDisplayName !== undefined ? { assigneeDisplayName: parsed.data.assigneeDisplayName } : {}),
+          ...(parsed.data.assigneeEmailAddress !== undefined ? { assigneeEmailAddress: parsed.data.assigneeEmailAddress } : {}),
+          ...(parsed.data.unassign !== undefined ? { unassign: parsed.data.unassign } : {}),
+        };
         deps.logger.info("Assigning Jira issue", { issueKey: input.issueKey });
 
         const result = await deps.jiraService.assignIssue(input);

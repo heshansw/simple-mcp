@@ -1,30 +1,19 @@
-import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isErr } from "@shared/result.js";
 import type { Result, DomainError } from "@shared/result.js";
-import { JiraFindUsersInputSchema } from "@shared/schemas/jira.schema.js";
+import {
+  JiraFindUsersInputObjectSchema,
+  JiraFindUsersInputSchema,
+} from "@shared/schemas/jira.schema.js";
 import type { JiraFindUsersParams } from "../../services/jira.service.js";
+import { createValidationErrorResponse, type ToolLogger } from "./tool-shared.js";
 
 export type FindUsersToolDeps = {
   jiraService: {
     findUsers(params: JiraFindUsersParams): Promise<Result<unknown, DomainError>>;
   };
-  connectionManager: {
-    getConnection(integrationName: string): unknown;
-  };
-  logger: {
-    info(msg: string, meta?: unknown): void;
-    error(msg: string, meta?: unknown): void;
-  };
+  logger: ToolLogger;
 };
-
-const FindUsersInputObjectSchema = z.object({
-  query: z.string().min(1).optional(),
-  displayName: z.string().min(1).optional(),
-  emailAddress: z.string().email().optional(),
-  accountId: z.string().min(1).optional(),
-  maxResults: z.number().int().positive().max(20).default(10),
-});
 
 export function registerFindUsersTool(
   server: McpServer,
@@ -33,10 +22,21 @@ export function registerFindUsersTool(
   server.tool(
     "jira_find_users",
     "Find Jira users by account ID, query, display name, or email address for assignment and mentions.",
-    FindUsersInputObjectSchema.shape,
+    JiraFindUsersInputObjectSchema.shape,
     async (args: unknown) => {
+      const parsed = JiraFindUsersInputSchema.safeParse(args);
+      if (!parsed.success) {
+        return createValidationErrorResponse(parsed.error);
+      }
+
       try {
-        const input = JiraFindUsersInputSchema.parse(args);
+        const input = {
+          ...(parsed.data.query !== undefined ? { query: parsed.data.query } : {}),
+          ...(parsed.data.displayName !== undefined ? { displayName: parsed.data.displayName } : {}),
+          ...(parsed.data.emailAddress !== undefined ? { emailAddress: parsed.data.emailAddress } : {}),
+          ...(parsed.data.accountId !== undefined ? { accountId: parsed.data.accountId } : {}),
+          ...(parsed.data.maxResults !== undefined ? { maxResults: parsed.data.maxResults } : {}),
+        };
         deps.logger.info("Finding Jira users", input);
 
         const result = await deps.jiraService.findUsers(input);

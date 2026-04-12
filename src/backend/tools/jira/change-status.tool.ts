@@ -2,11 +2,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { isErr } from "@shared/result.js";
 import type { Result, DomainError } from "@shared/result.js";
 import {
+  JiraChangeStatusInputObjectSchema,
   JiraChangeStatusInputSchema,
-  type JiraChangeStatusInput,
 } from "@shared/schemas/jira.schema.js";
-
-export type ChangeStatusInput = JiraChangeStatusInput;
+import { createValidationErrorResponse, type ToolLogger } from "./tool-shared.js";
 
 export type ChangeStatusToolDeps = {
   jiraService: {
@@ -15,13 +14,7 @@ export type ChangeStatusToolDeps = {
       targetStatusName: string
     ): Promise<Result<unknown, DomainError>>;
   };
-  connectionManager: {
-    getConnection(integrationName: string): unknown;
-  };
-  logger: {
-    info(msg: string, meta?: unknown): void;
-    error(msg: string, meta?: unknown): void;
-  };
+  logger: ToolLogger;
 };
 
 export function registerChangeStatusTool(
@@ -31,13 +24,15 @@ export function registerChangeStatusTool(
   server.tool(
     "jira_change_status",
     "Change a Jira issue status by status name. Use this when you know the target status but not the transition ID.",
-    {
-      issueKey: JiraChangeStatusInputSchema.shape.issueKey,
-      targetStatusName: JiraChangeStatusInputSchema.shape.targetStatusName,
-    },
+    JiraChangeStatusInputObjectSchema.shape,
     async (args: unknown) => {
+      const parsed = JiraChangeStatusInputSchema.safeParse(args);
+      if (!parsed.success) {
+        return createValidationErrorResponse(parsed.error);
+      }
+
       try {
-        const input = JiraChangeStatusInputSchema.parse(args);
+        const input = parsed.data;
         deps.logger.info("Changing Jira issue status", {
           issueKey: input.issueKey,
           targetStatusName: input.targetStatusName,

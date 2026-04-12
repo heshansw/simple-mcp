@@ -84,7 +84,7 @@ export type JiraUpdateIssueResponse = {
   success: true;
   issueKey: string;
   updatedFields: string[];
-  mode: "markdown" | "adf" | undefined;
+  mode?: "markdown" | "adf";
 };
 
 export type JiraUserResolution = "exact" | "partial";
@@ -145,20 +145,20 @@ export type JiraUpdateIssueParams = {
 };
 
 export type JiraFindUsersParams = {
-  accountId?: string | undefined;
-  query?: string | undefined;
-  displayName?: string | undefined;
-  emailAddress?: string | undefined;
-  maxResults?: number | undefined;
+  accountId?: string;
+  query?: string;
+  displayName?: string;
+  emailAddress?: string;
+  maxResults?: number;
 };
 
 export type JiraAssignIssueParams = {
   issueKey: string;
-  assigneeAccountId?: string | undefined;
-  assigneeQuery?: string | undefined;
-  assigneeDisplayName?: string | undefined;
-  assigneeEmailAddress?: string | undefined;
-  unassign?: boolean | undefined;
+  assigneeAccountId?: string;
+  assigneeQuery?: string;
+  assigneeDisplayName?: string;
+  assigneeEmailAddress?: string;
+  unassign?: boolean;
 };
 
 // ── Credentials shape ──────────────────────────────────────────────────
@@ -612,25 +612,35 @@ export function createJiraService(
     auth: string,
     mentions: JiraMentionInput[]
   ): Promise<Result<Array<JiraMentionInput & { user: JiraResolvedUser }>, DomainError>> {
+    const mentionResults = await Promise.all(
+      mentions.map(async (mention) => {
+        const resolvedMention = await resolveSingleUser(siteUrl, auth, {
+          ...(mention.accountId !== undefined ? { accountId: mention.accountId } : {}),
+          ...(mention.query !== undefined ? { query: mention.query } : {}),
+          ...(mention.displayName !== undefined ? { displayName: mention.displayName } : {}),
+          ...(mention.emailAddress !== undefined ? { emailAddress: mention.emailAddress } : {}),
+          maxResults: 10,
+        });
+
+        if (resolvedMention._tag === "Err") {
+          return resolvedMention;
+        }
+
+        return ok({
+          ...mention,
+          user: resolvedMention.value.user,
+        });
+      })
+    );
+
     const resolvedMentions: Array<JiraMentionInput & { user: JiraResolvedUser }> = [];
 
-    for (const mention of mentions) {
-      const resolvedMention = await resolveSingleUser(siteUrl, auth, buildUserLookupParams({
-        ...(mention.accountId !== undefined ? { accountId: mention.accountId } : {}),
-        ...(mention.query !== undefined ? { query: mention.query } : {}),
-        ...(mention.displayName !== undefined ? { displayName: mention.displayName } : {}),
-        ...(mention.emailAddress !== undefined ? { emailAddress: mention.emailAddress } : {}),
-        maxResults: 10,
-      }));
-
-      if (resolvedMention._tag === "Err") {
-        return resolvedMention;
+    for (const mentionResult of mentionResults) {
+      if (mentionResult._tag === "Err") {
+        return mentionResult;
       }
 
-      resolvedMentions.push({
-        ...mention,
-        user: resolvedMention.value.user,
-      });
+      resolvedMentions.push(mentionResult.value);
     }
 
     return ok(resolvedMentions);
@@ -640,17 +650,7 @@ export function createJiraService(
     return value.trim().toLocaleLowerCase();
   }
 
-  function buildUserLookupParams(params: JiraFindUsersParams): JiraFindUsersParams {
-    return {
-      ...(params.accountId !== undefined ? { accountId: params.accountId } : {}),
-      ...(params.query !== undefined ? { query: params.query } : {}),
-      ...(params.displayName !== undefined ? { displayName: params.displayName } : {}),
-      ...(params.emailAddress !== undefined ? { emailAddress: params.emailAddress } : {}),
-      ...(params.maxResults !== undefined ? { maxResults: params.maxResults } : {}),
-    };
-  }
-
-  return {
+  const service: JiraServiceResult = {
     async searchIssues(
       jql: string,
       maxResults: number
@@ -946,7 +946,7 @@ export function createJiraService(
       issueKey: string,
       params: Pick<JiraUpdateIssueParams, "description" | "descriptionMarkdown" | "descriptionAdf">
     ): Promise<Result<JiraUpdateIssueResponse, DomainError>> {
-      const result = await this.updateIssue({
+      const result = await service.updateIssue({
         issueKey,
         ...params,
       });
@@ -959,7 +959,7 @@ export function createJiraService(
         success: true,
         issueKey,
         updatedFields: ["description"],
-        mode: result.value.mode,
+        ...(result.value.mode !== undefined ? { mode: result.value.mode } : {}),
       });
     },
 
@@ -999,7 +999,7 @@ export function createJiraService(
           success: true,
           issueKey: params.issueKey,
           updatedFields: updateResult.value.updatedFields,
-          mode: updateResult.value.mode,
+          ...(updateResult.value.mode !== undefined ? { mode: updateResult.value.mode } : {}),
         });
       } catch (error) {
         logger.error({ error, issueKey: params.issueKey }, "Failed to update Jira issue");
@@ -1018,7 +1018,7 @@ export function createJiraService(
         const { siteUrl, auth } = connResult.value;
 
         if (params.unassign) {
-          const result = await this.updateIssue({
+          const result = await service.updateIssue({
             issueKey: params.issueKey,
             assigneeAccountId: null,
           });
@@ -1035,19 +1035,19 @@ export function createJiraService(
           });
         }
 
-        const resolvedAssignee = await resolveSingleUser(siteUrl, auth, buildUserLookupParams({
+        const resolvedAssignee = await resolveSingleUser(siteUrl, auth, {
           ...(params.assigneeAccountId !== undefined ? { accountId: params.assigneeAccountId } : {}),
           ...(params.assigneeQuery !== undefined ? { query: params.assigneeQuery } : {}),
           ...(params.assigneeDisplayName !== undefined ? { displayName: params.assigneeDisplayName } : {}),
           ...(params.assigneeEmailAddress !== undefined ? { emailAddress: params.assigneeEmailAddress } : {}),
           maxResults: 10,
-        }));
+        });
 
         if (resolvedAssignee._tag === "Err") {
           return resolvedAssignee;
         }
 
-        const updateResult = await this.updateIssue({
+        const updateResult = await service.updateIssue({
           issueKey: params.issueKey,
           assigneeAccountId: resolvedAssignee.value.user.accountId,
         });
@@ -1075,7 +1075,7 @@ export function createJiraService(
       targetStatusName: string
     ): Promise<Result<JiraChangeStatusResponse, DomainError>> {
       try {
-        const transitionsResult = await this.getAvailableTransitions(issueKey);
+        const transitionsResult = await service.getAvailableTransitions(issueKey);
         if (transitionsResult._tag === "Err") {
           return transitionsResult;
         }
@@ -1109,7 +1109,7 @@ export function createJiraService(
           return err(validationError("Requested status is not reachable"));
         }
 
-        const transitionResult = await this.transitionIssue(issueKey, selectedTransition.id);
+        const transitionResult = await service.transitionIssue(issueKey, selectedTransition.id);
         if (transitionResult._tag === "Err") {
           return transitionResult;
         }
@@ -1129,4 +1129,6 @@ export function createJiraService(
       }
     },
   };
+
+  return service;
 }

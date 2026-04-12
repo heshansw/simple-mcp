@@ -26,7 +26,7 @@ export const JiraAdfDocumentSchema = z.object({
 
 export type JiraAdfDocument = z.infer<typeof JiraAdfDocumentSchema>;
 
-const JiraUserIdentifierInputObjectSchema = z.object({
+export const JiraUserIdentifierInputObjectSchema = z.object({
   accountId: z.string().min(1).optional(),
   query: z.string().min(1).optional(),
   displayName: z.string().min(1).optional(),
@@ -88,12 +88,14 @@ export const JiraDescriptionInputSchema = z.object({
   }
 });
 
-export const JiraCommentBodyInputSchema = z.object({
+export const JiraCommentBodyInputObjectSchema = z.object({
   body: z.string().min(1).optional(),
   bodyMarkdown: z.string().min(1).optional(),
   bodyAdf: JiraAdfDocumentSchema.optional(),
   mentions: z.array(JiraMentionInputSchema).min(1).optional(),
-}).superRefine((value, ctx) => {
+});
+
+export const JiraCommentBodyInputSchema = JiraCommentBodyInputObjectSchema.superRefine((value, ctx) => {
   requireExactlyOneOf(
     value,
     ["body", "bodyMarkdown", "bodyAdf"],
@@ -148,9 +150,11 @@ export const JiraUpdateIssueInputSchema = z.object({
   }
 });
 
-export const JiraFindUsersInputSchema = JiraUserIdentifierInputObjectSchema.extend({
+export const JiraFindUsersInputObjectSchema = JiraUserIdentifierInputObjectSchema.extend({
   maxResults: z.number().int().positive().max(20).default(10),
-}).superRefine((value, ctx) => {
+});
+
+export const JiraFindUsersInputSchema = JiraFindUsersInputObjectSchema.superRefine((value, ctx) => {
   requireExactlyOneOf(
     value,
     ["accountId", "query", "displayName", "emailAddress"],
@@ -162,14 +166,16 @@ export const JiraFindUsersInputSchema = JiraUserIdentifierInputObjectSchema.exte
 
 export type JiraFindUsersInput = z.infer<typeof JiraFindUsersInputSchema>;
 
-export const JiraAssignIssueInputSchema = z.object({
+export const JiraAssignIssueInputObjectSchema = z.object({
   issueKey: z.string().min(1, "Issue key is required"),
   assigneeAccountId: z.string().min(1).optional(),
   assigneeQuery: z.string().min(1).optional(),
   assigneeDisplayName: z.string().min(1).optional(),
   assigneeEmailAddress: z.string().email().optional(),
   unassign: z.boolean().default(false),
-}).superRefine((value, ctx) => {
+});
+
+export const JiraAssignIssueInputSchema = JiraAssignIssueInputObjectSchema.superRefine((value, ctx) => {
   const identifierCount = [
     value.assigneeAccountId,
     value.assigneeQuery,
@@ -199,16 +205,20 @@ export const JiraAssignIssueInputSchema = z.object({
 
 export type JiraAssignIssueInput = z.infer<typeof JiraAssignIssueInputSchema>;
 
-export const JiraChangeStatusInputSchema = z.object({
+export const JiraChangeStatusInputObjectSchema = z.object({
   issueKey: z.string().min(1, "Issue key is required"),
   targetStatusName: z.string().min(1, "Target status name is required"),
 });
 
+export const JiraChangeStatusInputSchema = JiraChangeStatusInputObjectSchema;
+
 export type JiraChangeStatusInput = z.infer<typeof JiraChangeStatusInputSchema>;
 
-export const JiraGetTransitionsInputSchema = z.object({
+export const JiraGetTransitionsInputObjectSchema = z.object({
   issueKey: z.string().min(1, "Issue key is required"),
 });
+
+export const JiraGetTransitionsInputSchema = JiraGetTransitionsInputObjectSchema;
 
 export type JiraGetTransitionsInput = z.infer<typeof JiraGetTransitionsInputSchema>;
 
