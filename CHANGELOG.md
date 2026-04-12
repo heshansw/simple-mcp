@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.3.0...simple-mcp-v0.4.0) (2026-04-12)
+
+
+### Features
+
+* **jira:** add collaboration workflow tools ([#14](https://github.com/heshansw/simple-mcp/issues/14)) ([8f717f1](https://github.com/heshansw/simple-mcp/commit/8f717f128a271575784acaa50d78072571cf837e))
+
 ## [0.3.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.2.0...simple-mcp-v0.3.0) (2026-04-08)
 
 
