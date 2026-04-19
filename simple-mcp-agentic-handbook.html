@@ -1,0 +1,3041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Agentic Development Handbook — simple-mcp, Claude Code & Codex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=JetBrains+Mono:wght@400;500;600&family=Sohne:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #1a1a1a;
+  --ink-2: #3d3d3a;
+  --ink-3: #6b6b66;
+  --paper: #f5f1e8;
+  --paper-2: #ebe6d7;
+  --paper-3: #dfd9c5;
+  --accent: #c4432b;
+  --accent-soft: #e8ddc9;
+  --ok: #2d6a3f;
+  --warn: #a86a1a;
+  --line: rgba(26, 26, 26, 0.12);
+  --line-2: rgba(26, 26, 26, 0.25);
+  --serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--paper);
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(196, 67, 43, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(45, 106, 63, 0.025) 0%, transparent 50%);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1, "onum" 1;
+}
+
+/* grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  z-index: 1;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' seed='2'/><feColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.1 0 0 0 0 0.1 0 0 0 0.04 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: multiply;
+}
+
+/* ============ Layout ============ */
+.app {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+  position: relative;
+  z-index: 2;
+}
+
+/* ============ Sidebar / TOC ============ */
+aside.toc {
+  background: var(--paper-2);
+  border-right: 1px solid var(--line);
+  padding: 48px 32px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+aside.toc::-webkit-scrollbar { width: 6px; }
+aside.toc::-webkit-scrollbar-track { background: transparent; }
+aside.toc::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
+
+.brand {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--ink);
+  margin-bottom: 4px;
+  font-variation-settings: "opsz" 48;
+}
+.brand-sub {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 36px;
+}
+
+.toc h4 {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 28px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.toc h4:first-of-type { margin-top: 0; }
+
+.toc ol { list-style: none; counter-reset: chapter; }
+.toc li { counter-increment: chapter; margin-bottom: 3px; }
+.toc a {
+  display: block;
+  padding: 6px 10px 6px 32px;
+  color: var(--ink-2);
+  text-decoration: none;
+  border-radius: 3px;
+  position: relative;
+  transition: all 0.15s ease;
+}
+.toc a::before {
+  content: counter(chapter, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 24px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0;
+}
+.toc a:hover { background: var(--paper-3); color: var(--ink); }
+.toc a.active {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 500;
+}
+.toc a.active::before { color: var(--paper-3); }
+
+/* ============ Main content ============ */
+main {
+  padding: 60px 80px 120px;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+/* progress bar */
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 280px;
+  right: 0;
+  height: 2px;
+  background: var(--paper-2);
+  z-index: 100;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+/* ============ Chapter styling ============ */
+.chapter {
+  margin-bottom: 120px;
+  scroll-margin-top: 20px;
+}
+
+.chapter-eyebrow {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.chapter-eyebrow::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.chapter h1 {
+  font-family: var(--serif);
+  font-size: 54px;
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin-bottom: 24px;
+  font-variation-settings: "opsz" 144;
+}
+
+.chapter h1 em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent);
+  font-variation-settings: "opsz" 144, "SOFT" 60;
+}
+
+.chapter .lede {
+  font-family: var(--serif);
+  font-size: 22px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  font-weight: 400;
+  font-style: italic;
+  margin-bottom: 48px;
+  max-width: 640px;
+  padding-left: 20px;
+  border-left: 2px solid var(--accent);
+  font-variation-settings: "opsz" 72;
+}
+
+.chapter h2 {
+  font-family: var(--serif);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.2;
+  margin: 64px 0 20px;
+  color: var(--ink);
+  font-variation-settings: "opsz" 96;
+  letter-spacing: -0.01em;
+}
+
+.chapter h3 {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 40px 0 14px;
+  color: var(--ink);
+  font-variation-settings: "opsz" 72;
+}
+
+.chapter h4 {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  margin: 32px 0 12px;
+}
+
+.chapter p {
+  margin-bottom: 18px;
+  font-size: 18px;
+  line-height: 1.7;
+}
+
+.chapter p:first-of-type::first-letter {
+  /* drop cap on first paragraph only */
+}
+
+.chapter strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.chapter em {
+  font-style: italic;
+}
+
+.chapter a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.chapter ul, .chapter ol {
+  margin: 0 0 20px 0;
+  padding-left: 24px;
+}
+.chapter li {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+.chapter code {
+  font-family: var(--mono);
+  font-size: 15px;
+  background: var(--paper-2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  font-weight: 500;
+}
+
+.chapter pre {
+  background: #1a1a1a;
+  color: #f5f1e8;
+  padding: 24px 28px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 20px 0 28px;
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.6;
+  position: relative;
+  box-shadow: 0 20px 50px -20px rgba(0,0,0,0.2);
+}
+
+.chapter pre::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff5f56;
+  box-shadow: 16px 0 0 #ffbd2e, 32px 0 0 #27c93f;
+}
+
+.chapter pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border: 0;
+  font-size: inherit;
+  display: block;
+  margin-top: 14px;
+}
+
+.chapter pre .c-lang {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(245, 241, 232, 0.4);
+}
+
+/* syntax coloring inside pre */
+.chapter pre .k { color: #d08770; }
+.chapter pre .s { color: #a3be8c; }
+.chapter pre .n { color: #81a1c1; }
+.chapter pre .c { color: #616e88; font-style: italic; }
+.chapter pre .v { color: #ebcb8b; }
+
+/* ============ Callout boxes ============ */
+.callout {
+  margin: 28px 0;
+  padding: 22px 26px;
+  border-left: 3px solid var(--accent);
+  background: rgba(196, 67, 43, 0.04);
+  border-radius: 0 6px 6px 0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.callout-label {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+  display: block;
+}
+.callout.ok { border-color: var(--ok); background: rgba(45, 106, 63, 0.05); }
+.callout.ok .callout-label { color: var(--ok); }
+.callout.warn { border-color: var(--warn); background: rgba(168, 106, 26, 0.05); }
+.callout.warn .callout-label { color: var(--warn); }
+.callout.note { border-color: var(--ink-3); background: rgba(61, 61, 58, 0.04); }
+.callout.note .callout-label { color: var(--ink-3); }
+
+/* ============ Cover page ============ */
+.cover {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 40px 0;
+  position: relative;
+  margin-bottom: 80px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cover-top {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cover-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  padding: 80px 0;
+}
+
+.cover h1 {
+  font-family: var(--serif);
+  font-size: 96px;
+  font-weight: 300;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-bottom: 32px;
+  font-variation-settings: "opsz" 144, "SOFT" 0;
+  color: var(--ink);
+}
+.cover h1 em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--accent);
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+}
+
+.cover-sub {
+  font-family: var(--serif);
+  font-size: 22px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  max-width: 520px;
+  font-style: italic;
+  font-variation-settings: "opsz" 72;
+  margin-bottom: 48px;
+}
+
+.cover-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
+}
+.cover-meta-item {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.cover-meta-item strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 20px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  margin-top: 4px;
+  font-variation-settings: "opsz" 48;
+  font-weight: 500;
+}
+
+.cover-bottom {
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  justify-content: space-between;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+/* ============ Spec tables ============ */
+.spec-table {
+  width: 100%;
+  margin: 28px 0;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 14px;
+}
+.spec-table th {
+  text-align: left;
+  padding: 12px 16px 12px 0;
+  border-bottom: 2px solid var(--ink);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.spec-table td {
+  padding: 14px 16px 14px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.spec-table td:first-child {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ============ Step lists ============ */
+.steps {
+  counter-reset: step;
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 40px;
+}
+.steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 0 0 28px 64px;
+  border-left: 1px dashed var(--line-2);
+  margin-left: 20px;
+  min-height: 50px;
+}
+.steps > li:last-child { border-left: 0; padding-bottom: 0; }
+.steps > li::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: -21px;
+  top: -4px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.steps > li h4 {
+  margin-top: 0;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  margin-bottom: 8px;
+  font-variation-settings: "opsz" 48;
+}
+.steps > li p { margin-bottom: 10px; font-size: 16px; }
+.steps > li pre { margin: 12px 0; }
+
+/* ============ Figure ============ */
+figure.diagram {
+  margin: 40px 0;
+  padding: 32px;
+  background: var(--paper-2);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+figure.diagram figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: 16px;
+  font-style: italic;
+  text-align: center;
+}
+
+/* ============ Quote blocks ============ */
+blockquote {
+  margin: 32px 0;
+  padding: 4px 0 4px 32px;
+  border-left: 3px solid var(--accent);
+  font-family: var(--serif);
+  font-size: 24px;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--ink);
+  font-variation-settings: "opsz" 96, "SOFT" 60;
+  font-weight: 400;
+}
+blockquote cite {
+  display: block;
+  margin-top: 14px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ============ Horizontal rule ============ */
+hr.section-break {
+  border: 0;
+  text-align: center;
+  margin: 48px 0;
+  overflow: visible;
+}
+hr.section-break::before {
+  content: '\00A7 \00A7 \00A7';
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--ink-3);
+  letter-spacing: 1em;
+  padding-left: 1em;
+}
+
+/* ============ Tag pills ============ */
+.tag {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--paper-3);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+  letter-spacing: 0.05em;
+  margin-right: 4px;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+.tag.new { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.tag.ok { background: rgba(45, 106, 63, 0.1); color: var(--ok); border-color: rgba(45, 106, 63, 0.3); }
+
+/* ============ Tier boxes for automation levels ============ */
+.tier-box {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 20px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: baseline;
+}
+.tier-box:last-child { border-bottom: 0; }
+.tier-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding-top: 4px;
+}
+.tier-body h4 {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+.tier-body p { font-size: 15px; margin-bottom: 6px; }
+
+/* ============ Glossary / quick ref ============ */
+.glossary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 32px;
+  margin: 24px 0;
+}
+.glossary dt {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--accent);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.glossary dd {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin-bottom: 4px;
+}
+
+/* ============ File tree ============ */
+.filetree {
+  background: var(--paper-2);
+  padding: 20px 24px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 20px 0 28px;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+.filetree .comment { color: var(--ink-3); font-style: italic; }
+.filetree .folder { color: var(--accent); font-weight: 500; }
+.filetree .file { color: var(--ink); }
+
+/* ============ Chapter-end navigation ============ */
+.chapter-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+.chapter-nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+  display: block;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  min-width: 200px;
+}
+.chapter-nav a:hover { background: var(--paper-2); border-color: var(--ink); color: var(--ink); }
+.chapter-nav .label {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: block;
+  margin-bottom: 2px;
+}
+.chapter-nav .title { font-family: var(--serif); font-size: 16px; font-weight: 500; }
+.chapter-nav .next { text-align: right; }
+
+/* ============ Print / PDF support ============ */
+@media print {
+  body { background: white; font-size: 11pt; }
+  body::before { display: none; }
+  .app { grid-template-columns: 1fr; }
+  aside.toc, .progress-bar, .chapter-nav { display: none; }
+  main { padding: 0; max-width: none; }
+  .chapter { page-break-before: always; margin-bottom: 40px; }
+  .chapter:first-of-type { page-break-before: auto; }
+  .chapter h1 { font-size: 32pt; }
+  .cover { min-height: auto; page-break-after: always; }
+  .cover h1 { font-size: 48pt; }
+  .chapter pre { background: #f0f0f0; color: #1a1a1a; }
+  .chapter pre::before { display: none; }
+  .chapter pre code { margin-top: 0; }
+}
+
+/* ============ Mobile ============ */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
+  aside.toc {
+    position: fixed;
+    left: -280px;
+    z-index: 50;
+    transition: left 0.3s ease;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+  }
+  aside.toc.open { left: 0; }
+  main { padding: 40px 24px 80px; }
+  .cover h1 { font-size: 56px; }
+  .chapter h1 { font-size: 38px; }
+  .progress-bar { left: 0; }
+  .toggle-toc {
+    position: fixed; top: 16px; left: 16px; z-index: 60;
+    background: var(--ink); color: var(--paper);
+    border: 0; width: 44px; height: 44px; border-radius: 22px;
+    font-size: 20px; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .glossary { grid-template-columns: 1fr; }
+  .cover-meta { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 901px) { .toggle-toc { display: none; } }
+
+/* ============ Small flourishes ============ */
+.pull-quote {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 28px;
+  line-height: 1.3;
+  color: var(--accent);
+  margin: 40px 40px;
+  padding: 0;
+  max-width: 520px;
+  font-variation-settings: "opsz" 96, "SOFT" 80;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  border: 0;
+}
+
+/* reveal on scroll */
+.chapter { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.chapter.in-view { opacity: 1; transform: translateY(0); }
+.cover { opacity: 1; transform: none; }
+
+</style>
+</head>
+<body>
+
+<button class="toggle-toc" aria-label="Toggle contents">☰</button>
+
+<div class="progress-bar"><div class="progress-fill"></div></div>
+
+<div class="app">
+  <aside class="toc">
+    <div class="brand">The Agentic<br><em>Development</em> Handbook</div>
+    <div class="brand-sub">v1.0 · April 2026</div>
+
+    <h4>Part I — Foundations</h4>
+    <ol>
+      <li><a href="#ch-intro">Why this handbook</a></li>
+      <li><a href="#ch-mental-model">The mental model</a></li>
+      <li><a href="#ch-architecture">The shared architecture</a></li>
+    </ol>
+
+    <h4>Part II — Build the system</h4>
+    <ol>
+      <li><a href="#ch-bootstrap">Bootstrap &amp; layout</a></li>
+      <li><a href="#ch-hooks">Hooks — the guardrails</a></li>
+      <li><a href="#ch-skills">Skills — the recipes</a></li>
+      <li><a href="#ch-subagents">Subagents — the team</a></li>
+      <li><a href="#ch-pr-review">Multi-agent PR review</a></li>
+    </ol>
+
+    <h4>Part III — The 2026 upgrades</h4>
+    <ol>
+      <li><a href="#ch-builtins">/simplify, /batch &amp; built-ins</a></li>
+      <li><a href="#ch-automation">Loops, schedules, routines</a></li>
+      <li><a href="#ch-codex">Pairing with Codex</a></li>
+    </ol>
+
+    <h4>Part IV — Operate</h4>
+    <ol>
+      <li><a href="#ch-workflows">Daily workflows</a></li>
+      <li><a href="#ch-optimization">Token &amp; time optimization</a></li>
+      <li><a href="#ch-observability">Observability</a></li>
+    </ol>
+
+    <h4>Part V — Your MCP</h4>
+    <ol>
+      <li><a href="#ch-mcp-now">Where simple-mcp stands</a></li>
+      <li><a href="#ch-mcp-upgrades">Modifications to add</a></li>
+    </ol>
+
+    <h4>Appendix</h4>
+    <ol>
+      <li><a href="#ch-rollout">Week-by-week rollout</a></li>
+      <li><a href="#ch-pitfalls">Pitfalls &amp; gotchas</a></li>
+      <li><a href="#ch-glossary">Glossary &amp; quick ref</a></li>
+    </ol>
+  </aside>
+
+  <main>
+
+    <!-- ============ COVER ============ -->
+    <section class="cover">
+      <div class="cover-top">
+        <span>An agentic engineering handbook</span>
+        <span>edition 01 · apr 2026</span>
+      </div>
+
+      <div class="cover-main">
+        <div style="font-family: var(--sans); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 24px; font-weight: 600;">
+          A practical guide for Heshan
+        </div>
+        <h1>The Agentic<br>Development<br><em>Handbook</em></h1>
+        <p class="cover-sub">
+          How to build software with Claude Code, Codex, and your own <code style="font-family: var(--mono); font-size: 18px; background: rgba(196,67,43,0.08); padding: 2px 8px; border-radius: 3px; color: var(--accent);">simple-mcp</code> — from the first hook to full cloud autonomy.
+        </p>
+        <div class="cover-meta">
+          <div class="cover-meta-item">Parts<strong>Five</strong></div>
+          <div class="cover-meta-item">Chapters<strong>Sixteen</strong></div>
+          <div class="cover-meta-item">Read time<strong>~90 min</strong></div>
+          <div class="cover-meta-item">Build time<strong>One week</strong></div>
+        </div>
+      </div>
+
+      <div class="cover-bottom">
+        <span>Claude Code · Codex · simple-mcp</span>
+        <span>For compounding engineering systems</span>
+      </div>
+    </section>
+
+    <!-- ============ CH 1: INTRO ============ -->
+    <section class="chapter" id="ch-intro">
+      <div class="chapter-eyebrow">Chapter one · Foundations</div>
+      <h1>Why this <em>handbook</em> exists</h1>
+      <p class="lede">Four conversations distilled into one reference. Everything from mental model to production deployment, written for someone who already has simple-mcp running and wants the rest of the system.</p>
+
+      <p>If you're reading this, you've already built the hardest thing: a local MCP server that both Claude Code and Codex can share. That's the architectural keystone most teams never get right. What follows is everything that goes around it — the hooks that make guarantees, the skills that encode expertise, the subagents that parallelize work, and the 2026 features (routines, <code>/simplify</code>, <code>/batch</code>, Auto Mode) that collapsed half of what we were planning to build into one-line commands.</p>
+
+      <h2>What this covers</h2>
+      <p>This handbook compresses everything from our earlier conversations into a single, ordered read. Nothing is invented — it's the refined version of plans we walked through, with the April 2026 capabilities woven in.</p>
+
+      <div class="callout note">
+        <span class="callout-label">How to read this</span>
+        Parts I–II are foundational and sequential. Part III adds the 2026 features on top. Part IV is daily operation. Part V is specifically what to change in <code>simple-mcp</code>. The appendix is reference material you'll come back to. If you're impatient, jump to Chapter 16 — the week-by-week rollout — and use the rest as reference.
+      </div>
+
+      <h2>Three principles that run through every chapter</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">§ 01</div>
+        <div class="tier-body">
+          <h4>Orchestrator and workers, not one big brain</h4>
+          <p>Claude Code stays the orchestrator. Subagents, Codex sessions, and <code>simple-mcp</code> agents are workers. Workers have narrow scopes, their own context windows, and limited tool access. This is the only model that scales past one concurrent task.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">§ 02</div>
+        <div class="tier-body">
+          <h4>Context is the scarce resource — not tokens</h4>
+          <p>Token optimization is downstream of context discipline. A clean main-session context beats every other optimization. Subagents exist primarily to absorb noisy work (file reads, test output, exploration) so your main reasoning stays focused.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">§ 03</div>
+        <div class="tier-body">
+          <h4>simple-mcp is a database, not a brain</h4>
+          <p>Use <code>agent_start_run</code> (client-driven tracked runs), not <code>agent_execute</code> (server-side loop). The reasoning happens in Claude Code or Codex. <code>simple-mcp</code> records what happened and holds your credentials. One Anthropic bill, full observability, no duplicate reasoning.</p>
+        </div>
+      </div>
+
+      <blockquote>
+        Every correction becomes a rule. Week one you correct ten things. Month three you correct zero.
+        <cite>— the compounding loop, after Boris Cherny</cite>
+      </blockquote>
+
+      <p>That's the whole payoff. You spend an afternoon setting this up, then every hour of work afterwards is cheaper and cleaner than the last. The system compounds because you feed it.</p>
+    </section>
+
+    <!-- ============ CH 2: MENTAL MODEL ============ -->
+    <section class="chapter" id="ch-mental-model">
+      <div class="chapter-eyebrow">Chapter two · Foundations</div>
+      <h1>The mental <em>model</em></h1>
+      <p class="lede">Five primitives. Pick the right one for each job, and the whole system stays legible. Pick the wrong one and you're fighting the framework.</p>
+
+      <p>Before you touch a single config file, internalize what each primitive is <em>for</em>. The biggest source of wasted tokens and broken workflows in agentic development is using the wrong primitive for the job — encoding deterministic rules as prompts, encoding reasoning as hooks, encoding integration as skills.</p>
+
+      <h2>The five primitives</h2>
+
+      <table class="spec-table">
+        <thead>
+          <tr><th>Primitive</th><th>What it is</th><th>When to reach for it</th><th>Cost</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Skill</td>
+            <td>Directory with SKILL.md plus scripts, references, examples. Claude loads it on demand when the description matches.</td>
+            <td>Reusable recipes you invoke by name or have Claude auto-trigger: "open a PR", "run tests", "turn a Jira ticket into a spec".</td>
+            <td>Free until triggered</td>
+          </tr>
+          <tr>
+            <td>Subagent</td>
+            <td>Markdown file in <code>.claude/agents/</code> with YAML frontmatter. Own context window, own system prompt, own tool whitelist.</td>
+            <td>Noisy or focused work you want to keep out of main context — exploration, code review, test runs, parallel implementation.</td>
+            <td>Own model cost + input</td>
+          </tr>
+          <tr>
+            <td>Hook</td>
+            <td>Shell command on a lifecycle event (<code>PreToolUse</code>, <code>PostToolUse</code>, <code>Stop</code>, etc.). Reads JSON via stdin, returns JSON via stdout.</td>
+            <td>Deterministic rules that run every time: formatting, secret scanning, blocking destructive ops, recording to <code>simple-mcp</code>.</td>
+            <td>Zero LLM tokens</td>
+          </tr>
+          <tr>
+            <td>Script</td>
+            <td>Plain shell or Python file called from a skill, hook, or subagent.</td>
+            <td>Implementation of anything that isn't reasoning. Parsers, formatters, merge logic, API calls.</td>
+            <td>Zero</td>
+          </tr>
+          <tr>
+            <td>MCP tool</td>
+            <td>Function exposed by your MCP server. For you, this is anything in <code>simple-mcp</code>.</td>
+            <td>Integration with external systems: GitHub, Jira, Confluence, database, filesystem.</td>
+            <td>Schema cost in input</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="pull-quote">If it's deterministic, make it a hook or script. If it needs judgment, make it a skill or subagent. If it needs external state, make it an MCP tool.</p>
+
+      <h2>Why picking the right layer matters</h2>
+      <p>Every primitive has a natural cost curve:</p>
+      <ul>
+        <li><strong>Hooks are free but rigid.</strong> They run every time and never hallucinate. But they can't reason — a hook can check that SQL starts with <code>SELECT</code>, but it can't judge whether a query is semantically safe.</li>
+        <li><strong>Subagents are flexible but expensive.</strong> They reason well and isolate context, but each one costs tokens in their own window. Over-use them and your per-session cost explodes.</li>
+        <li><strong>Skills are cheap until used.</strong> A 200-line SKILL.md doesn't cost anything until Claude decides to load it. This is why skills beat bloated CLAUDE.md files.</li>
+        <li><strong>MCP tools are the most expensive per-turn.</strong> Their schemas live in every turn's input. Expose too many, you degrade every response.</li>
+      </ul>
+
+      <p>The art is matching cost to value. Hooks for things that must happen 100% of the time. Skills for anything you do more than twice. Subagents for isolation. MCP tools for stateful integration. Scripts for everything else.</p>
+
+      <div class="callout">
+        <span class="callout-label">The shortcut</span>
+        When in doubt: ask yourself "can I write a shell script that does this?" If yes, you probably want a hook or a script. If no, you probably want a skill or subagent.
+      </div>
+    </section>
+
+    <!-- ============ CH 3: ARCHITECTURE ============ -->
+    <section class="chapter" id="ch-architecture">
+      <div class="chapter-eyebrow">Chapter three · Foundations</div>
+      <h1>The shared <em>architecture</em></h1>
+      <p class="lede">Four layers, one shared state. How Claude Code and Codex both plug into simple-mcp without duplicating anything.</p>
+
+      <p>Your <code>simple-mcp</code> solved the hardest architectural problem for you already: a single shared state layer that both Claude Code and Codex can write into. When Codex does a tracked run via <code>agent_start_run</code>, Claude Code can see it later via <code>agent_status</code>. Same credentials, same run history, same tool surface. Zero duplication.</p>
+
+      <p>Everything in this handbook is built around preserving that property. Here's the four-layer architecture:</p>
+
+      <figure class="diagram">
+        <svg width="100%" viewBox="0 0 720 540" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Sohne', sans-serif;">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/>
+            </marker>
+          </defs>
+
+          <text x="20" y="30" font-size="11" fill="#6b6b66" letter-spacing="1.5">LAYER 01 — HUMAN INTERFACE</text>
+          <rect x="20" y="40" width="680" height="52" rx="4" fill="#ebe6d7" stroke="#3d3d3a" stroke-width="0.5"/>
+          <text x="360" y="64" text-anchor="middle" font-size="15" fill="#1a1a1a" font-weight="600">You — terminal, IDE, mobile, admin panel</text>
+          <text x="360" y="82" text-anchor="middle" font-size="12" fill="#6b6b66" font-style="italic">goals in natural language, plan approvals, PR reviews</text>
+
+          <text x="20" y="122" font-size="11" fill="#6b6b66" letter-spacing="1.5">LAYER 02 — REASONING AGENTS (PARALLEL)</text>
+          <rect x="20" y="132" width="332" height="100" rx="4" fill="rgba(196,67,43,0.08)" stroke="#c4432b" stroke-width="0.5"/>
+          <text x="186" y="156" text-anchor="middle" font-size="15" fill="#c4432b" font-weight="600">Claude Code</text>
+          <text x="186" y="176" text-anchor="middle" font-size="12" fill="#3d3d3a">subagents · skills · hooks</text>
+          <text x="186" y="194" text-anchor="middle" font-size="12" fill="#3d3d3a">worktrees · Opus main + Sonnet subs</text>
+          <text x="186" y="212" text-anchor="middle" font-size="11" fill="#6b6b66" font-style="italic">reads CLAUDE.md + .claude/</text>
+
+          <rect x="368" y="132" width="332" height="100" rx="4" fill="rgba(45,106,63,0.08)" stroke="#2d6a3f" stroke-width="0.5"/>
+          <text x="534" y="156" text-anchor="middle" font-size="15" fill="#2d6a3f" font-weight="600">Codex CLI</text>
+          <text x="534" y="176" text-anchor="middle" font-size="12" fill="#3d3d3a">client-driven tracked runs</text>
+          <text x="534" y="194" text-anchor="middle" font-size="12" fill="#3d3d3a">sandbox · adversarial review</text>
+          <text x="534" y="212" text-anchor="middle" font-size="11" fill="#6b6b66" font-style="italic">reads AGENTS.md + .codex/</text>
+
+          <text x="20" y="262" font-size="11" fill="#6b6b66" letter-spacing="1.5">LAYER 03 — SHARED HUB (YOUR simple-mcp)</text>
+          <rect x="20" y="272" width="680" height="130" rx="4" fill="rgba(168,106,26,0.06)" stroke="#a86a1a" stroke-width="0.5"/>
+          <text x="360" y="296" text-anchor="middle" font-size="15" fill="#a86a1a" font-weight="600">simple-mcp server (one process, both clients connect)</text>
+
+          <rect x="40" y="316" width="200" height="68" rx="3" fill="#f5f1e8" stroke="#a86a1a" stroke-width="0.5"/>
+          <text x="140" y="336" text-anchor="middle" font-size="12" fill="#1a1a1a" font-weight="600">Tracked agent runs</text>
+          <text x="140" y="352" text-anchor="middle" font-size="11" fill="#3d3d3a">SQLite + admin panel</text>
+          <text x="140" y="368" text-anchor="middle" font-size="11" fill="#3d3d3a">localhost:3100</text>
+
+          <rect x="260" y="316" width="200" height="68" rx="3" fill="#f5f1e8" stroke="#a86a1a" stroke-width="0.5"/>
+          <text x="360" y="336" text-anchor="middle" font-size="12" fill="#1a1a1a" font-weight="600">7 pre-built agents</text>
+          <text x="360" y="352" text-anchor="middle" font-size="11" fill="#3d3d3a">delegation, guardrails</text>
+          <text x="360" y="368" text-anchor="middle" font-size="11" fill="#3d3d3a">jira-triage, pr-review, …</text>
+
+          <rect x="480" y="316" width="200" height="68" rx="3" fill="#f5f1e8" stroke="#a86a1a" stroke-width="0.5"/>
+          <text x="580" y="336" text-anchor="middle" font-size="12" fill="#1a1a1a" font-weight="600">Encrypted credentials</text>
+          <text x="580" y="352" text-anchor="middle" font-size="11" fill="#3d3d3a">AES-256</text>
+          <text x="580" y="368" text-anchor="middle" font-size="11" fill="#3d3d3a">one vault for both clients</text>
+
+          <text x="20" y="432" font-size="11" fill="#6b6b66" letter-spacing="1.5">LAYER 04 — EXTERNAL SERVICES</text>
+          <g>
+            <rect x="20" y="442" width="125" height="48" rx="3" fill="rgba(61,61,58,0.04)" stroke="#3d3d3a" stroke-width="0.5"/>
+            <text x="82" y="462" text-anchor="middle" font-size="12" fill="#1a1a1a" font-weight="500">GitHub</text>
+            <text x="82" y="478" text-anchor="middle" font-size="10" fill="#6b6b66">PRs, code search</text>
+          </g>
+          <g>
+            <rect x="159" y="442" width="125" height="48" rx="3" fill="rgba(61,61,58,0.04)" stroke="#3d3d3a" stroke-width="0.5"/>
+            <text x="221" y="462" text-anchor="middle" font-size="12" fill="#1a1a1a" font-weight="500">Jira</text>
+            <text x="221" y="478" text-anchor="middle" font-size="10" fill="#6b6b66">issues, sprints</text>
+          </g>
+          <g>
+            <rect x="298" y="442" width="125" height="48" rx="3" fill="rgba(61,61,58,0.04)" stroke="#3d3d3a" stroke-width="0.5"/>
+            <text x="360" y="462" text-anchor="middle" font-size="12" fill="#1a1a1a" font-weight="500">Confluence</text>
+            <text x="360" y="478" text-anchor="middle" font-size="10" fill="#6b6b66">docs, specs</text>
+          </g>
+          <g>
+            <rect x="437" y="442" width="125" height="48" rx="3" fill="rgba(61,61,58,0.04)" stroke="#3d3d3a" stroke-width="0.5"/>
+            <text x="499" y="462" text-anchor="middle" font-size="12" fill="#1a1a1a" font-weight="500">Databases</text>
+            <text x="499" y="478" text-anchor="middle" font-size="10" fill="#6b6b66">Postgres, MySQL</text>
+          </g>
+          <g>
+            <rect x="576" y="442" width="124" height="48" rx="3" fill="rgba(61,61,58,0.04)" stroke="#3d3d3a" stroke-width="0.5"/>
+            <text x="638" y="462" text-anchor="middle" font-size="12" fill="#1a1a1a" font-weight="500">Local repos</text>
+            <text x="638" y="478" text-anchor="middle" font-size="10" fill="#6b6b66">filesystem</text>
+          </g>
+
+          <line x1="186" y1="232" x2="186" y2="272" stroke="#1a1a1a" stroke-width="1" marker-end="url(#arr)"/>
+          <line x1="534" y1="232" x2="534" y2="272" stroke="#1a1a1a" stroke-width="1" marker-end="url(#arr)"/>
+          <line x1="140" y1="402" x2="82" y2="440" stroke="#1a1a1a" stroke-width="0.75" marker-end="url(#arr)"/>
+          <line x1="360" y1="402" x2="360" y2="440" stroke="#1a1a1a" stroke-width="0.75" marker-end="url(#arr)"/>
+          <line x1="580" y1="402" x2="638" y2="440" stroke="#1a1a1a" stroke-width="0.75" marker-end="url(#arr)"/>
+
+          <text x="360" y="520" text-anchor="middle" font-size="12" fill="#6b6b66" font-style="italic">
+            Both agents share one credential vault, one run history, one tool set. Zero duplication.
+          </text>
+        </svg>
+        <figcaption>The four layers. Claude Code and Codex are peers; simple-mcp is their shared substrate.</figcaption>
+      </figure>
+
+      <h2>What each layer owns</h2>
+
+      <h3>Layer 1 — Human interface</h3>
+      <p>You. In the terminal, in Claude Desktop, on mobile via the Claude iOS app, or in <code>simple-mcp</code>'s admin panel at <code>localhost:3100</code>. You issue goals in natural language and approve plans. Everything below this layer is in service of turning your words into verified, committed code.</p>
+
+      <h3>Layer 2 — Reasoning agents</h3>
+      <p>Claude Code and Codex run in parallel. Claude Code reads <code>CLAUDE.md</code> and <code>.claude/</code>, Codex reads <code>AGENTS.md</code> and <code>.codex/</code>. The universal <code>AGENTS.md</code> is the single source of truth — <code>CLAUDE.md</code> just references it and adds Claude-specific extras.</p>
+
+      <h3>Layer 3 — The shared hub</h3>
+      <p>Your <code>simple-mcp</code>. It's not a third reasoning agent — it's the database that records what the reasoning agents did, plus the vault that holds credentials for the integrations they use. The admin panel is your unified view.</p>
+
+      <h3>Layer 4 — External services</h3>
+      <p>GitHub, Jira, Confluence, databases, local filesystems. Every one of these has credentials stored <em>once</em> in <code>simple-mcp</code>. Neither Claude Code nor Codex knows about GitHub tokens; they call MCP tools that call the services.</p>
+
+      <div class="callout ok">
+        <span class="callout-label">Architectural advantage</span>
+        A team member running Codex on the same machine sees the same runs in the admin panel as you running Claude Code. When someone asks "what did the deployment agent do yesterday?", there's one place to look.
+      </div>
+    </section>
+
+    <!-- ============ CH 4: BOOTSTRAP ============ -->
+    <section class="chapter" id="ch-bootstrap">
+      <div class="chapter-eyebrow">Chapter four · Build the system</div>
+      <h1>Bootstrap &amp; <em>layout</em></h1>
+      <p class="lede">The files, folders, and environment variables. Set once, used forever. If you do nothing else in this handbook, do this chapter.</p>
+
+      <h2>The project layout</h2>
+      <p>Every project you work in gets this structure. You already have most of it in <code>simple-mcp</code> itself — copy the pattern to every other project:</p>
+
+      <div class="filetree">
+<span class="folder">your-project/</span>
+├── <span class="file">AGENTS.md</span>                   <span class="comment"># universal — Codex, Cursor, etc.</span>
+├── <span class="file">CLAUDE.md</span>                   <span class="comment"># thin wrapper → @AGENTS.md + extras</span>
+├── <span class="file">.mcp.json</span>                   <span class="comment"># points at simple-mcp</span>
+├── <span class="folder">.claude/</span>
+│   ├── <span class="file">settings.json</span>           <span class="comment"># hook wiring</span>
+│   ├── <span class="folder">agents/</span>                 <span class="comment"># subagent definitions</span>
+│   │   ├── <span class="file">explorer.md</span>
+│   │   ├── <span class="file">implementer.md</span>
+│   │   ├── <span class="file">security-reviewer.md</span>
+│   │   ├── <span class="file">correctness-reviewer.md</span>
+│   │   ├── <span class="file">performance-reviewer.md</span>
+│   │   ├── <span class="file">test-reviewer.md</span>
+│   │   ├── <span class="file">review-orchestrator.md</span>
+│   │   └── <span class="file">mcp-operator.md</span>
+│   ├── <span class="folder">skills/</span>
+│   │   ├── <span class="folder">pr-review/</span>
+│   │   ├── <span class="folder">open-pr/</span>
+│   │   ├── <span class="folder">from-jira/</span>
+│   │   ├── <span class="folder">run-tests/</span>
+│   │   └── <span class="folder">compact-policy/</span>
+│   └── <span class="folder">hooks/</span>
+│       ├── <span class="file">block-destructive.sh</span>
+│       ├── <span class="file">block-secrets.sh</span>
+│       ├── <span class="file">block-write-sql.sh</span>
+│       ├── <span class="file">auto-format.sh</span>
+│       ├── <span class="file">typecheck-touched.sh</span>
+│       ├── <span class="file">record-to-mcp.sh</span>
+│       └── <span class="file">finalize-mcp-run.sh</span>
+├── <span class="folder">.codex/</span>                     <span class="comment"># already exists in simple-mcp</span>
+│   ├── <span class="folder">agents/</span>
+│   └── <span class="folder">skills/</span>
+└── <span class="folder">scripts/</span>                    <span class="comment"># project scripts skills call</span>
+      </div>
+
+      <h2>Step one: AGENTS.md</h2>
+      <p>One universal instruction file. Under 150 lines. Commands in backticks. No preamble. Only rules that push agents off their defaults.</p>
+
+      <pre><span class="c-lang">AGENTS.md</span><code># Project: &lt;project-name&gt;
+
+## Stack
+- TypeScript, Node 20+, pnpm
+- Vitest for tests, ESLint + Prettier
+
+## Commands
+- `pnpm dev` — run locally
+- `pnpm build` — production build
+- `pnpm test` — run full test suite
+- `pnpm typecheck` — tsc --noEmit
+
+## Conventions
+- Use Result&lt;T, E&gt; over thrown exceptions
+- File naming: kebab-case for files, PascalCase for components
+- Imports: absolute paths via tsconfig aliases
+- Commits: Conventional Commits (feat:, fix:, feat!:)
+
+## Before opening a PR
+- `pnpm typecheck` passes
+- `pnpm test` passes
+- Run /simplify (built-in multi-reviewer)
+- Jira ticket linked in description
+
+## MCP integration
+- simple-mcp is connected. Use agent_start_run for multi-step tasks.
+- Jira/GitHub/Confluence/DB credentials live in simple-mcp. Never .env.</code></pre>
+
+      <h2>Step two: CLAUDE.md</h2>
+      <p>Delegates to AGENTS.md via <code>@</code>-import. Adds Claude-specific rules. Under 100 lines.</p>
+
+      <pre><span class="c-lang">CLAUDE.md</span><code># Project instructions
+See @AGENTS.md for build commands, architecture, and conventions.
+
+## Workflow
+- Start in Plan Mode. Iterate the plan. Then auto-accept edits.
+- Any task with 3+ steps gets a spec before code.
+- Subagents for exploration touching &gt;5 files.
+- Worktrees (claude -w) for tasks running &gt;20 min.
+
+## Automation
+- Run /simplify before opening any PR.
+- Use /batch for migrations touching &gt;10 files.
+- Use /btw for side questions — don't spawn new sessions.
+
+## Compact policy
+Preserve: specs, file paths, error messages, current simple-mcp runId.
+Summarize: exploration, test output (keep failures, drop passes).
+Drop: failed attempts, reverted changes, resolved clarifications.
+
+## Corrections
+When the user corrects me, I update this file or the relevant skill.</code></pre>
+
+      <div class="callout">
+        <span class="callout-label">The compounding line</span>
+        The last rule — "when the user corrects me, I update this file" — is what turns a static setup into a compounding one. Week one you correct ten things. Month one you correct two. Month three Claude does it right the first time.
+      </div>
+
+      <h2>Step three: .mcp.json</h2>
+      <p>Points both Claude Code and Codex at your <code>simple-mcp</code>:</p>
+
+      <pre><span class="c-lang">.mcp.json</span><code>{
+  "mcpServers": {
+    "simple-mcp": {
+      "command": "/absolute/path/to/simple-mcp/run-mcp.sh",
+      "env": { "CLAUDE_MCP_TRANSPORT": "stdio" }
+    }
+  }
+}</code></pre>
+
+      <h2>Step four: machine-wide environment</h2>
+      <p>In your <code>~/.zshrc</code> or <code>~/.bashrc</code>:</p>
+
+      <pre><span class="c-lang">shell</span><code># Highest-leverage single line — cheap model for subagents
+export CLAUDE_CODE_SUBAGENT_MODEL="claude-sonnet-4-6"
+
+# Enable experimental agent teams
+export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+
+# Keys
+export ANTHROPIC_API_KEY="sk-ant-..."
+export CLAUDE_MCP_ENCRYPTION_KEY="$(openssl rand -hex 32)"</code></pre>
+
+      <p>That first line alone cuts your per-session cost by roughly 60% on typical workloads. Main orchestrator on Opus for reasoning; subagents on Sonnet for exploration, grep, test-running, file-reading.</p>
+
+      <h2>Step five: connect simple-mcp integrations once</h2>
+
+      <ol class="steps">
+        <li>
+          <h4>Start simple-mcp</h4>
+          <p>In your <code>simple-mcp</code> repo:</p>
+          <pre><code>pnpm dev</code></pre>
+          <p>Open <code>http://localhost:3100</code>.</p>
+        </li>
+        <li>
+          <h4>Connect GitHub</h4>
+          <p>Navigate to Connections. Create a Personal Access Token at GitHub Settings → Developer settings with scopes <code>repo</code> and <code>read:org</code>. Paste it in simple-mcp. Save.</p>
+        </li>
+        <li>
+          <h4>Connect Jira</h4>
+          <p>Generate an API token at <code>id.atlassian.com</code>. Add a connection with base URL, email, token. Save.</p>
+        </li>
+        <li>
+          <h4>Add Confluence and databases the same way</h4>
+          <p>Credentials are AES-256 encrypted at rest. You'll never type them again.</p>
+        </li>
+      </ol>
+
+      <div class="callout ok">
+        <span class="callout-label">You're done with setup</span>
+        Both Claude Code and Codex now know about simple-mcp. Every integration is in one encrypted vault. Subagents run on Sonnet. The rest of this handbook is building hooks, skills, and subagents on top of this foundation.
+      </div>
+    </section>
+
+    <!-- ============ CH 5: HOOKS ============ -->
+    <section class="chapter" id="ch-hooks">
+      <div class="chapter-eyebrow">Chapter five · Build the system</div>
+      <h1>Hooks — the <em>guardrails</em></h1>
+      <p class="lede">Deterministic rules that cost zero tokens. Hooks are where agentic-ness becomes reliable. Anything you'd repeat in every prompt goes here.</p>
+
+      <h2>How hooks work</h2>
+      <p>A hook is a shell command attached to a Claude Code lifecycle event. Events include <code>PreToolUse</code> (before a tool call), <code>PostToolUse</code> (after), <code>Stop</code> (session ending), <code>SubagentStop</code> (subagent done), <code>UserPromptSubmit</code>, and more.</p>
+
+      <p>The contract is simple:</p>
+      <ul>
+        <li><strong>Input:</strong> JSON on stdin — the tool name, arguments, output, etc.</li>
+        <li><strong>Output:</strong> JSON on stdout for fine control, or an exit code (0 allow, 2 block).</li>
+      </ul>
+
+      <p>For <code>PreToolUse</code>, you return <code>permissionDecision: "allow" | "deny" | "ask"</code> with an optional reason that gets shown to Claude. For <code>PostToolUse</code> and <code>Stop</code>, you use top-level <code>decision: "block"</code> with a <code>reason</code> that Claude reads as feedback.</p>
+
+      <h2>The wiring file</h2>
+      <p><code>.claude/settings.json</code> connects events to scripts. Multiple hooks on the same matcher run in parallel.</p>
+
+      <pre><span class="c-lang">.claude/settings.json</span><code>{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command",
+          "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-destructive.sh" }]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [{ "type": "command",
+          "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-secrets.sh" }]
+      },
+      {
+        "matcher": "mcp__simple-mcp__db_query",
+        "hooks": [{ "type": "command",
+          "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-write-sql.sh" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          { "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/auto-format.sh" },
+          { "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/typecheck-touched.sh" }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      { "hooks": [{ "type": "command",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/record-to-mcp.sh" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/finalize-mcp-run.sh" }] }
+    ]
+  }
+}</code></pre>
+
+      <h2>The seven hooks every project needs</h2>
+
+      <h3>1 · block-destructive.sh — the safety net</h3>
+      <p>Refuses <code>rm -rf /</code>, force-pushes, DROP TABLE, and other irreversible operations.</p>
+
+      <pre><span class="c-lang">bash</span><code>#!/bin/bash
+set -euo pipefail
+INPUT=$(cat)
+CMD=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+
+BLOCKED='rm -rf /|rm -rf ~|rm -rf \*|git push --force|git reset --hard HEAD~|DROP TABLE|DROP DATABASE'
+
+if echo "$CMD" | grep -qE "$BLOCKED"; then
+  jq -n --arg cmd "$CMD" '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: ("Blocked: " + $cmd + ". If intentional, run it outside Claude Code.")
+    }
+  }'
+  exit 0
+fi
+exit 0</code></pre>
+
+      <h3>2 · block-secrets.sh — prevents credential leaks</h3>
+      <p>Refuses writes to <code>.env</code> or files containing secret patterns (API keys, private keys).</p>
+
+      <pre><span class="c-lang">bash</span><code>#!/bin/bash
+set -euo pipefail
+INPUT=$(cat)
+FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
+CONTENT=$(echo "$INPUT" | jq -r '.tool_input.content // .tool_input.new_string // ""')
+
+if [[ "$FILE" == *".env"* ]] || [[ "$FILE" == *"credentials"* ]] || [[ "$FILE" == *"id_rsa"* ]]; then
+  jq -n '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: "Refusing to write to secret file. Use simple-mcp admin panel at localhost:3100/connections."
+    }
+  }'
+  exit 0
+fi
+
+if echo "$CONTENT" | grep -qE '(sk-ant-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{30,}|AKIA[0-9A-Z]{16}|-----BEGIN.*PRIVATE KEY-----)'; then
+  jq -n '{
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: "Detected secret pattern in content. Move to simple-mcp vault."
+    }
+  }'
+  exit 0
+fi
+exit 0</code></pre>
+
+      <h3>3 · block-write-sql.sh — the MCP-specific guardrail</h3>
+      <p>Matches only <code>mcp__simple-mcp__db_query</code>. Allows read-only SQL, blocks writes. This is the pattern — <em>hooks can guard specific MCP tools by name.</em></p>
+
+      <pre><span class="c-lang">bash</span><code>#!/bin/bash
+set -euo pipefail
+INPUT=$(cat)
+SQL=$(echo "$INPUT" | jq -r '.tool_input.sql // ""')
+SQL_UPPER=$(echo "$SQL" | tr '[:lower:]' '[:upper:]' | tr -s ' ')
+
+if echo "$SQL_UPPER" | grep -qE '^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)'; then
+  exit 0
+fi
+
+jq -n --arg sql "$SQL" '{
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "deny",
+    permissionDecisionReason: ("Write SQL blocked. Only SELECT/SHOW/DESCRIBE/EXPLAIN allowed. Got: " + $sql)
+  }
+}'
+exit 0</code></pre>
+
+      <h3>4 · auto-format.sh — silent housekeeping</h3>
+      <p>Runs Prettier or Ruff after every edit. Deterministic, never asks.</p>
+
+      <pre><span class="c-lang">bash</span><code>#!/bin/bash
+set -euo pipefail
+INPUT=$(cat)
+FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
+[[ -z "$FILE" ]] && exit 0
+[[ ! -f "$FILE" ]] && exit 0
+
+case "$FILE" in
+  *.ts|*.tsx|*.js|*.jsx|*.json|*.md)
+    pnpm exec prettier --write "$FILE" &gt;/dev/null 2&gt;&amp;1 || true ;;
+  *.py)
+    pnpm exec ruff format "$FILE" &gt;/dev/null 2&gt;&amp;1 || true ;;
+esac
+exit 0</code></pre>
+
+      <h3>5 · typecheck-touched.sh — the highest-leverage hook</h3>
+      <p>This one turns every edit into a feedback loop. If the type check fails, Claude sees the error on the next turn and fixes it without you saying anything.</p>
+
+      <pre><span class="c-lang">bash</span><code>#!/bin/bash
+set -euo pipefail
+INPUT=$(cat)
+FILE=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
+
+if [[ ! "$FILE" =~ \.(ts|tsx)$ ]]; then exit 0; fi
+
+OUTPUT=$(pnpm exec tsc --noEmit --incremental 2&gt;&amp;1 || true)
+
+if echo "$OUTPUT" | grep -qE 'error TS[0-9]+:'; then
+  ERRORS=$(echo "$OUTPUT" | grep -E 'error TS[0-9]+:' | head -20)
+  jq -n --arg errors "$ERRORS" '{
+    decision: "block",
+    reason: ("Typecheck failed. Fix these before continuing:\n" + $errors)
+  }'
+  exit 0
+fi
+exit 0</code></pre>
+
+      <h3>6 · record-to-mcp.sh — subagent results into simple-mcp</h3>
+      <p>Every time a subagent finishes, it gets recorded as an <code>agent_record_step</code> in your <code>simple-mcp</code> admin panel. Unified observability.</p>
+
+      <pre><span class="c-lang">bash</span><code>#!/bin/bash
+set -euo pipefail
+INPUT=$(cat)
+SUBAGENT_OUTPUT=$(echo "$INPUT" | jq -r '.result // ""')
+SUBAGENT_NAME=$(echo "$INPUT" | jq -r '.subagent_name // "unknown"')
+
+RUN_FILE="/tmp/claude-mcp-run-id.txt"
+[[ ! -f "$RUN_FILE" ]] &amp;&amp; exit 0
+
+RUN_ID=$(cat "$RUN_FILE")
+SUMMARY=$(echo "$SUBAGENT_OUTPUT" | head -c 2000)
+
+curl -s -X POST "http://localhost:3101/api/agents/runs/$RUN_ID/steps" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --arg name "$SUBAGENT_NAME" --arg summary "$SUMMARY" \
+    '{title: ("subagent: " + $name), summary: $summary, kind: "subagent_result"}')" \
+  &gt;/dev/null 2&gt;&amp;1 || true
+exit 0</code></pre>
+
+      <h3>7 · finalize-mcp-run.sh — clean close on session end</h3>
+
+      <pre><span class="c-lang">bash</span><code>#!/bin/bash
+set -euo pipefail
+RUN_FILE="/tmp/claude-mcp-run-id.txt"
+[[ ! -f "$RUN_FILE" ]] &amp;&amp; exit 0
+
+RUN_ID=$(cat "$RUN_FILE")
+curl -s -X POST "http://localhost:3101/api/agents/runs/$RUN_ID/complete" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "completed"}' &gt;/dev/null 2&gt;&amp;1 || true
+
+rm -f "$RUN_FILE"
+exit 0</code></pre>
+
+      <div class="callout warn">
+        <span class="callout-label">Do not forget</span>
+        <code>chmod +x .claude/hooks/*.sh</code> — once, after creating these. Without it, hooks silently fail and you'll spend an hour wondering why nothing's firing. This is the single most common gotcha in all of agentic setup.
+      </div>
+    </section>
+
+    <!-- ============ CH 6: SKILLS ============ -->
+    <section class="chapter" id="ch-skills">
+      <div class="chapter-eyebrow">Chapter six · Build the system</div>
+      <h1>Skills — the <em>recipes</em></h1>
+      <p class="lede">A skill is a directory Claude loads on demand. Write once, invoke forever. The format works across Claude Code, Codex, Cursor, and every other compatible agent.</p>
+
+      <h2>Anatomy of a skill</h2>
+      <p>A skill is a directory, not a file. The entry is <code>SKILL.md</code> with YAML frontmatter. Claude reads the <code>description</code> field to decide whether to load the skill. Supporting files — scripts, references, examples — are loaded only when the skill specifically needs them. This is <strong>progressive disclosure</strong>: a 500-line skill costs zero tokens until triggered.</p>
+
+      <div class="filetree">
+<span class="folder">.claude/skills/pr-review/</span>
+├── <span class="file">SKILL.md</span>              <span class="comment"># required — frontmatter + trigger logic</span>
+├── <span class="folder">scripts/</span>
+│   └── <span class="file">merge-reviews.ts</span>  <span class="comment"># deterministic merge logic</span>
+├── <span class="folder">references/</span>
+│   └── <span class="file">severity-rules.md</span> <span class="comment"># loaded only when Claude needs detail</span>
+└── <span class="folder">examples/</span>
+    └── <span class="file">good-report.md</span>    <span class="comment"># shows the expected output</span>
+      </div>
+
+      <h2>The four rules for writing skills</h2>
+
+      <ol class="steps">
+        <li>
+          <h4>Description is a trigger, not a summary</h4>
+          <p>Write "Use when the user provides a Jira key or Jira URL" — not "This skill fetches Jira tickets". The description is what Claude reads to decide whether this skill applies.</p>
+        </li>
+        <li>
+          <h4>Don't state what Claude already does</h4>
+          <p>A skill that says "be helpful and accurate" is wasted tokens. Focus only on what pushes Claude off its default behavior.</p>
+        </li>
+        <li>
+          <h4>Give goals and constraints, not step-by-step instructions</h4>
+          <p>Except when the steps are the whole point (like the merge pipeline). Over-prescriptive skills make Claude brittle.</p>
+        </li>
+        <li>
+          <h4>Include scripts so Claude composes instead of reconstructing</h4>
+          <p>A skill that says "run <code>./scripts/parse-vitest.sh</code>" is better than a skill that re-derives parser logic every time.</p>
+        </li>
+      </ol>
+
+      <h2>Skill 1 · from-jira — turn a ticket into a spec</h2>
+      <p>This is the highest-leverage workflow skill. Give it a Jira key, get back a ready-to-implement spec.</p>
+
+      <pre><span class="c-lang">.claude/skills/from-jira/SKILL.md</span><code>---
+name: from-jira
+description: Converts a Jira ticket into an implementation-ready spec. Use when the user provides a Jira issue key (like PROJ-1234) or a Jira URL. Fetches the ticket, linked Confluence pages, and related code, then produces acceptance criteria.
+---
+
+# Jira ticket → spec
+
+## Steps
+1. Extract the Jira key from the user's message (pattern: [A-Z]+-\d+)
+2. Call mcp__simple-mcp__jira_search_issues with JQL `key = &lt;KEY&gt;`
+3. Scan the description for Confluence URLs; fetch each via
+   mcp__simple-mcp__confluence_get_page
+4. Scan for referenced file paths; search for each via
+   mcp__simple-mcp__fs_workspace_search
+5. Produce the spec using references/spec-template.md
+
+## Output shape
+- Context: 2–3 sentences on why this ticket exists
+- Goal: one sentence
+- Acceptance criteria: bullet list, each testable
+- Files to touch: paths with one-line reason each
+- Out of scope: what the ticket does NOT include
+- Open questions: things the user must clarify
+
+## Stop conditions
+- Empty acceptance criteria + short description → ask user
+- Multiple conflicting tickets → ask user
+- Never start implementing. Spec only.
+
+## Gotchas
+- Jira descriptions often have truncated code references. Always search the
+  workspace for confirmations.
+- Confluence pages may be gated; if a fetch 403s, note it and proceed.</code></pre>
+
+      <h2>Skill 2 · pr-review — multi-agent review pipeline</h2>
+      <p>This dispatches four specialist subagents in parallel and merges their findings. It's the centerpiece of Part II. Detail in Chapter 8.</p>
+
+      <h2>Skill 3 · open-pr — the PR-creation recipe</h2>
+      <p>Encodes your team's PR process so Claude doesn't reinvent it every time.</p>
+
+      <pre><span class="c-lang">.claude/skills/open-pr/SKILL.md</span><code>---
+name: open-pr
+description: Opens a PR with conventional-commit branch name, generated description, and linked Jira ticket. Use only after pr-review has run and user has approved. Runs pnpm typecheck and pnpm test as a final gate.
+---
+
+# Open a PR
+
+## Preconditions — refuse if not met
+- pr-review or /simplify has run this session
+- User has explicitly said "open the PR" or "create the PR"
+- `git status` is clean (no uncommitted changes)
+
+## Steps
+1. `pnpm typecheck && pnpm test` — if either fails, stop and report
+2. Get commit messages since main; extract Jira key if present
+3. Build PR description: summary, bullet list of changes, test plan, Jira link
+4. `gh pr create --fill-verbose --body-file /tmp/pr-body.md`
+5. Return the PR URL
+
+## Never
+- Push with --force
+- Bypass branch protection
+- Open a PR with unaddressed pr-review findings</code></pre>
+
+      <h2>Skill 4 · run-tests — focused test output</h2>
+
+      <pre><span class="c-lang">.claude/skills/run-tests/SKILL.md</span><code>---
+name: run-tests
+description: Runs the project's test suite and returns only failures with file:line. Use after any code change. Never dumps full test output.
+---
+
+# Run tests
+
+1. `pnpm test --reporter=json &gt; /tmp/vitest-out.json 2&gt;&amp;1 || true`
+2. `.claude/skills/run-tests/scripts/parse.sh /tmp/vitest-out.json`
+
+## Output contract
+- 0 failures: "All N tests passed."
+- &gt;0 failures: one line per failure — test name, file:line, expected vs actual
+
+## Never dump raw vitest output into the conversation.</code></pre>
+
+      <p>The accompanying parse script at <code>scripts/parse.sh</code>:</p>
+
+      <pre><span class="c-lang">bash</span><code>#!/bin/bash
+set -euo pipefail
+FILE="${1:-/tmp/vitest-out.json}"
+[[ ! -s "$FILE" ]] &amp;&amp; echo "No output." &amp;&amp; exit 0
+
+TOTAL=$(jq -r '.numTotalTests // 0' "$FILE")
+FAILED=$(jq -r '.numFailedTests // 0' "$FILE")
+
+if [[ "$FAILED" == "0" ]]; then
+  echo "All $TOTAL tests passed."
+else
+  echo "$FAILED of $TOTAL failed:"
+  jq -r '.testResults[] | .assertionResults[] | select(.status == "failed") |
+    "  \(.fullName) at \(.location.path):\(.location.line)"' "$FILE"
+fi</code></pre>
+
+      <div class="callout">
+        <span class="callout-label">Gotchas section</span>
+        Every skill should have a Gotchas section — start empty, add entries every time Claude fails using the skill. This is where your real institutional knowledge lives. Over weeks, this section becomes more valuable than the skill's steps.
+      </div>
+    </section>
+
+    <!-- ============ CH 7: SUBAGENTS ============ -->
+    <section class="chapter" id="ch-subagents">
+      <div class="chapter-eyebrow">Chapter seven · Build the system</div>
+      <h1>Subagents — the <em>team</em></h1>
+      <p class="lede">Specialists with their own context windows, tool whitelists, and system prompts. Use them to parallelize work and to keep your main context clean.</p>
+
+      <h2>The four rules for subagents</h2>
+      <ul>
+        <li><strong>One clear goal per agent.</strong> If you need two things, write two agents.</li>
+        <li><strong>Whitelist tools explicitly.</strong> Omitting <code>tools:</code> inherits everything, including all MCP tools. This is almost never what you want.</li>
+        <li><strong>Pick the model per agent.</strong> Exploration on Sonnet. Deep review on Opus. Implementation on Sonnet. Default to Sonnet; promote to Opus only where judgment matters.</li>
+        <li><strong>Describe when to fire, not what the agent is.</strong> The description is a trigger for auto-invocation.</li>
+      </ul>
+
+      <h2>The core team</h2>
+
+      <h3>explorer — read-only exploration</h3>
+
+      <pre><span class="c-lang">.claude/agents/explorer.md</span><code>---
+name: explorer
+description: Read-only codebase exploration. Use proactively whenever the main session needs to understand unfamiliar code, trace a function, find where something is defined, or map a feature. Returns a focused summary with file:line references — never dumps raw files.
+tools: Read, Glob, Grep, Bash
+model: sonnet
+---
+
+You are a read-only code explorer. Your purpose is to keep the main
+session's context clean by absorbing file-reading work into your own window.
+
+## Workflow
+1. Start broad with Glob/Grep, then narrow with Read
+2. Never read a file you don't need to answer the question
+3. If you read &gt;10 files, you're doing it wrong — regroup
+
+## Output contract
+Always return three sections:
+- Summary: one paragraph answering the question
+- References: 3–5 file:line pointers with 5-word context each
+- Surprises: anti-patterns, tech debt, inconsistencies (can be empty)
+
+## Never
+- Include raw file contents unless user explicitly asked
+- Propose changes — you're read-only
+- Spawn other subagents</code></pre>
+
+      <h3>implementer — writes code from a spec</h3>
+
+      <pre><span class="c-lang">.claude/agents/implementer.md</span><code>---
+name: implementer
+description: Writes and modifies code from an approved spec. Use after exploration is complete and the user has approved the plan. Operates only on files listed in the spec.
+tools: Read, Edit, Write, Bash, Grep, Glob
+model: sonnet
+---
+
+You implement from a spec. You do not plan. You do not explore beyond
+what the spec requires.
+
+## Definition of done
+1. Code matches the spec's acceptance criteria
+2. Tests written or updated — minimum one per acceptance criterion
+3. `pnpm typecheck &amp;&amp; pnpm test` passes
+4. No files outside the spec's "Files to touch" are modified
+5. Final message: summary of changes with file:line references
+
+## Constraints
+- Need to touch a file not in the spec? Stop and ask.
+- Tests fail after 3 fix attempts? Stop and report.
+- Use project's existing patterns; grep for similar code when unsure.
+
+## Tool budget
+Max 40 tool calls. If you're not close to done, something is wrong.</code></pre>
+
+      <h3>mcp-operator — drives simple-mcp tracked runs</h3>
+
+      <pre><span class="c-lang">.claude/agents/mcp-operator.md</span><code>---
+name: mcp-operator
+description: Runs simple-mcp tracked agent runs for any task requiring Jira/GitHub/Confluence/DB integration. Use whenever work crosses external services. Persists the run so it's visible in the admin panel.
+tools: mcp__simple-mcp__agent_list, mcp__simple-mcp__agent_start_run, mcp__simple-mcp__agent_record_step, mcp__simple-mcp__agent_update_task, mcp__simple-mcp__agent_complete_run, mcp__simple-mcp__jira_search_issues, mcp__simple-mcp__jira_create_issue, mcp__simple-mcp__github_list_prs, mcp__simple-mcp__github_get_pr_diff, mcp__simple-mcp__confluence_search_pages, mcp__simple-mcp__db_query, mcp__simple-mcp__fs_workspace_search
+model: sonnet
+---
+
+You drive simple-mcp tracked runs. Workflow for every task:
+
+1. agent_list — find the best pre-built agent for this goal
+2. agent_start_run with that agent + goal → get systemPrompt, requiredTools, tasks
+3. Execute work using ONLY the tools in requiredTools
+4. agent_record_step after every meaningful tool call
+5. agent_update_task for each planned task as you complete it
+6. agent_complete_run with the final result
+
+Never skip tracking calls — the whole point is that every run is visible
+in the admin panel at localhost:3100 and survives across sessions.</code></pre>
+
+      <p>Four more subagents — <code>security-reviewer</code>, <code>correctness-reviewer</code>, <code>performance-reviewer</code>, <code>test-reviewer</code> — make up the PR review team. We cover those in the next chapter.</p>
+    </section>
+
+    <!-- ============ CH 8: PR REVIEW PIPELINE ============ -->
+    <section class="chapter" id="ch-pr-review">
+      <div class="chapter-eyebrow">Chapter eight · Build the system</div>
+      <h1>Multi-agent <em>PR review</em></h1>
+      <p class="lede">Four specialists in parallel. Each with its own context, its own focus, its own JSON output. A merge script dedupes and prioritizes. The whole pipeline runs in 45 seconds.</p>
+
+      <h2>The pipeline at a glance</h2>
+
+      <figure class="diagram">
+        <svg width="100%" viewBox="0 0 720 580" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Sohne', sans-serif;">
+          <defs>
+            <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="#1a1a1a" stroke-width="1.5" stroke-linecap="round"/>
+            </marker>
+          </defs>
+
+          <rect x="240" y="20" width="240" height="48" rx="4" fill="#ebe6d7" stroke="#3d3d3a" stroke-width="0.5"/>
+          <text x="360" y="42" text-anchor="middle" font-size="14" fill="#1a1a1a" font-weight="600">User: "review my PR"</text>
+          <text x="360" y="58" text-anchor="middle" font-size="11" fill="#6b6b66">Main Claude Code session</text>
+
+          <line x1="360" y1="68" x2="360" y2="95" stroke="#1a1a1a" stroke-width="1" marker-end="url(#arr2)"/>
+
+          <rect x="220" y="100" width="280" height="46" rx="4" fill="rgba(196,67,43,0.08)" stroke="#c4432b" stroke-width="0.5"/>
+          <text x="360" y="122" text-anchor="middle" font-size="13" fill="#c4432b" font-weight="600">pr-review skill triggers</text>
+          <text x="360" y="137" text-anchor="middle" font-size="10" fill="#6b6b66" font-style="italic">loads on description match</text>
+
+          <line x1="360" y1="146" x2="360" y2="173" stroke="#1a1a1a" stroke-width="1" marker-end="url(#arr2)"/>
+
+          <rect x="200" y="178" width="320" height="46" rx="4" fill="rgba(196,67,43,0.08)" stroke="#c4432b" stroke-width="0.5"/>
+          <text x="360" y="200" text-anchor="middle" font-size="13" fill="#c4432b" font-weight="600">review-orchestrator subagent</text>
+          <text x="360" y="215" text-anchor="middle" font-size="10" fill="#6b6b66" font-style="italic">gets diff, starts simple-mcp run</text>
+
+          <line x1="500" y1="200" x2="570" y2="258" stroke="#a86a1a" stroke-width="0.75" stroke-dasharray="3 3" marker-end="url(#arr2)"/>
+
+          <rect x="530" y="256" width="170" height="60" rx="4" fill="rgba(168,106,26,0.08)" stroke="#a86a1a" stroke-width="0.5"/>
+          <text x="615" y="276" text-anchor="middle" font-size="13" fill="#a86a1a" font-weight="600">simple-mcp</text>
+          <text x="615" y="292" text-anchor="middle" font-size="10" fill="#3d3d3a">agent_start_run</text>
+          <text x="615" y="306" text-anchor="middle" font-size="10" fill="#3d3d3a">→ returns runId</text>
+
+          <line x1="360" y1="224" x2="360" y2="253" stroke="#1a1a1a" stroke-width="1" marker-end="url(#arr2)"/>
+          <text x="430" y="245" font-size="10" fill="#6b6b66" font-style="italic">dispatches 4 in parallel</text>
+
+          <g>
+            <rect x="20" y="258" width="115" height="68" rx="4" fill="rgba(45,106,63,0.08)" stroke="#2d6a3f" stroke-width="0.5"/>
+            <text x="77" y="278" text-anchor="middle" font-size="12" fill="#2d6a3f" font-weight="600">security</text>
+            <text x="77" y="294" text-anchor="middle" font-size="10" fill="#3d3d3a">Opus</text>
+            <text x="77" y="310" text-anchor="middle" font-size="9" fill="#6b6b66">review-security.json</text>
+          </g>
+          <g>
+            <rect x="145" y="258" width="115" height="68" rx="4" fill="rgba(45,106,63,0.08)" stroke="#2d6a3f" stroke-width="0.5"/>
+            <text x="202" y="278" text-anchor="middle" font-size="12" fill="#2d6a3f" font-weight="600">performance</text>
+            <text x="202" y="294" text-anchor="middle" font-size="10" fill="#3d3d3a">Sonnet</text>
+            <text x="202" y="310" text-anchor="middle" font-size="9" fill="#6b6b66">review-performance.json</text>
+          </g>
+          <g>
+            <rect x="270" y="258" width="115" height="68" rx="4" fill="rgba(45,106,63,0.08)" stroke="#2d6a3f" stroke-width="0.5"/>
+            <text x="327" y="278" text-anchor="middle" font-size="12" fill="#2d6a3f" font-weight="600">correctness</text>
+            <text x="327" y="294" text-anchor="middle" font-size="10" fill="#3d3d3a">Opus</text>
+            <text x="327" y="310" text-anchor="middle" font-size="9" fill="#6b6b66">review-correctness.json</text>
+          </g>
+          <g>
+            <rect x="395" y="258" width="115" height="68" rx="4" fill="rgba(45,106,63,0.08)" stroke="#2d6a3f" stroke-width="0.5"/>
+            <text x="452" y="278" text-anchor="middle" font-size="12" fill="#2d6a3f" font-weight="600">tests</text>
+            <text x="452" y="294" text-anchor="middle" font-size="10" fill="#3d3d3a">Sonnet</text>
+            <text x="452" y="310" text-anchor="middle" font-size="9" fill="#6b6b66">review-tests.json</text>
+          </g>
+
+          <line x1="77" y1="326" x2="77" y2="360" stroke="#a86a1a" stroke-width="0.75" stroke-dasharray="3 3"/>
+          <line x1="202" y1="326" x2="202" y2="360" stroke="#a86a1a" stroke-width="0.75" stroke-dasharray="3 3"/>
+          <line x1="327" y1="326" x2="327" y2="360" stroke="#a86a1a" stroke-width="0.75" stroke-dasharray="3 3"/>
+          <line x1="452" y1="326" x2="452" y2="360" stroke="#a86a1a" stroke-width="0.75" stroke-dasharray="3 3"/>
+
+          <rect x="20" y="360" width="490" height="44" rx="4" fill="rgba(168,106,26,0.08)" stroke="#a86a1a" stroke-width="0.5"/>
+          <text x="265" y="380" text-anchor="middle" font-size="13" fill="#a86a1a" font-weight="600">Hook: record-to-mcp.sh</text>
+          <text x="265" y="396" text-anchor="middle" font-size="10" fill="#6b6b66" font-style="italic">each SubagentStop → POST /api/agents/runs/:runId/steps</text>
+
+          <line x1="510" y1="382" x2="570" y2="316" stroke="#a86a1a" stroke-width="0.75" stroke-dasharray="3 3" marker-end="url(#arr2)"/>
+
+          <line x1="265" y1="404" x2="265" y2="430" stroke="#1a1a1a" stroke-width="1" marker-end="url(#arr2)"/>
+
+          <rect x="90" y="435" width="340" height="46" rx="4" fill="rgba(196,67,43,0.08)" stroke="#c4432b" stroke-width="0.5"/>
+          <text x="260" y="457" text-anchor="middle" font-size="13" fill="#c4432b" font-weight="600">merge-reviews.ts</text>
+          <text x="260" y="472" text-anchor="middle" font-size="10" fill="#6b6b66" font-style="italic">dedupe, group by file, sort by severity</text>
+
+          <line x1="260" y1="481" x2="260" y2="508" stroke="#1a1a1a" stroke-width="1" marker-end="url(#arr2)"/>
+
+          <rect x="60" y="513" width="400" height="46" rx="4" fill="rgba(168,106,26,0.08)" stroke="#a86a1a" stroke-width="0.5"/>
+          <text x="260" y="535" text-anchor="middle" font-size="13" fill="#a86a1a" font-weight="600">agent_complete_run + report to user</text>
+          <text x="260" y="550" text-anchor="middle" font-size="10" fill="#6b6b66" font-style="italic">admin panel shows full run at localhost:3100</text>
+
+        </svg>
+        <figcaption>Total wall clock: ~45s for a typical diff. Sequential would take ~3 minutes.</figcaption>
+      </figure>
+
+      <h2>The four reviewer subagents</h2>
+      <p>Each reviewer has a narrow focus, returns JSON in the same shape, and stays out of each other's lanes.</p>
+
+      <h3>security-reviewer</h3>
+      <pre><span class="c-lang">.claude/agents/security-reviewer.md</span><code>---
+name: security-reviewer
+description: Reviews a diff for security issues. Focuses on injection, authentication, authorization, secrets, and PII handling. Returns structured JSON only. Part of the multi-agent PR review pipeline.
+tools: Read, Grep, Glob, Bash
+model: opus
+---
+
+Read /tmp/review-diff.patch and touched files. Return JSON only — no prose.
+
+## Focus (priority order)
+1. Injection (SQL, command, template, prompt, XSS)
+2. AuthN/AuthZ (missing checks, broken ownership, privilege escalation)
+3. Secrets (hardcoded keys, tokens in logs, secrets in error messages)
+4. PII (personal data in logs, third-party calls, unencrypted at rest)
+5. Unsafe defaults (CORS wildcards, disabled CSRF, insecure cookies)
+
+## Out of scope
+Performance. Correctness bugs not security-relevant. Style.
+
+## Output shape (write to /tmp/review-security.json)
+{
+  "reviewer": "security",
+  "findings": [
+    {"severity": "blocker|should-fix|nice-to-have",
+     "file": "path", "line": N,
+     "message": "...", "suggestion": "optional"}
+  ],
+  "summary": "2-3 sentence overall take"
+}
+
+## Severity
+- blocker: exploitable vulnerability or secret committed
+- should-fix: materially weakens security posture
+- nice-to-have: defense in depth</code></pre>
+
+      <h3>correctness-reviewer</h3>
+      <pre><span class="c-lang">.claude/agents/correctness-reviewer.md</span><code>---
+name: correctness-reviewer
+description: Reviews a diff for correctness bugs. Focuses on edge cases, null/undefined handling, boundary conditions, race conditions, and off-by-one errors. Returns structured JSON. Part of the multi-agent PR review pipeline.
+tools: Read, Grep, Glob, Bash
+model: opus
+---
+
+You are adversarial. Assume the implementer missed edge cases.
+
+## Focus
+1. Boundaries: empty arrays, zero, max int, unicode, very long strings
+2. Null/undefined: every .x.y chain, every array access, every map lookup
+3. Concurrency: two requests racing, double-clicks, parallel await issues
+4. Error paths: what happens if this throws, times out, returns partial
+5. Off-by-one: loops, slice bounds, date math, pagination
+
+## Method
+For each changed function ask "what's the pathological input?" Write that down.
+
+## Output shape (write to /tmp/review-correctness.json)
+Same as security-reviewer.
+
+## Severity
+- blocker: real-world input will crash or corrupt data
+- should-fix: edge case will bite eventually
+- nice-to-have: theoretical, unlikely input</code></pre>
+
+      <p>The <code>performance-reviewer</code> and <code>test-reviewer</code> follow the same pattern — narrow focus, structured output, opinionated severity.</p>
+
+      <h2>The orchestrator</h2>
+      <p>This subagent dispatches the four reviewers in parallel and merges results. Parallelism is mandatory — four in parallel = 4× faster than sequential.</p>
+
+      <pre><span class="c-lang">.claude/agents/review-orchestrator.md</span><code>---
+name: review-orchestrator
+description: Orchestrates the multi-agent PR review. Used by the pr-review skill. Dispatches security, performance, correctness, and test reviewers in parallel, merges findings, returns unified report.
+tools: Read, Bash, Task, mcp__simple-mcp__agent_start_run, mcp__simple-mcp__agent_record_step, mcp__simple-mcp__agent_complete_run, mcp__simple-mcp__github_get_pr_diff
+model: sonnet
+---
+
+You orchestrate parallel PR reviews. You do not review yourself.
+
+## Steps
+1. Get diff (local branch or PR URL) → /tmp/review-diff.patch
+2. agent_start_run agentId "pr-review" → save runId to /tmp/claude-mcp-run-id.txt
+3. Dispatch four subagents IN PARALLEL via Task tool (one call, four invocations):
+   - security-reviewer
+   - performance-reviewer
+   - correctness-reviewer
+   - test-reviewer
+   Each receives: "Review /tmp/review-diff.patch per your system prompt."
+4. Wait for all four to return
+5. Run .claude/skills/pr-review/scripts/merge-reviews.ts /tmp/review-*.json
+6. agent_complete_run with merged markdown
+7. Print the merged report
+
+## Parallelism is mandatory.
+## Never propose fixes yourself. Never merge. Never add opinions.</code></pre>
+
+      <h2>The merge script</h2>
+      <p>Deterministic merge — no LLM cost.</p>
+
+      <pre><span class="c-lang">typescript</span><code>#!/usr/bin/env tsx
+import { readFileSync } from "fs";
+
+type Finding = {
+  severity: "blocker" | "should-fix" | "nice-to-have";
+  file: string; line: number; message: string; suggestion?: string;
+};
+type Review = { reviewer: string; findings: Finding[]; summary: string };
+
+const reviews: Review[] = process.argv.slice(2)
+  .map(f =&gt; JSON.parse(readFileSync(f, "utf8")));
+
+const all = reviews.flatMap(r =&gt; r.findings.map(f =&gt; ({ ...f, reviewer: r.reviewer })));
+
+// Dedupe: same file+line+severity from different reviewers → merge
+const key = (f: any) =&gt; `${f.file}:${f.line}:${f.severity}`;
+const grouped = new Map&lt;string, any[]&gt;();
+for (const f of all) {
+  const existing = grouped.get(f.file) ?? [];
+  const dup = existing.find(e =&gt; key(e) === key(f));
+  if (dup) {
+    dup.reviewers.push(f.reviewer);
+    dup.message = `${dup.message} / ${f.message}`;
+  } else {
+    existing.push({ ...f, reviewers: [f.reviewer] });
+    grouped.set(f.file, existing);
+  }
+}
+
+console.log("# PR review\n");
+for (const sev of ["blocker", "should-fix", "nice-to-have"] as const) {
+  const matches = [...grouped.values()].flat().filter(f =&gt; f.severity === sev);
+  if (!matches.length) continue;
+  console.log(`## ${sev.toUpperCase()}`);
+  for (const f of matches) {
+    console.log(`- **${f.file}:${f.line}** [${f.reviewers.join(",")}] ${f.message}`);
+    if (f.suggestion) console.log(`  fix: ${f.suggestion}`);
+  }
+  console.log();
+}
+console.log("## Per-reviewer summaries");
+for (const r of reviews) console.log(`**${r.reviewer}**: ${r.summary}`);</code></pre>
+
+      <div class="callout ok">
+        <span class="callout-label">Why this beats /simplify alone</span>
+        <code>/simplify</code> is Anthropic's built-in 3-reviewer pipeline (routine issues, no configuration). Your custom 4-reviewer pipeline is for sensitive domains — auth, payments, PII, DB writes — where you want specialists with Opus-level judgment and structured output your CI can parse. Use <code>/simplify</code> as the default and the custom pipeline on demand. More on this in the next chapter.
+      </div>
+    </section>
+
+    <!-- ============ CH 9: BUILT-INS ============ -->
+    <section class="chapter" id="ch-builtins">
+      <div class="chapter-eyebrow">Chapter nine · The 2026 upgrades</div>
+      <h1>The built-ins — <em>/simplify</em>, <em>/batch</em>, and Plan Mode</h1>
+      <p class="lede">Between our first conversation and now, Anthropic shipped three features that collapsed half of what we were planning. Learn these before building custom replacements.</p>
+
+      <h2>Tag list <span class="tag new">Feb 2026</span> <span class="tag new">Mar 2026</span> <span class="tag new">Apr 2026</span></h2>
+      <p>The major 2026 additions to Claude Code, in order of impact on your daily work:</p>
+
+      <table class="spec-table">
+        <thead><tr><th>Feature</th><th>Released</th><th>What it replaces</th></tr></thead>
+        <tbody>
+          <tr><td>/simplify</td><td>Feb 2026 (v2.1.63)</td><td>3-reviewer pipeline you'd otherwise hand-build</td></tr>
+          <tr><td>/batch</td><td>Feb 2026 (v2.1.63)</td><td>Shell scripts that run claude -p in loops</td></tr>
+          <tr><td>/btw</td><td>Mar 2026</td><td>Spawning a second session for side questions</td></tr>
+          <tr><td>Plan Mode → auto-accept</td><td>Q1 2026</td><td>Unstructured back-and-forth code writing</td></tr>
+          <tr><td>Auto Mode</td><td>Q1 2026</td><td>Manual approval of every command</td></tr>
+          <tr><td>Worktrees first-class</td><td>Feb 2026</td><td>Manual git worktree commands</td></tr>
+          <tr><td>Routines</td><td>Apr 14 2026</td><td>Your laptop having to be on</td></tr>
+        </tbody>
+      </table>
+
+      <h2>/simplify — the default checkpoint after any implementation</h2>
+      <p>Run <code>/simplify</code> after every code change, before opening a PR. It dispatches three built-in reviewers in parallel — the routine-issue coverage you'd otherwise build yourself.</p>
+
+      <p>Put this rule in your <code>CLAUDE.md</code>:</p>
+      <blockquote>Run /simplify before opening any PR.<cite>— CLAUDE.md workflow rule</cite></blockquote>
+
+      <p><code>/simplify</code> averages 3–5 findings per feature branch — issues that would've otherwise needed human review. It doesn't replace your custom four-reviewer pipeline; it augments it. Use <code>/simplify</code> for routine changes, custom pipeline for sensitive changes.</p>
+
+      <h2>/batch — the parallelism engine</h2>
+      <p>Before <code>/batch</code>, mass migrations meant shell scripts. Now:</p>
+
+      <pre><span class="c-lang">Claude Code</span><code>/batch migrate these 50 Express routes to Hono</code></pre>
+
+      <p><code>/batch</code> interviews you about the change, generates the task list, spawns one worktree agent per unit, each runs <code>/simplify</code> on its output, each opens its own PR. You merge independently.</p>
+
+      <p>Use cases that used to take days:</p>
+      <ul>
+        <li>Codebase-wide API migrations (React class → hooks, Express → Hono)</li>
+        <li>Test generation across directories</li>
+        <li>Dependency version bumps with breaking changes</li>
+        <li>Schema migrations with type updates</li>
+      </ul>
+
+      <h2>Plan Mode → auto-accept</h2>
+      <p>Boris Cherny's most repeated rule: start every non-trivial task in Plan Mode. Iterate the plan with Claude until it's right. Then switch to auto-accept so Claude executes the whole thing.</p>
+
+      <p>This prevents the classic failure mode: Claude makes 40 changes you didn't want. With Plan Mode, you agree on exactly what will be done before any file is touched.</p>
+
+      <pre><span class="c-lang">keyboard</span><code>Shift+Tab        # toggle plan mode
+&lt;iterate on plan&gt;
+&lt;switch to auto-accept edits mode&gt;
+&lt;Claude executes full plan&gt;</code></pre>
+
+      <h2>/btw — side queries without context pollution</h2>
+      <p>Before <code>/btw</code>, the advice was "spawn a new session for side questions". Now: don't. <code>/btw</code> keeps the current session's full context while your main agent keeps working. The answer pops up in an overlay; dismiss with Escape; main work continues.</p>
+
+      <pre><span class="c-lang">Claude Code</span><code>/btw what's our convention for error types?
+/btw how do I spell "dachshund"?</code></pre>
+
+      <h2>Auto Mode</h2>
+      <p>The middle ground between approve-every-command and <code>--dangerously-skip-permissions</code>. Faster than manual approval, safer than YOLO mode. Start restrictive, widen as trust builds. Use it for <code>/loop</code> tasks after you've validated their behavior.</p>
+
+      <h2>Worktrees as first-class</h2>
+
+      <pre><span class="c-lang">shell</span><code>claude -w                         # new session in a worktree
+# or check the "worktree" box in Desktop</code></pre>
+
+      <p>Each worktree is an isolated git checkout. Parallel Claudes never fight over the same files. Boris runs dozens of Claudes at all times this way.</p>
+
+      <p>Your reflex to build: any task &gt;20 min, or any task you might want to run in parallel with other work, goes in its own worktree.</p>
+    </section>
+
+    <!-- ============ CH 10: AUTOMATION TIERS ============ -->
+    <section class="chapter" id="ch-automation">
+      <div class="chapter-eyebrow">Chapter ten · The 2026 upgrades</div>
+      <h1>Loops, schedules, <em>routines</em></h1>
+      <p class="lede">Four tiers of automation. Interactive at the bottom. Fully autonomous cloud agents at the top. Each tier trades human oversight for scale.</p>
+
+      <h2>The four tiers</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">TIER 01</div>
+        <div class="tier-body">
+          <h4>Interactive — you at the terminal</h4>
+          <p>Single session, Plan Mode → auto-accept, <code>/btw</code> for side queries. This is where most work happens.</p>
+          <p><em>Reflex: get fast feedback. When a flow works, promote it.</em></p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">TIER 02</div>
+        <div class="tier-body">
+          <h4>Parallel — one machine, many sessions</h4>
+          <p>Worktrees, <code>/simplify</code>, <code>/batch</code>, Agent Teams. 5–15 concurrent Claudes in isolated checkouts.</p>
+          <p><em>Reflex: parallelize anything independent. <code>/batch</code> for mass migrations.</em></p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">TIER 03</div>
+        <div class="tier-body">
+          <h4>Scheduled local — machine on, you asleep</h4>
+          <p><code>/loop</code> for recurring local tasks, Dispatch for mobile remote control, local cron via <code>claude -p</code>.</p>
+          <p><em>Reflex: recurring chores that need your machine running.</em></p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">TIER 04</div>
+        <div class="tier-body">
+          <h4>Cloud routines — machine off, 24/7</h4>
+          <p><code>/schedule</code>, Routines (Apr 14 2026 preview). Triggers: cron, HTTP API, GitHub webhooks. Pushes to <code>claude/</code>-prefixed branches by default for safety.</p>
+          <p><em>Reflex: production automation (nightly triage, PR-opened review).</em></p>
+        </div>
+      </div>
+
+      <h2>/loop — local recurring tasks</h2>
+      <p>Boris's own setup runs these continuously:</p>
+
+      <pre><span class="c-lang">Claude Code</span><code>/loop 5m /babysit                 # auto-address reviews, auto-rebase PRs every 5 min
+/loop 30m /slack-feedback         # every 30m, put up PRs for Slack feedback
+/loop 1h /pr-pruner               # hourly, close stale PRs
+/loop /post-merge-sweeper         # address review comments I missed</code></pre>
+
+      <p>The pattern: a recurring task = a skill + <code>/loop interval /skill</code>. Your first one to build:</p>
+
+      <pre><span class="c-lang">Claude Code</span><code>/loop 15m /triage-jira</code></pre>
+
+      <p>Where <code>/triage-jira</code> calls <code>simple-mcp:jira_search_issues</code> for new P1 tickets, does the <code>jira-triage</code> agent's work, and posts a summary back to the ticket. You never think about triage again.</p>
+
+      <h2>Routines — Tier 4</h2>
+      <p>Released April 14, 2026 as research preview. Cloud-hosted Claude. Your laptop can be closed.</p>
+
+      <p>Three trigger types:</p>
+      <ul>
+        <li><strong>Scheduled</strong> — hourly to weekly</li>
+        <li><strong>API</strong> — HTTP POST with bearer auth</li>
+        <li><strong>GitHub webhook</strong> — PR opened, PR updated, release, etc.</li>
+      </ul>
+
+      <p>Safety defaults: routines push only to <code>claude/</code>-prefixed branches unless you override; daily limits are 5 on Pro, 25 on Team/Enterprise; cloud connectors are available (Slack, Linear, Google Drive) but <strong>not your local MCP servers</strong>.</p>
+
+      <div class="callout warn">
+        <span class="callout-label">simple-mcp + routines</span>
+        Since routines run on Anthropic cloud and your <code>simple-mcp</code> is local, they can't call it directly. Three ways to bridge — see Chapter 15 for the specifics.
+      </div>
+
+      <h2>The four routines everyone should have</h2>
+
+      <table class="spec-table">
+        <thead><tr><th>Routine</th><th>Trigger</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Nightly dep scan</td>
+            <td>daily 2am</td>
+            <td>Checks package.json for CVEs, opens <code>claude/sec-&lt;date&gt;</code> PR if found</td>
+          </tr>
+          <tr>
+            <td>PR-opened review</td>
+            <td>GitHub webhook</td>
+            <td>Runs <code>/simplify</code> on every new PR. One session per PR.</td>
+          </tr>
+          <tr>
+            <td>Morning triage</td>
+            <td>weekdays 9am</td>
+            <td>Surfaces unassigned P1s, drafts Slack messages to likely owners</td>
+          </tr>
+          <tr>
+            <td>Release notes</td>
+            <td>GitHub release webhook</td>
+            <td>Reads commits, generates CHANGELOG update, opens PR</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ============ CH 11: CODEX ============ -->
+    <section class="chapter" id="ch-codex">
+      <div class="chapter-eyebrow">Chapter eleven · The 2026 upgrades</div>
+      <h1>Pairing with <em>Codex</em></h1>
+      <p class="lede">A second model's opinion, cheaply. Your simple-mcp already has .codex/ configs — here's how to use them alongside Claude Code.</p>
+
+      <h2>Why bother with Codex</h2>
+      <p>Different models make different mistakes. Claude and GPT see different edge cases. Running both on the same problem — especially adversarial review before a PR — catches issues neither would alone.</p>
+
+      <p>Your <code>simple-mcp</code> already has three Codex roles:</p>
+      <ul>
+        <li><code>.codex/agents/business-analyst</code> — requirements, scope, implementation-ready specs</li>
+        <li><code>.codex/agents/senior-fullstack-typescript-developer</code> — implementation</li>
+        <li><code>.codex/agents/typescript-pr-reviewer</code> — review and regression-focused validation</li>
+      </ul>
+
+      <h2>The shared instruction layer</h2>
+      <p><code>AGENTS.md</code> is the universal file both tools read. Codex reads it natively. <code>CLAUDE.md</code> delegates to it via <code>@AGENTS.md</code>. One source of truth, two tools.</p>
+
+      <h2>When to use which</h2>
+
+      <table class="spec-table">
+        <thead><tr><th>Scenario</th><th>Tool</th><th>Reasoning</th></tr></thead>
+        <tbody>
+          <tr><td>New feature spec</td><td>Codex business-analyst</td><td>Strong at requirements gathering</td></tr>
+          <tr><td>Implementation</td><td>Claude Code</td><td>Deeper integration, skills/hooks/subagents</td></tr>
+          <tr><td>Adversarial pre-PR review</td><td>Codex</td><td>Second model's view catches what Claude misses</td></tr>
+          <tr><td>Codebase exploration</td><td>Claude Code explorer subagent</td><td>Context isolation + simple-mcp integration</td></tr>
+          <tr><td>Long autonomous task</td><td>Either</td><td>Run both in parallel worktrees, compare</td></tr>
+        </tbody>
+      </table>
+
+      <h2>The adversarial-review workflow</h2>
+      <p>Before any significant PR:</p>
+
+      <ol class="steps">
+        <li>
+          <h4>Claude Code implements and runs /simplify</h4>
+          <p>Normal workflow. Main session plus your 4-reviewer pipeline for sensitive changes.</p>
+        </li>
+        <li>
+          <h4>Open a second terminal. Start Codex in a worktree.</h4>
+          <pre><code>cd $(git worktree list | grep feat-5421 | awk '{print $1}')
+codex "adversarial review of this branch — try to break this code"</code></pre>
+        </li>
+        <li>
+          <h4>Codex reads AGENTS.md and .codex/agents/typescript-pr-reviewer</h4>
+          <p>It uses the same simple-mcp MCP tools. Sees the same Jira tickets, same GitHub PRs.</p>
+        </li>
+        <li>
+          <h4>Merge Codex's findings into your PR review report</h4>
+          <p>Codex's tracked run appears in the same <code>simple-mcp</code> admin panel as Claude's — unified audit trail.</p>
+        </li>
+      </ol>
+
+      <div class="callout">
+        <span class="callout-label">Cost/value reality check</span>
+        Codex adversarial review typically takes 5–10 minutes in a worktree and costs about one Claude Code session. For changes to auth, payments, database schema, or any public API — worth it. For a CSS tweak — not worth it.
+      </div>
+    </section>
+
+    <!-- ============ CH 12: WORKFLOWS ============ -->
+    <section class="chapter" id="ch-workflows">
+      <div class="chapter-eyebrow">Chapter twelve · Operate</div>
+      <h1>Daily <em>workflows</em></h1>
+      <p class="lede">Concrete, not theoretical. Four workflows that cover 80% of real engineering work. Practice these until they're reflexive.</p>
+
+      <h2>Workflow A — "Implement ticket PROJ-5421"</h2>
+
+      <ol class="steps">
+        <li>
+          <h4>New worktree</h4>
+          <pre><code>claude -w feat-5421</code></pre>
+        </li>
+        <li>
+          <h4>Turn the ticket into a spec</h4>
+          <pre><code>from-jira PROJ-5421</code></pre>
+          <p>Skill fetches the ticket, linked Confluence pages, referenced code. Returns a spec with acceptance criteria.</p>
+        </li>
+        <li>
+          <h4>Iterate the spec in Plan Mode</h4>
+          <p>Read it carefully. Push back where it's wrong. Approve when right.</p>
+        </li>
+        <li>
+          <h4>Switch to auto-accept. Dispatch implementer.</h4>
+          <p>Implementer subagent executes. Hooks format and typecheck every edit. If typecheck fails, Claude sees the error and fixes on the next turn automatically.</p>
+        </li>
+        <li>
+          <h4>Review</h4>
+          <pre><code>/simplify
+# For sensitive changes also:
+"Use the security-reviewer and correctness-reviewer subagents"</code></pre>
+        </li>
+        <li>
+          <h4>Codex adversarial review (for sensitive changes)</h4>
+          <p>Second terminal, different worktree, second model's view.</p>
+        </li>
+        <li>
+          <h4>Address findings → open-pr skill</h4>
+          <pre><code>open-pr</code></pre>
+        </li>
+      </ol>
+
+      <h2>Workflow B — "Review my PR"</h2>
+      <ol class="steps">
+        <li>
+          <h4>Main session recognizes the trigger</h4>
+          <p>"review my PR" / "review my branch" / PR URL → pr-review skill loads</p>
+        </li>
+        <li>
+          <h4>review-orchestrator dispatches 4 reviewers in parallel</h4>
+          <p>Fetches diff, starts simple-mcp tracked run, launches four Task subagents simultaneously.</p>
+        </li>
+        <li>
+          <h4>Hooks record each to simple-mcp</h4>
+          <p>SubagentStop → record-to-mcp.sh → visible in admin panel.</p>
+        </li>
+        <li>
+          <h4>merge-reviews.ts dedupes and prioritizes</h4>
+          <p>Deterministic merge. No LLM cost.</p>
+        </li>
+        <li>
+          <h4>Report printed, run completed</h4>
+          <p>BLOCKER / should-fix / nice-to-have. Full trace at localhost:3100/agent-executions.</p>
+        </li>
+      </ol>
+
+      <h2>Workflow C — "Orders are failing for user 4827"</h2>
+      <ol class="steps">
+        <li>
+          <h4>Delegate exploration</h4>
+          <p><em>"Use the explorer subagent to find where orders are created and what can fail for user 4827"</em></p>
+          <p>Explorer returns call graph + file:line map. Your main context stays clean.</p>
+        </li>
+        <li>
+          <h4>Delegate data retrieval</h4>
+          <p><em>"Use mcp-operator to query the last 50 failed orders for user 4827 and group by error"</em></p>
+          <p>db_query hook ensures read-only. mcp-operator returns the failure pattern.</p>
+        </li>
+        <li>
+          <h4>Form hypothesis in main session</h4>
+          <p>You have both the code paths and the real data now. Hypothesize. Plan the fix.</p>
+        </li>
+        <li>
+          <h4>Implementer writes fix + regression test</h4>
+          <p>Hooks auto-format, typecheck. Reviewer checks the boundary.</p>
+        </li>
+        <li>
+          <h4>Local verification + PR</h4>
+        </li>
+      </ol>
+
+      <h2>Workflow D — "Migrate 80 files to the new API"</h2>
+      <ol class="steps">
+        <li>
+          <h4>Trial on 2-3 files in the main session</h4>
+          <p>Validate the pattern before mass-running it.</p>
+        </li>
+        <li>
+          <h4>Call /batch</h4>
+          <pre><code>/batch migrate all usages of fetchUser to fetchUserV2</code></pre>
+          <p>/batch interviews you about scope, edge cases, and naming. Generates task list.</p>
+        </li>
+        <li>
+          <h4>It spawns 80 worktree agents in parallel</h4>
+          <p>Each works on one unit. Each runs /simplify on its output. Each opens its own PR.</p>
+        </li>
+        <li>
+          <h4>You merge as they're ready</h4>
+          <p>Independent PRs — review and revert independently. If one fails, the other 79 are unaffected.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ============ CH 13: OPTIMIZATION ============ -->
+    <section class="chapter" id="ch-optimization">
+      <div class="chapter-eyebrow">Chapter thirteen · Operate</div>
+      <h1>Token &amp; time <em>optimization</em></h1>
+      <p class="lede">Seven levers, ordered by impact. The first three cover most of the gain. The rest compound over weeks.</p>
+
+      <ol class="steps">
+        <li>
+          <h4>Subagent model routing — ~60% cost reduction</h4>
+          <p><code>CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-4-6</code></p>
+          <p>Main orchestrator on Opus. Subagents on Sonnet. Exploration, grep, file reading, tests — all on Sonnet at ~5× lower cost. Opus only where judgment actually matters.</p>
+        </li>
+        <li>
+          <h4>Context isolation via subagents — ~40% input token reduction</h4>
+          <p>A main session that reads 50 files has 50 files in its context forever. A main session that delegates exploration gets a 300-token summary; the 50 files never enter its context. This compounds on every subsequent turn.</p>
+        </li>
+        <li>
+          <h4>Parallel subagents — 4× wall-clock speedup</h4>
+          <p>Four reviewers in parallel = 4× faster than sequential, same token count. You pay for tokens either way, but iteration speed compounds.</p>
+        </li>
+        <li>
+          <h4>Skills loaded on demand</h4>
+          <p>A 500-line SKILL.md costs zero until triggered. Thin CLAUDE.md (under 100 lines) is always in context; skills load only when their description matches.</p>
+        </li>
+        <li>
+          <h4>Hooks instead of prompts</h4>
+          <p>Format-on-save, typecheck-on-edit, block-write-SQL — zero tokens. Every recurring instruction moved from CLAUDE.md to a hook saves tokens on every turn for the rest of the session.</p>
+        </li>
+        <li>
+          <h4>Client-driven simple-mcp runs</h4>
+          <p>Use <code>agent_start_run</code> (tracked only) not <code>agent_execute</code> (runs its own Anthropic loop). One Anthropic bill instead of two for the same work.</p>
+        </li>
+        <li>
+          <h4>Compact policy</h4>
+          <p>In CLAUDE.md, specify what <code>/compact</code> should preserve (specs, errors, file paths) and what to drop (exploration, failed attempts). Policy-driven summarization beats generic summarization.</p>
+        </li>
+      </ol>
+
+      <h2>Measured numbers</h2>
+      <p>On a typical PR review in a large codebase:</p>
+
+      <table class="spec-table">
+        <thead><tr><th>Approach</th><th>Tokens</th><th>Wall-clock</th></tr></thead>
+        <tbody>
+          <tr><td>Naive (main session does everything)</td><td>~80k</td><td>~3 min</td></tr>
+          <tr><td>Subagents, sequential</td><td>~35k</td><td>~2 min</td></tr>
+          <tr><td>4 parallel subagents on Sonnet</td><td>~20k</td><td>~45 sec</td></tr>
+          <tr><td>+ /simplify preamble</td><td>~25k</td><td>~55 sec</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <span class="callout-label">The compounding advantage</span>
+        The quoted 60% / 40% reductions are per session. Over a week of 20–30 sessions, you've saved enough tokens to fund a month of extra work. Over a quarter, the compounded savings pay for your entire tool subscription several times over.
+      </div>
+    </section>
+
+    <!-- ============ CH 14: OBSERVABILITY ============ -->
+    <section class="chapter" id="ch-observability">
+      <div class="chapter-eyebrow">Chapter fourteen · Operate</div>
+      <h1>Observability &amp; <em>governance</em></h1>
+      <p class="lede">You can't tune what you don't measure. Your simple-mcp admin panel is your control room.</p>
+
+      <h2>The four metrics to track weekly</h2>
+
+      <ol class="steps">
+        <li>
+          <h4>Tokens per PR</h4>
+          <p>Total input + output across all runs tied to a branch. Trending up = too much exploration in main context. Fix: more subagents.</p>
+        </li>
+        <li>
+          <h4>Wall-clock per PR</h4>
+          <p>First commit to merge. Not going down = not parallelizing enough. Fix: /batch, worktrees, parallel subagents.</p>
+        </li>
+        <li>
+          <h4>Reviewer find rate</h4>
+          <p>How many blockers did each reviewer catch? Low-rate reviewers get pruned or re-tuned.</p>
+        </li>
+        <li>
+          <h4>Hook fire rate</h4>
+          <p>How many typecheck-touched blocks per session? Trending up means Claude is typing sloppier — tune CLAUDE.md.</p>
+        </li>
+      </ol>
+
+      <h2>Your Friday ritual</h2>
+      <p>15 minutes. Every Friday. Open <code>localhost:3100/agent-executions</code> and look for:</p>
+
+      <ul>
+        <li>Runs over 100k tokens — investigate why</li>
+        <li>Subagents that ran &gt;10 times with no findings — delete or narrow them</li>
+        <li>Skills that never auto-triggered — description is wrong, rewrite it</li>
+        <li>Hooks that never fired — matcher is wrong, or not needed</li>
+      </ul>
+
+      <h2>Governance — hard limits</h2>
+      <p>Set these defaults for any <code>agent_start_run</code> from Claude Code:</p>
+
+      <pre><span class="c-lang">call args</span><code>{
+  "config": {
+    "maxIterations": 10,
+    "maxToolCalls": 30,
+    "maxTokens": 50000
+  }
+}</code></pre>
+
+      <p>Your current defaults in <code>simple-mcp</code> (25 / 100 / 200k) are fine for server-side <code>agent_execute</code> but too loose for client-driven runs. Tighter defaults catch runaway loops faster.</p>
+
+      <h2>Your simple-mcp admin panel as unified dashboard</h2>
+      <p>You already have this. Use it intentionally:</p>
+      <ul>
+        <li><code>/agent-executions</code> — every tracked run. Iterations, tool calls, tokens, duration. Catches runaway loops.</li>
+        <li><code>/databases</code> — your token consumption log. Review weekly; anything &gt;100k tokens warrants investigation.</li>
+        <li>Filter by agent — which pre-built agents are actually being used? Deprecate the dead ones.</li>
+      </ul>
+
+      <div class="callout ok">
+        <span class="callout-label">The power of one dashboard</span>
+        Everything — Claude Code sessions, Codex runs, cloud routines (once bridged), subagent calls — flows into one admin panel. When someone asks "what did we do last Tuesday with the payment module?" there's one place to look. This single-pane-of-glass is worth more than any individual feature.
+      </div>
+    </section>
+
+    <!-- ============ CH 15: simple-mcp current state ============ -->
+    <section class="chapter" id="ch-mcp-now">
+      <div class="chapter-eyebrow">Chapter fifteen · Your MCP</div>
+      <h1>Where <em>simple-mcp</em> stands</h1>
+      <p class="lede">An honest assessment of what your MCP already does well and where the gaps are.</p>
+
+      <h2>What you already have (and got right)</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">✓ 01</div>
+        <div class="tier-body">
+          <h4>Tracked agent runs</h4>
+          <p><code>agent_start_run</code> / <code>agent_record_step</code> / <code>agent_update_task</code> / <code>agent_complete_run</code>. Client-driven, observable, persisted. This is the architectural keystone.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">✓ 02</div>
+        <div class="tier-body">
+          <h4>Seven pre-built agents with delegation</h4>
+          <p>jira-triage, pr-review, code-search, sprint-planning, local-repo-analysis, confluence-reader, database-explorer. Depth-2 delegation, guardrails built in.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">✓ 03</div>
+        <div class="tier-body">
+          <h4>Admin panel with execution detail</h4>
+          <p>Visual run list, detail pages with auto-refresh, cancel for active runs. This is your unified dashboard.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">✓ 04</div>
+        <div class="tier-body">
+          <h4>Encrypted credential vault</h4>
+          <p>AES-256-CBC. One place for GitHub, Jira, Confluence, DB credentials. Shared by both Claude Code and Codex.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">✓ 05</div>
+        <div class="tier-body">
+          <h4>Both .claude/ and .codex/ configs</h4>
+          <p>Three Codex roles (BA, senior dev, reviewer). The shared-instruction architecture is already set up correctly.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">✓ 06</div>
+        <div class="tier-body">
+          <h4>Release pipeline</h4>
+          <p>release-please + conventional commits + automated CHANGELOG. Your own PR merges trigger releases. This is how a well-run open-source project ships.</p>
+        </div>
+      </div>
+
+      <h2>Gaps, ordered by priority for the agentic workflow we've designed</h2>
+
+      <p>These aren't criticisms — they're the delta between "great local MCP" and "the hub for everything in this handbook." Nine concrete modifications in the next chapter.</p>
+    </section>
+
+    <!-- ============ CH 16: simple-mcp upgrades ============ -->
+    <section class="chapter" id="ch-mcp-upgrades">
+      <div class="chapter-eyebrow">Chapter sixteen · Your MCP</div>
+      <h1>Modifications to <em>add</em></h1>
+      <p class="lede">Nine concrete upgrades to simple-mcp. First three are critical for the pipelines in this handbook. Last six are incremental improvements.</p>
+
+      <h2>Critical — do these first</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">P1 · 01</div>
+        <div class="tier-body">
+          <h4>Add a pr-review agent to the registry</h4>
+          <p>The multi-agent PR review pipeline in Chapter 8 calls <code>agent_start_run</code> with <code>agentId: "pr-review"</code>. You need to register it in your agent registry.</p>
+          <pre><span class="c-lang">src/backend/agents/registry.ts</span><code>{
+  id: "pr-review",
+  name: "Multi-agent PR review",
+  description: "Parallel security, performance, correctness, and test reviewers",
+  requiredIntegrations: ["github"],
+  systemPrompt: "See .claude/skills/pr-review/SKILL.md",
+  requiredTools: [
+    "github_get_pr_diff",
+    "agent_record_step",
+    "agent_complete_run"
+  ],
+  tasks: [
+    { id: "fetch-diff", title: "Fetch PR diff" },
+    { id: "dispatch-reviewers", title: "Dispatch 4 parallel reviewers" },
+    { id: "merge-findings", title: "Merge and deduplicate findings" },
+    { id: "report", title: "Present to user" }
+  ]
+}</code></pre>
+          <p>Also add agents for <code>multi-batch</code> (for /batch orchestration) and <code>nightly-security</code> (for the cloud routine).</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">P1 · 02</div>
+        <div class="tier-body">
+          <h4>Remote-accessible deployment mode for routines</h4>
+          <p>Routines run on Anthropic cloud. They can't reach <code>localhost:3101</code>. Three options, pick one:</p>
+          <ul>
+            <li><strong>Option A (easiest): Bearer-token HTTP endpoint.</strong> Add a <code>CLAUDE_MCP_PUBLIC_URL</code> env var and a <code>CLAUDE_MCP_API_TOKEN</code>. Deploy to Fly.io or Render. Routines POST to <code>$PUBLIC_URL/api/agents/runs/:id/steps</code> with <code>Authorization: Bearer $TOKEN</code>.</li>
+            <li><strong>Option B (middleweight): HTTPS MCP transport.</strong> Add <code>CLAUDE_MCP_TRANSPORT=http</code> support with auth. Routines connect as a real MCP server.</li>
+            <li><strong>Option C (workaround): GitHub-webhook bridge.</strong> Routine opens a PR on a <code>claude/</code> branch. Your local <code>/loop</code> picks it up and writes to simple-mcp locally.</li>
+          </ul>
+          <p>Start with A. C is a decent backup if you don't want public exposure.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">P1 · 03</div>
+        <div class="tier-body">
+          <h4>Per-run budget enforcement</h4>
+          <p>The handbook recommends <code>maxIterations: 10, maxTokens: 50000</code> as defaults for client-driven runs. Right now clients pass these as config; simple-mcp should enforce them server-side so a buggy Claude Code session can't blow through your budget.</p>
+          <p>Add a <code>guardrails</code> column to the runs table, enforce on every <code>agent_record_step</code>:</p>
+          <pre><span class="c-lang">typescript</span><code>if (run.inputTokensUsed + delta &gt; run.guardrails.maxTokens) {
+  await updateRunStatus(runId, "cancelled", "budget_exceeded");
+  throw new Error("Run exceeded token budget");
+}</code></pre>
+        </div>
+      </div>
+
+      <h2>Important — add these second</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">P2 · 04</div>
+        <div class="tier-body">
+          <h4>Skill &amp; subagent registry</h4>
+          <p>Right now your admin panel shows executions but not the skills/subagents that ran them. Add tables + UI for:</p>
+          <ul>
+            <li>Skills discovered in <code>.claude/skills/</code> of connected repos — with description, last-used timestamp, and find-rate</li>
+            <li>Subagents discovered in <code>.claude/agents/</code> — same metadata</li>
+          </ul>
+          <p>This makes your admin panel the source of truth for "what capabilities does this workspace have?" — and surfaces dead skills/agents your Friday review needs to find.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">P2 · 05</div>
+        <div class="tier-body">
+          <h4>Hook event ingestion</h4>
+          <p>Your <code>record-to-mcp.sh</code> hook POSTs to <code>/api/agents/runs/:id/steps</code>. Formalize this:</p>
+          <pre><span class="c-lang">endpoints</span><code>POST /api/hooks/event
+  body: { eventName, tool, toolInput, toolOutput, runId?, sessionId }
+  → stores to hook_events table, correlates to run if runId present</code></pre>
+          <p>Then your admin panel can show a "session timeline" with every hook fire alongside every tool call and subagent. This is the full audit trail.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">P2 · 06</div>
+        <div class="tier-body">
+          <h4>Cost tracking with per-model breakdown</h4>
+          <p>You track input/output tokens. Add:</p>
+          <ul>
+            <li><code>model</code> column on each step (sonnet-4-6, opus-4-7, etc.)</li>
+            <li>Computed USD cost based on current per-model pricing</li>
+            <li>Daily/weekly/monthly rollups</li>
+            <li>Budget alerts (Slack webhook on 80% / 100% of monthly cap)</li>
+          </ul>
+          <p>This is what turns your admin panel from "dashboard" to "cost control."</p>
+        </div>
+      </div>
+
+      <h2>Nice to have — do these when you have time</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">P3 · 07</div>
+        <div class="tier-body">
+          <h4>MCP tool permission matrix per agent</h4>
+          <p>Right now agents declare <code>requiredTools</code>. Make it enforceable: at <code>agent_start_run</code>, the run's tool whitelist is stored. <code>agent_record_step</code> rejects tools not in the whitelist. Prevents agent-scope drift.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">P3 · 08</div>
+        <div class="tier-body">
+          <h4>Run replay and diff</h4>
+          <p>For any completed run, offer "replay with same config." Great for debugging agent logic. Plus "diff between runs" for comparing agent versions.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">P3 · 09</div>
+        <div class="tier-body">
+          <h4>Webhook fan-out</h4>
+          <p>When a run completes, fire a webhook. Subscribers (Slack, Linear, your CI) get a structured payload. This is how your simple-mcp becomes a node in a larger automation graph, not just a Claude-Code companion.</p>
+        </div>
+      </div>
+
+      <h2>What this roadmap adds up to</h2>
+
+      <blockquote>
+        Your simple-mcp becomes the observability, governance, and orchestration layer for all agentic work on this machine — Claude Code, Codex, and cloud routines — with one credential vault, one run history, one cost dashboard.
+        <cite>— the north star for simple-mcp v2</cite>
+      </blockquote>
+
+      <p>None of this requires rewriting what you have. These are additive — each module sits next to what's already there. Ship P1 in a week, P2 over the following month, P3 as time allows.</p>
+    </section>
+
+    <!-- ============ APPENDIX A: ROLLOUT ============ -->
+    <section class="chapter" id="ch-rollout">
+      <div class="chapter-eyebrow">Appendix A</div>
+      <h1>Week-by-week <em>rollout</em></h1>
+      <p class="lede">Don't build everything in one day. Here's the order that actually works, calibrated to let each layer's value become visible before adding the next.</p>
+
+      <ol class="steps">
+        <li>
+          <h4>Day 1 — Bootstrap</h4>
+          <p>AGENTS.md, CLAUDE.md, .mcp.json. Connect simple-mcp integrations in admin panel. Test that Claude Code can call simple-mcp tools. Don't build any hooks or subagents yet.</p>
+        </li>
+        <li>
+          <h4>Day 2 — Two hooks only</h4>
+          <p><code>auto-format.sh</code> and <code>typecheck-touched.sh</code>. These give the biggest quality-of-life jump. Feel the difference. Notice how Claude starts fixing its own typos without you saying anything.</p>
+        </li>
+        <li>
+          <h4>Day 3 — explorer and implementer subagents</h4>
+          <p>Use them on one real task. Notice your main context stays clean for the first time.</p>
+        </li>
+        <li>
+          <h4>Day 4 — PR review pipeline</h4>
+          <p>Four reviewer subagents + pr-review skill + review-orchestrator. Run it on a real PR. Compare wall-clock against what you'd have done manually.</p>
+        </li>
+        <li>
+          <h4>Day 5 — The rest of the hooks</h4>
+          <p>block-destructive, block-secrets, block-write-sql, record-to-mcp, finalize-mcp-run. Full workflow end-to-end.</p>
+        </li>
+        <li>
+          <h4>Day 6 — Workflow skills</h4>
+          <p>from-jira, open-pr, run-tests, compact-policy. These encode your team's PR process so Claude doesn't reinvent it.</p>
+        </li>
+        <li>
+          <h4>Day 7 — First review + simple-mcp P1 upgrade</h4>
+          <p>Open the admin panel. Any run over 50k tokens — figure out why. Tune subagent tool whitelists (tighter = cheaper). Trim CLAUDE.md of anything a hook now handles. Start on P1-01 from Chapter 16 — register the pr-review agent in simple-mcp.</p>
+        </li>
+        <li>
+          <h4>Week 2 — Automation layer</h4>
+          <p>Build your first <code>/loop</code> (triage-jira or check-ci). Then <code>/simplify</code> and <code>/batch</code> in daily use. Codex adversarial review on the first sensitive PR.</p>
+        </li>
+        <li>
+          <h4>Week 3 — Cloud routines</h4>
+          <p>Deploy simple-mcp to a reachable URL (P1-02). Set up one cloud routine — GitHub-webhook on PR-opened that runs /simplify. Biggest single lift to team velocity.</p>
+        </li>
+        <li>
+          <h4>Month 2 — simple-mcp P2</h4>
+          <p>Skill &amp; subagent registry, hook event ingestion, cost tracking. Your admin panel becomes a full observability dashboard.</p>
+        </li>
+      </ol>
+
+      <div class="callout ok">
+        <span class="callout-label">The real work</span>
+        After month one, you iterate. Every time you notice yourself repeating an instruction → make it a hook or skill. Every time an agent reads too many files → more subagents. Every time you want a second opinion → another reviewer. The goal isn't to have every hook and subagent from day one — it's to build the ones that solve real friction, and let your simple-mcp admin panel tell you where the friction is.
+      </div>
+    </section>
+
+    <!-- ============ APPENDIX B: PITFALLS ============ -->
+    <section class="chapter" id="ch-pitfalls">
+      <div class="chapter-eyebrow">Appendix B</div>
+      <h1>Pitfalls &amp; <em>gotchas</em></h1>
+      <p class="lede">The mistakes everyone makes on their first week. Save yourself the debugging time.</p>
+
+      <h2>Setup gotchas</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Hook scripts not executable</h4>
+          <p><code>chmod +x .claude/hooks/*.sh</code> — once, after creating hooks. Without it, hooks silently fail and you'll spend an hour wondering why nothing's firing. <strong>The single most common gotcha in all of agentic setup.</strong></p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Hook stdout polluted</h4>
+          <p>Don't <code>echo</code> debug info in hook scripts — it corrupts the JSON parser. Log to a file, or use stderr. Exit 0 only when your hook is 100% silent or outputs valid JSON.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Shell profile printing on startup</h4>
+          <p>If your <code>.zshrc</code> prints a welcome banner, that text will appear on hook stdout when scripts source your profile. Break the JSON parse, break the hook. Move banners behind an <code>[[ -o interactive ]]</code> guard.</p>
+        </div>
+      </div>
+
+      <h2>Subagent gotchas</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Subagent with inherited tools</h4>
+          <p>Omitting <code>tools:</code> in frontmatter inherits everything, including all MCP tools. Subagents then wander. Always whitelist.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Sequential dispatches when you wanted parallel</h4>
+          <p>If you don't explicitly request parallel, Claude often sequences subagent calls. Say "dispatch all four in parallel" in the orchestrator prompt. The <code>Task</code> tool accepts multiple invocations in a single call — that's how you get true parallelism.</p>
+        </div>
+      </div>
+
+      <h2>Skill gotchas</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Description is a summary</h4>
+          <p>"This skill opens pull requests" — Claude won't load it when you ask to open a PR. Write "Use when the user asks to open a pull request". Triggers, not summaries.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Skill folder without SKILL.md</h4>
+          <p>A directory with just scripts or templates will be silently ignored. Every skill needs SKILL.md at the root of its directory.</p>
+        </div>
+      </div>
+
+      <h2>simple-mcp gotchas</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Running agent_execute when you meant agent_start_run</h4>
+          <p>Double-bill. <code>agent_execute</code> runs its own Anthropic loop server-side. Use <code>agent_start_run</code> from within Claude Code to keep the reasoning in your existing session.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Stale MCP process after code changes</h4>
+          <p>MCP loads code at process start. After changing simple-mcp code, restart: in Claude Code type <code>/mcp</code>, select simple-mcp, restart. Or <code>pkill -f 'tsx.*cli.ts start'</code>.</p>
+        </div>
+      </div>
+
+      <h2>Workflow gotchas</h2>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Too much in CLAUDE.md</h4>
+          <p>Keep CLAUDE.md under 100 lines. Anything reusable → skill. Anything deterministic → hook. CLAUDE.md is advisory (followed ~70% of the time); overstuffing it dilutes the important rules.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">!</div>
+        <div class="tier-body">
+          <h4>Skipping Plan Mode on complex tasks</h4>
+          <p>Boris's rule: tasks with 3+ steps get a spec first. Skipping Plan Mode is how you end up with 40 changes you didn't want. Plan Mode first, auto-accept second.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ APPENDIX C: GLOSSARY ============ -->
+    <section class="chapter" id="ch-glossary">
+      <div class="chapter-eyebrow">Appendix C</div>
+      <h1>Glossary &amp; <em>quick ref</em></h1>
+      <p class="lede">Everything in one page. Keep this open as a sidebar while you work.</p>
+
+      <h2>Primitives</h2>
+      <dl class="glossary">
+        <div>
+          <dt>AGENTS.md</dt>
+          <dd>Universal instruction file. Codex, Cursor, Claude Code (via @-import) all read it. Under 150 lines.</dd>
+        </div>
+        <div>
+          <dt>CLAUDE.md</dt>
+          <dd>Claude-specific instruction file. Delegates to AGENTS.md. Under 100 lines.</dd>
+        </div>
+        <div>
+          <dt>.claude/agents/</dt>
+          <dd>Directory of subagent definitions. Markdown files with YAML frontmatter.</dd>
+        </div>
+        <div>
+          <dt>.claude/skills/</dt>
+          <dd>Directory of skills. Each skill is a subdirectory with SKILL.md.</dd>
+        </div>
+        <div>
+          <dt>.claude/hooks/</dt>
+          <dd>Shell scripts called by settings.json hook wiring.</dd>
+        </div>
+        <div>
+          <dt>.mcp.json</dt>
+          <dd>MCP server configuration. Points at simple-mcp for both Claude Code and Codex.</dd>
+        </div>
+      </dl>
+
+      <h2>Slash commands (2026)</h2>
+      <dl class="glossary">
+        <div>
+          <dt>/simplify</dt>
+          <dd>Built-in 3-reviewer pipeline. Run before every PR.</dd>
+        </div>
+        <div>
+          <dt>/batch</dt>
+          <dd>Fan out work across many worktree agents. For mass migrations.</dd>
+        </div>
+        <div>
+          <dt>/btw</dt>
+          <dd>Side query without interrupting main agent.</dd>
+        </div>
+        <div>
+          <dt>/loop</dt>
+          <dd>Run a prompt recurringly, up to 7 days.</dd>
+        </div>
+        <div>
+          <dt>/schedule</dt>
+          <dd>Creates cloud routines (as of Apr 14, 2026).</dd>
+        </div>
+        <div>
+          <dt>/teleport</dt>
+          <dd>Continue a cloud session on your local machine.</dd>
+        </div>
+        <div>
+          <dt>/branch</dt>
+          <dd>Fork the current session.</dd>
+        </div>
+        <div>
+          <dt>/compact</dt>
+          <dd>Compress conversation history. Uses your compact-policy skill.</dd>
+        </div>
+      </dl>
+
+      <h2>simple-mcp tools you'll use daily</h2>
+      <dl class="glossary">
+        <div>
+          <dt>agent_list</dt>
+          <dd>Enumerate pre-built agents + their readiness status.</dd>
+        </div>
+        <div>
+          <dt>agent_start_run</dt>
+          <dd>Start a tracked run. Returns runId + systemPrompt + requiredTools.</dd>
+        </div>
+        <div>
+          <dt>agent_record_step</dt>
+          <dd>Record a step inside a tracked run. Call after every meaningful tool call.</dd>
+        </div>
+        <div>
+          <dt>agent_update_task</dt>
+          <dd>Update task state within a tracked run.</dd>
+        </div>
+        <div>
+          <dt>agent_complete_run</dt>
+          <dd>Finalize a run with completed/failed/cancelled status.</dd>
+        </div>
+        <div>
+          <dt>jira_search_issues</dt>
+          <dd>JQL-based issue search.</dd>
+        </div>
+        <div>
+          <dt>github_get_pr_diff</dt>
+          <dd>Full PR diff — used by pr-review skill.</dd>
+        </div>
+        <div>
+          <dt>db_query</dt>
+          <dd>Read-only SQL (enforced by block-write-sql.sh hook).</dd>
+        </div>
+      </dl>
+
+      <h2>Environment variables</h2>
+      <dl class="glossary">
+        <div>
+          <dt>CLAUDE_CODE_SUBAGENT_MODEL</dt>
+          <dd>Default: claude-sonnet-4-6. ~60% cost reduction vs Opus.</dd>
+        </div>
+        <div>
+          <dt>CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS</dt>
+          <dd>Set to 1 to enable agent teams with cross-talk.</dd>
+        </div>
+        <div>
+          <dt>ANTHROPIC_API_KEY</dt>
+          <dd>Used by Claude Code and simple-mcp's server-side loop.</dd>
+        </div>
+        <div>
+          <dt>CLAUDE_MCP_ENCRYPTION_KEY</dt>
+          <dd>32+ char key for simple-mcp credential vault. Generate with openssl rand -hex 32.</dd>
+        </div>
+      </dl>
+
+      <h2>Hook events (most used)</h2>
+      <dl class="glossary">
+        <div>
+          <dt>PreToolUse</dt>
+          <dd>Before a tool call. Can deny/modify/ask.</dd>
+        </div>
+        <div>
+          <dt>PostToolUse</dt>
+          <dd>After a tool call completes. Can block with feedback.</dd>
+        </div>
+        <div>
+          <dt>SubagentStop</dt>
+          <dd>Subagent finished. Good for recording results.</dd>
+        </div>
+        <div>
+          <dt>Stop</dt>
+          <dd>Main session ending. Good for cleanup.</dd>
+        </div>
+        <div>
+          <dt>SessionStart</dt>
+          <dd>Session begins. Good for loading dynamic context.</dd>
+        </div>
+        <div>
+          <dt>UserPromptSubmit</dt>
+          <dd>Before Claude processes the user's message. Can modify.</dd>
+        </div>
+      </dl>
+
+      <hr class="section-break">
+
+      <h2>The shortest possible summary</h2>
+
+      <p class="pull-quote">
+        One AGENTS.md. One CLAUDE.md. One simple-mcp. Seven hooks. Five skills. Seven subagents. Four daily workflows. One Friday observability ritual. Update everything when corrections happen. Compound over weeks.
+      </p>
+
+      <p style="text-align: center; margin: 48px 0 12px; font-family: var(--sans); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3);">— end of handbook —</p>
+      <p style="text-align: center; font-family: var(--serif); font-style: italic; color: var(--ink-2); font-size: 16px;">Build the system. Feed it. Let it compound.</p>
+
+    </section>
+
+  </main>
+</div>
+
+<script>
+// Progress bar
+const progressFill = document.querySelector('.progress-fill');
+window.addEventListener('scroll', () => {
+  const h = document.documentElement;
+  const pct = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+  progressFill.style.width = pct + '%';
+});
+
+// Reveal chapters on scroll
+const chapters = document.querySelectorAll('.chapter');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in-view'); });
+}, { threshold: 0.05, rootMargin: '0px 0px -10% 0px' });
+chapters.forEach(c => observer.observe(c));
+
+// Active TOC highlight
+const tocLinks = document.querySelectorAll('aside.toc a');
+const tocObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      tocLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`aside.toc a[href="#${e.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px' });
+chapters.forEach(c => tocObserver.observe(c));
+
+// Mobile TOC toggle
+const toggleBtn = document.querySelector('.toggle-toc');
+const toc = document.querySelector('aside.toc');
+toggleBtn?.addEventListener('click', () => toc.classList.toggle('open'));
+tocLinks.forEach(link => {
+  link.addEventListener('click', () => { if (window.innerWidth < 900) toc.classList.remove('open'); });
+});
+</script>
+
+</body>
+</html>
