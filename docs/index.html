@@ -692,18 +692,40 @@ hr.section-break::before {
 /* ============ File tree ============ */
 .filetree {
   background: var(--paper-2);
-  padding: 20px 24px;
+  padding: 24px 28px;
   border-radius: 6px;
   font-family: var(--mono);
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.75;
   margin: 20px 0 28px;
   border: 1px solid var(--line);
   color: var(--ink-2);
+  overflow-x: auto;
+  white-space: pre;
 }
-.filetree .comment { color: var(--ink-3); font-style: italic; }
-.filetree .folder { color: var(--accent); font-weight: 500; }
+.filetree .comment {
+  color: var(--ink-3);
+  font-style: italic;
+  white-space: normal;
+}
+.filetree .folder { color: var(--accent); font-weight: 600; }
 .filetree .file { color: var(--ink); }
+.filetree .row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  white-space: pre;
+}
+.filetree .row .tree { flex-shrink: 0; }
+.filetree .row .comment {
+  flex-shrink: 0;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+  white-space: normal;
+  line-height: 1.4;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
 
 /* ============ Chapter-end navigation ============ */
 .chapter-nav {
@@ -1138,14 +1160,13 @@ hr.section-break::before {
       <h2>The project layout</h2>
       <p>Every project that wants to use simple-mcp gets this structure. The repo itself already follows it — treat <a href="https://github.com/heshansw/simple-mcp">heshansw/simple-mcp</a> as a working reference and copy the pattern to downstream projects:</p>
 
-      <div class="filetree">
-<span class="folder">your-project/</span>
-├── <span class="file">AGENTS.md</span>                   <span class="comment"># universal — Codex, Cursor, etc.</span>
-├── <span class="file">CLAUDE.md</span>                   <span class="comment"># thin wrapper → @AGENTS.md + extras</span>
-├── <span class="file">.mcp.json</span>                   <span class="comment"># points at simple-mcp</span>
+      <div class="filetree" style="white-space:pre;"><span class="folder">your-project/</span>
+├── <span class="file">AGENTS.md</span>
+├── <span class="file">CLAUDE.md</span>
+├── <span class="file">.mcp.json</span>
 ├── <span class="folder">.claude/</span>
-│   ├── <span class="file">settings.json</span>           <span class="comment"># hook wiring</span>
-│   ├── <span class="folder">agents/</span>                 <span class="comment"># subagent definitions</span>
+│   ├── <span class="file">settings.json</span>
+│   ├── <span class="folder">agents/</span>
 │   │   ├── <span class="file">explorer.md</span>
 │   │   ├── <span class="file">implementer.md</span>
 │   │   ├── <span class="file">security-reviewer.md</span>
@@ -1168,11 +1189,27 @@ hr.section-break::before {
 │       ├── <span class="file">typecheck-touched.sh</span>
 │       ├── <span class="file">record-to-mcp.sh</span>
 │       └── <span class="file">finalize-mcp-run.sh</span>
-├── <span class="folder">.codex/</span>                     <span class="comment"># already exists in simple-mcp</span>
+├── <span class="folder">.codex/</span>
 │   ├── <span class="folder">agents/</span>
 │   └── <span class="folder">skills/</span>
-└── <span class="folder">scripts/</span>                    <span class="comment"># project scripts skills call</span>
-      </div>
+└── <span class="folder">scripts/</span></div>
+
+      <table class="spec-table" style="margin-top: 0; font-size: 13px;">
+        <thead>
+          <tr><th style="width:160px;">Entry</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>AGENTS.md</td><td>Universal instructions — read by Codex, Cursor, and any other agent tool</td></tr>
+          <tr><td>CLAUDE.md</td><td>Claude-specific extras; delegates to AGENTS.md via <code>@</code>-import</td></tr>
+          <tr><td>.mcp.json</td><td>Points Claude Code and Codex at the simple-mcp server</td></tr>
+          <tr><td>settings.json</td><td>Hook wiring — maps lifecycle events to shell scripts</td></tr>
+          <tr><td>.claude/agents/</td><td>Subagent definitions with YAML frontmatter (tool whitelist, model, system prompt)</td></tr>
+          <tr><td>.claude/skills/</td><td>Skill directories — each has a SKILL.md loaded on demand</td></tr>
+          <tr><td>.claude/hooks/</td><td>Shell scripts called on PreToolUse, PostToolUse, Stop, SubagentStop</td></tr>
+          <tr><td>.codex/</td><td>Codex role definitions — already present in the simple-mcp repo as a working example</td></tr>
+          <tr><td>scripts/</td><td>Deterministic helpers called by skills and hooks (parsers, formatters, merge scripts)</td></tr>
+        </tbody>
+      </table>
 
       <h2>Step one: AGENTS.md</h2>
       <p>One universal instruction file. Under 150 lines. Commands in backticks. No preamble. Only rules that push agents off their defaults.</p>
@@ -1527,16 +1564,26 @@ exit 0</code></pre>
       <h2>Anatomy of a skill</h2>
       <p>A skill is a directory, not a file. The entry is <code>SKILL.md</code> with YAML frontmatter. Claude reads the <code>description</code> field to decide whether to load the skill. Supporting files — scripts, references, examples — are loaded only when the skill specifically needs them. This is <strong>progressive disclosure</strong>: a 500-line skill costs zero tokens until triggered.</p>
 
-      <div class="filetree">
-<span class="folder">.claude/skills/pr-review/</span>
-├── <span class="file">SKILL.md</span>              <span class="comment"># required — frontmatter + trigger logic</span>
+      <div class="filetree" style="white-space:pre;"><span class="folder">.claude/skills/pr-review/</span>
+├── <span class="file">SKILL.md</span>
 ├── <span class="folder">scripts/</span>
-│   └── <span class="file">merge-reviews.ts</span>  <span class="comment"># deterministic merge logic</span>
+│   └── <span class="file">merge-reviews.ts</span>
 ├── <span class="folder">references/</span>
-│   └── <span class="file">severity-rules.md</span> <span class="comment"># loaded only when Claude needs detail</span>
+│   └── <span class="file">severity-rules.md</span>
 └── <span class="folder">examples/</span>
-    └── <span class="file">good-report.md</span>    <span class="comment"># shows the expected output</span>
-      </div>
+    └── <span class="file">good-report.md</span></div>
+
+      <table class="spec-table" style="margin-top: 0; font-size: 13px;">
+        <thead>
+          <tr><th style="width:180px;">File</th><th>Role</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>SKILL.md</td><td>Required. YAML frontmatter with <code>description</code> (the trigger), plus steps and constraints.</td></tr>
+          <tr><td>scripts/</td><td>Deterministic helpers Claude calls explicitly — parsers, merge scripts, formatters.</td></tr>
+          <tr><td>references/</td><td>Supporting detail loaded only when the skill's steps specifically ask for it.</td></tr>
+          <tr><td>examples/</td><td>Expected output samples — helps Claude match the format without restating it in prose.</td></tr>
+        </tbody>
+      </table>
 
       <h2>The four rules for writing skills</h2>
 
