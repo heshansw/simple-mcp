@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>The Agentic Development Handbook — simple-mcp, Claude Code & Codex</title>
+<title>simple-mcp · Agentic Development Handbook</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&family=JetBrains+Mono:wght@400;500;600&family=Sohne:wght@400;500;600&display=swap" rel="stylesheet">
@@ -812,12 +812,12 @@ hr.section-break::before {
 
 <div class="app">
   <aside class="toc">
-    <div class="brand">The Agentic<br><em>Development</em> Handbook</div>
-    <div class="brand-sub">v1.0 · April 2026</div>
+    <div class="brand">simple-mcp<br><em>Agentic</em> Handbook</div>
+    <div class="brand-sub">reference doc · v1.0 · apr 2026</div>
 
     <h4>Part I — Foundations</h4>
     <ol>
-      <li><a href="#ch-intro">Why this handbook</a></li>
+      <li><a href="#ch-intro">About this handbook</a></li>
       <li><a href="#ch-mental-model">The mental model</a></li>
       <li><a href="#ch-architecture">The shared architecture</a></li>
     </ol>
@@ -845,15 +845,14 @@ hr.section-break::before {
       <li><a href="#ch-observability">Observability</a></li>
     </ol>
 
-    <h4>Part V — Your MCP</h4>
+    <h4>Part V — simple-mcp reference</h4>
     <ol>
-      <li><a href="#ch-mcp-now">Where simple-mcp stands</a></li>
-      <li><a href="#ch-mcp-upgrades">Modifications to add</a></li>
+      <li><a href="#ch-mcp-now">What simple-mcp provides</a></li>
+      <li><a href="#ch-mcp-upgrades">Proposed extensions</a></li>
     </ol>
 
     <h4>Appendix</h4>
     <ol>
-      <li><a href="#ch-rollout">Week-by-week rollout</a></li>
       <li><a href="#ch-pitfalls">Pitfalls &amp; gotchas</a></li>
       <li><a href="#ch-glossary">Glossary &amp; quick ref</a></li>
     </ol>
@@ -864,46 +863,54 @@ hr.section-break::before {
     <!-- ============ COVER ============ -->
     <section class="cover">
       <div class="cover-top">
-        <span>An agentic engineering handbook</span>
-        <span>edition 01 · apr 2026</span>
+        <span>Reference documentation · heshansw/simple-mcp</span>
+        <span>v1.0 · apr 2026</span>
       </div>
 
       <div class="cover-main">
         <div style="font-family: var(--sans); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 24px; font-weight: 600;">
-          A practical guide for Heshan
+          A reference guide for contributors and users
         </div>
-        <h1>The Agentic<br>Development<br><em>Handbook</em></h1>
+        <h1>simple-mcp<br>Agentic<br><em>Handbook</em></h1>
         <p class="cover-sub">
-          How to build software with Claude Code, Codex, and your own <code style="font-family: var(--mono); font-size: 18px; background: rgba(196,67,43,0.08); padding: 2px 8px; border-radius: 3px; color: var(--accent);">simple-mcp</code> — from the first hook to full cloud autonomy.
+          The conceptual model, operational patterns, and recommended workflows for using <code style="font-family: var(--mono); font-size: 18px; background: rgba(196,67,43,0.08); padding: 2px 8px; border-radius: 3px; color: var(--accent);">simple-mcp</code> with Claude Code and Codex — from first hook to full cloud autonomy.
         </p>
         <div class="cover-meta">
           <div class="cover-meta-item">Parts<strong>Five</strong></div>
           <div class="cover-meta-item">Chapters<strong>Sixteen</strong></div>
           <div class="cover-meta-item">Read time<strong>~90 min</strong></div>
-          <div class="cover-meta-item">Build time<strong>One week</strong></div>
+          <div class="cover-meta-item">Scope<strong>Patterns + repo</strong></div>
         </div>
       </div>
 
       <div class="cover-bottom">
         <span>Claude Code · Codex · simple-mcp</span>
-        <span>For compounding engineering systems</span>
+        <span>MIT licensed · contributions welcome</span>
       </div>
     </section>
 
     <!-- ============ CH 1: INTRO ============ -->
     <section class="chapter" id="ch-intro">
       <div class="chapter-eyebrow">Chapter one · Foundations</div>
-      <h1>Why this <em>handbook</em> exists</h1>
-      <p class="lede">Four conversations distilled into one reference. Everything from mental model to production deployment, written for someone who already has simple-mcp running and wants the rest of the system.</p>
+      <h1>About this <em>handbook</em></h1>
+      <p class="lede">A reference guide for using simple-mcp as the shared hub for agentic development. Explains the conceptual model, the recommended patterns around it, and the 2026 Claude Code and Codex features that make the whole thing work in production.</p>
 
-      <p>If you're reading this, you've already built the hardest thing: a local MCP server that both Claude Code and Codex can share. That's the architectural keystone most teams never get right. What follows is everything that goes around it — the hooks that make guarantees, the skills that encode expertise, the subagents that parallelize work, and the 2026 features (routines, <code>/simplify</code>, <code>/batch</code>, Auto Mode) that collapsed half of what we were planning to build into one-line commands.</p>
+      <p><a href="https://github.com/heshansw/simple-mcp">simple-mcp</a> is a local Model Context Protocol (MCP) server with a React 19 admin panel. It provides MCP tools for Jira and GitHub integrations, seven pre-built autonomous agents (Jira Triage, PR Review, Code Search, Sprint Planning, Local Repo Analysis, Confluence Reader, Database Explorer), an execution engine with guardrails, and both <code>.claude/</code> and <code>.codex/</code> configurations so Claude Code and Codex can share the same credentials, the same run history, and the same tool surface.</p>
 
-      <h2>What this covers</h2>
-      <p>This handbook compresses everything from our earlier conversations into a single, ordered read. Nothing is invented — it's the refined version of plans we walked through, with the April 2026 capabilities woven in.</p>
+      <p>This handbook covers what belongs around simple-mcp to make that architecture hum: the hooks that turn repetitive guidance into deterministic guarantees, the skills that encode recurring recipes, the subagents that parallelize and isolate work, and the 2026 Claude Code features (routines, <code>/simplify</code>, <code>/batch</code>, Auto Mode) that changed what's worth building by hand.</p>
+
+      <h2>Who this is for</h2>
+      <p>Anyone using or contributing to simple-mcp. Three audiences specifically:</p>
+      <ul>
+        <li><strong>New users</strong> who've cloned the repo and want a mental model before setting up integrations</li>
+        <li><strong>Daily users</strong> who want to go beyond <code>agent_execute</code> and build their own hook/skill/subagent stack around simple-mcp</li>
+        <li><strong>Contributors</strong> who want context on where simple-mcp fits in the agentic ecosystem and what extensions would matter next</li>
+      </ul>
 
       <div class="callout note">
         <span class="callout-label">How to read this</span>
-        Parts I–II are foundational and sequential. Part III adds the 2026 features on top. Part IV is daily operation. Part V is specifically what to change in <code>simple-mcp</code>. The appendix is reference material you'll come back to. If you're impatient, jump to Chapter 16 — the week-by-week rollout — and use the rest as reference.
+        Parts I–II are sequential and foundational. Part III adds 2026 platform features on top. Part IV is daily operation. Part V is a reference for simple-mcp itself — what it provides today and proposed extensions. The appendices are quick reference.<br><br>
+        The repo's <a href="https://github.com/heshansw/simple-mcp#quick-start">Quick Start in the README</a> covers actual setup (clone, install, configure integrations). This handbook covers what to build on top.
       </div>
 
       <h2>Three principles that run through every chapter</h2>
@@ -912,7 +919,7 @@ hr.section-break::before {
         <div class="tier-label">§ 01</div>
         <div class="tier-body">
           <h4>Orchestrator and workers, not one big brain</h4>
-          <p>Claude Code stays the orchestrator. Subagents, Codex sessions, and <code>simple-mcp</code> agents are workers. Workers have narrow scopes, their own context windows, and limited tool access. This is the only model that scales past one concurrent task.</p>
+          <p>A coding agent (Claude Code or Codex) stays the orchestrator. Subagents, second-model sessions, and simple-mcp's pre-built agents are workers. Workers have narrow scopes, their own context windows, and limited tool access. This is the only model that scales past one concurrent task.</p>
         </div>
       </div>
 
@@ -920,24 +927,24 @@ hr.section-break::before {
         <div class="tier-label">§ 02</div>
         <div class="tier-body">
           <h4>Context is the scarce resource — not tokens</h4>
-          <p>Token optimization is downstream of context discipline. A clean main-session context beats every other optimization. Subagents exist primarily to absorb noisy work (file reads, test output, exploration) so your main reasoning stays focused.</p>
+          <p>Token optimization is downstream of context discipline. A clean main-session context beats every other optimization. Subagents exist primarily to absorb noisy work (file reads, test output, exploration) so the main reasoning stays focused.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">§ 03</div>
         <div class="tier-body">
-          <h4>simple-mcp is a database, not a brain</h4>
-          <p>Use <code>agent_start_run</code> (client-driven tracked runs), not <code>agent_execute</code> (server-side loop). The reasoning happens in Claude Code or Codex. <code>simple-mcp</code> records what happened and holds your credentials. One Anthropic bill, full observability, no duplicate reasoning.</p>
+          <h4>simple-mcp can be a database or a brain — choose deliberately</h4>
+          <p>simple-mcp supports both modes. Server-side autonomous runs via <code>agent_execute</code> (the engine reasons with Anthropic, tracks progress). Client-driven tracked runs via <code>agent_start_run</code> / <code>agent_record_step</code> / <code>agent_complete_run</code> (Claude Code or Codex owns the reasoning loop, simple-mcp persists execution history). Use <code>agent_execute</code> for one-shot autonomy; use client-driven runs when the coding agent should stay in charge and you want unified observability without paying for two reasoning loops.</p>
         </div>
       </div>
 
       <blockquote>
         Every correction becomes a rule. Week one you correct ten things. Month three you correct zero.
-        <cite>— the compounding loop, after Boris Cherny</cite>
+        <cite>— the compounding loop</cite>
       </blockquote>
 
-      <p>That's the whole payoff. You spend an afternoon setting this up, then every hour of work afterwards is cheaper and cleaner than the last. The system compounds because you feed it.</p>
+      <p>That's the payoff of investing in the layers around simple-mcp. An afternoon of setup, then every hour of work afterwards is cheaper and cleaner than the last, because your rules accumulate in hooks and skills instead of evaporating when a session ends.</p>
     </section>
 
     <!-- ============ CH 2: MENTAL MODEL ============ -->
@@ -981,7 +988,7 @@ hr.section-break::before {
           </tr>
           <tr>
             <td>MCP tool</td>
-            <td>Function exposed by your MCP server. For you, this is anything in <code>simple-mcp</code>.</td>
+            <td>Function exposed by an MCP server. For simple-mcp users, this is any tool from the simple-mcp server — Jira search, GitHub PR diff, agent execution.</td>
             <td>Integration with external systems: GitHub, Jira, Confluence, database, filesystem.</td>
             <td>Schema cost in input</td>
           </tr>
@@ -1013,9 +1020,9 @@ hr.section-break::before {
       <h1>The shared <em>architecture</em></h1>
       <p class="lede">Four layers, one shared state. How Claude Code and Codex both plug into simple-mcp without duplicating anything.</p>
 
-      <p>Your <code>simple-mcp</code> solved the hardest architectural problem for you already: a single shared state layer that both Claude Code and Codex can write into. When Codex does a tracked run via <code>agent_start_run</code>, Claude Code can see it later via <code>agent_status</code>. Same credentials, same run history, same tool surface. Zero duplication.</p>
+      <p>simple-mcp resolves the hardest architectural problem in setups that want to run multiple coding agents: a single shared state layer that both Claude Code and Codex can write into. When Codex performs a tracked run via <code>agent_start_run</code>, Claude Code can see it later via <code>agent_status</code>. Same credentials, same run history, same tool surface. Zero duplication.</p>
 
-      <p>Everything in this handbook is built around preserving that property. Here's the four-layer architecture:</p>
+      <p>Everything in this handbook is built around preserving that property. The four-layer architecture:</p>
 
       <figure class="diagram">
         <svg width="100%" viewBox="0 0 720 540" xmlns="http://www.w3.org/2000/svg" style="font-family: 'Sohne', sans-serif;">
@@ -1027,7 +1034,7 @@ hr.section-break::before {
 
           <text x="20" y="30" font-size="11" fill="#6b6b66" letter-spacing="1.5">LAYER 01 — HUMAN INTERFACE</text>
           <rect x="20" y="40" width="680" height="52" rx="4" fill="#ebe6d7" stroke="#3d3d3a" stroke-width="0.5"/>
-          <text x="360" y="64" text-anchor="middle" font-size="15" fill="#1a1a1a" font-weight="600">You — terminal, IDE, mobile, admin panel</text>
+          <text x="360" y="64" text-anchor="middle" font-size="15" fill="#1a1a1a" font-weight="600">User — terminal, IDE, mobile, admin panel</text>
           <text x="360" y="82" text-anchor="middle" font-size="12" fill="#6b6b66" font-style="italic">goals in natural language, plan approvals, PR reviews</text>
 
           <text x="20" y="122" font-size="11" fill="#6b6b66" letter-spacing="1.5">LAYER 02 — REASONING AGENTS (PARALLEL)</text>
@@ -1105,20 +1112,20 @@ hr.section-break::before {
       <h2>What each layer owns</h2>
 
       <h3>Layer 1 — Human interface</h3>
-      <p>You. In the terminal, in Claude Desktop, on mobile via the Claude iOS app, or in <code>simple-mcp</code>'s admin panel at <code>localhost:3100</code>. You issue goals in natural language and approve plans. Everything below this layer is in service of turning your words into verified, committed code.</p>
+      <p>The user. In the terminal via Claude Code or Codex CLI, in Claude Desktop, on mobile via the Claude app, or in simple-mcp's React admin panel at <code>localhost:3100</code>. Goals get issued in natural language; plans get approved. Everything below this layer is in service of turning those words into verified, committed code.</p>
 
       <h3>Layer 2 — Reasoning agents</h3>
-      <p>Claude Code and Codex run in parallel. Claude Code reads <code>CLAUDE.md</code> and <code>.claude/</code>, Codex reads <code>AGENTS.md</code> and <code>.codex/</code>. The universal <code>AGENTS.md</code> is the single source of truth — <code>CLAUDE.md</code> just references it and adds Claude-specific extras.</p>
+      <p>Claude Code and Codex can run in parallel. Claude Code reads <code>CLAUDE.md</code> and <code>.claude/</code>; Codex reads <code>AGENTS.md</code> and <code>.codex/</code>. The universal <code>AGENTS.md</code> is the single source of truth — <code>CLAUDE.md</code> references it and adds Claude-specific extras. Both are already present in the simple-mcp repo as working examples.</p>
 
       <h3>Layer 3 — The shared hub</h3>
-      <p>Your <code>simple-mcp</code>. It's not a third reasoning agent — it's the database that records what the reasoning agents did, plus the vault that holds credentials for the integrations they use. The admin panel is your unified view.</p>
+      <p>simple-mcp itself. Not a third reasoning agent — a shared substrate. It records what the reasoning agents did (runs, steps, tasks, tokens), holds the encrypted credentials for integrations they use, and exposes a pre-built autonomous execution engine for workflows that should run without ongoing supervision. The React admin panel at <code>localhost:3100</code> is the unified view.</p>
 
       <h3>Layer 4 — External services</h3>
-      <p>GitHub, Jira, Confluence, databases, local filesystems. Every one of these has credentials stored <em>once</em> in <code>simple-mcp</code>. Neither Claude Code nor Codex knows about GitHub tokens; they call MCP tools that call the services.</p>
+      <p>GitHub, Jira, Confluence, databases, local filesystems. Credentials for each are stored <em>once</em> in simple-mcp, AES-256-CBC encrypted at rest. Neither Claude Code nor Codex ever handles raw tokens — they call MCP tools that call the services.</p>
 
       <div class="callout ok">
         <span class="callout-label">Architectural advantage</span>
-        A team member running Codex on the same machine sees the same runs in the admin panel as you running Claude Code. When someone asks "what did the deployment agent do yesterday?", there's one place to look.
+        A second user on the same machine running Codex sees the same runs in the admin panel as the first user running Claude Code. When someone asks "what did the deployment agent do yesterday?", there's one place to look.
       </div>
     </section>
 
@@ -1129,7 +1136,7 @@ hr.section-break::before {
       <p class="lede">The files, folders, and environment variables. Set once, used forever. If you do nothing else in this handbook, do this chapter.</p>
 
       <h2>The project layout</h2>
-      <p>Every project you work in gets this structure. You already have most of it in <code>simple-mcp</code> itself — copy the pattern to every other project:</p>
+      <p>Every project that wants to use simple-mcp gets this structure. The repo itself already follows it — treat <a href="https://github.com/heshansw/simple-mcp">heshansw/simple-mcp</a> as a working reference and copy the pattern to downstream projects:</p>
 
       <div class="filetree">
 <span class="folder">your-project/</span>
@@ -1156,7 +1163,7 @@ hr.section-break::before {
 │   └── <span class="folder">hooks/</span>
 │       ├── <span class="file">block-destructive.sh</span>
 │       ├── <span class="file">block-secrets.sh</span>
-│       ├── <span class="file">block-write-sql.sh</span>
+│       ├── <span class="file">confirm-mutations.sh</span>
 │       ├── <span class="file">auto-format.sh</span>
 │       ├── <span class="file">typecheck-touched.sh</span>
 │       ├── <span class="file">record-to-mcp.sh</span>
@@ -1318,9 +1325,9 @@ export CLAUDE_MCP_ENCRYPTION_KEY="$(openssl rand -hex 32)"</code></pre>
           "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-secrets.sh" }]
       },
       {
-        "matcher": "mcp__simple-mcp__db_query",
+        "matcher": "mcp__simple-mcp__jira_create_issue|mcp__simple-mcp__jira_transition_issue|mcp__simple-mcp__github_review_pr",
         "hooks": [{ "type": "command",
-          "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/block-write-sql.sh" }]
+          "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/confirm-mutations.sh" }]
       }
     ],
     "PostToolUse": [
@@ -1401,27 +1408,26 @@ if echo "$CONTENT" | grep -qE '(sk-ant-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{30,}|AKI
 fi
 exit 0</code></pre>
 
-      <h3>3 · block-write-sql.sh — the MCP-specific guardrail</h3>
-      <p>Matches only <code>mcp__simple-mcp__db_query</code>. Allows read-only SQL, blocks writes. This is the pattern — <em>hooks can guard specific MCP tools by name.</em></p>
+      <h3>3 · confirm-mutations.sh — the MCP-specific guardrail</h3>
+      <p>Matches simple-mcp tools that mutate external state: <code>jira_create_issue</code>, <code>jira_transition_issue</code>, <code>github_review_pr</code>. Forces explicit confirmation by asking the user. This is the pattern — <em>hooks can guard specific MCP tools by name.</em></p>
 
       <pre><span class="c-lang">bash</span><code>#!/bin/bash
 set -euo pipefail
 INPUT=$(cat)
-SQL=$(echo "$INPUT" | jq -r '.tool_input.sql // ""')
-SQL_UPPER=$(echo "$SQL" | tr '[:lower:]' '[:upper:]' | tr -s ' ')
+TOOL=$(echo "$INPUT" | jq -r '.tool_name // ""')
+ARGS=$(echo "$INPUT" | jq -c '.tool_input // {}')
 
-if echo "$SQL_UPPER" | grep -qE '^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)'; then
-  exit 0
-fi
-
-jq -n --arg sql "$SQL" '{
+# Ask for user confirmation on any external mutation
+jq -n --arg tool "$TOOL" --arg args "$ARGS" '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
-    permissionDecision: "deny",
-    permissionDecisionReason: ("Write SQL blocked. Only SELECT/SHOW/DESCRIBE/EXPLAIN allowed. Got: " + $sql)
+    permissionDecision: "ask",
+    permissionDecisionReason: ("About to mutate external state via " + $tool + ". Args: " + $args)
   }
 }'
 exit 0</code></pre>
+
+      <p>The pattern generalizes. Any simple-mcp tool that writes to an external system — creating a Jira issue, transitioning a workflow, posting a GitHub review — is a candidate for a per-tool matcher with user confirmation. Read tools (<code>jira_search_issues</code>, <code>github_list_prs</code>, <code>github_get_pr_diff</code>) don't need this.</p>
 
       <h3>4 · auto-format.sh — silent housekeeping</h3>
       <p>Runs Prettier or Ruff after every edit. Deterministic, never asks.</p>
@@ -1464,7 +1470,12 @@ fi
 exit 0</code></pre>
 
       <h3>6 · record-to-mcp.sh — subagent results into simple-mcp</h3>
-      <p>Every time a subagent finishes, it gets recorded as an <code>agent_record_step</code> in your <code>simple-mcp</code> admin panel. Unified observability.</p>
+      <p>When a subagent finishes, its result is persisted as a step on the current simple-mcp tracked run, so the admin panel shows a full timeline across sessions.</p>
+
+      <div class="callout warn">
+        <span class="callout-label">Depends on a proposed extension</span>
+        As of simple-mcp v0.4, the <code>agent_record_step</code> capability is exposed as an MCP tool but not as a plain HTTP endpoint. Using this hook as written requires the HTTP hook-ingestion endpoint described in Chapter 16 (proposed extension P2·05). Until that ships, the same effect can be achieved by having the subagent itself call the MCP tool as part of its output.
+      </div>
 
       <pre><span class="c-lang">bash</span><code>#!/bin/bash
 set -euo pipefail
@@ -1478,6 +1489,7 @@ RUN_FILE="/tmp/claude-mcp-run-id.txt"
 RUN_ID=$(cat "$RUN_FILE")
 SUMMARY=$(echo "$SUBAGENT_OUTPUT" | head -c 2000)
 
+# Requires simple-mcp hook-ingestion endpoint (Chapter 16, P2·05)
 curl -s -X POST "http://localhost:3101/api/agents/runs/$RUN_ID/steps" \
   -H "Content-Type: application/json" \
   -d "$(jq -n --arg name "$SUBAGENT_NAME" --arg summary "$SUMMARY" \
@@ -1731,22 +1743,31 @@ Max 40 tool calls. If you're not close to done, something is wrong.</code></pre>
 
       <pre><span class="c-lang">.claude/agents/mcp-operator.md</span><code>---
 name: mcp-operator
-description: Runs simple-mcp tracked agent runs for any task requiring Jira/GitHub/Confluence/DB integration. Use whenever work crosses external services. Persists the run so it's visible in the admin panel.
-tools: mcp__simple-mcp__agent_list, mcp__simple-mcp__agent_start_run, mcp__simple-mcp__agent_record_step, mcp__simple-mcp__agent_update_task, mcp__simple-mcp__agent_complete_run, mcp__simple-mcp__jira_search_issues, mcp__simple-mcp__jira_create_issue, mcp__simple-mcp__github_list_prs, mcp__simple-mcp__github_get_pr_diff, mcp__simple-mcp__confluence_search_pages, mcp__simple-mcp__db_query, mcp__simple-mcp__fs_workspace_search
+description: Runs simple-mcp tracked agent runs for any task crossing external services (Jira, GitHub) or that maps to a pre-built simple-mcp agent (confluence-reader, database-explorer, local-repo-analysis). Persists the run so it's visible in the admin panel.
+tools: mcp__simple-mcp__agent_list, mcp__simple-mcp__agent_start_run, mcp__simple-mcp__agent_record_step, mcp__simple-mcp__agent_update_task, mcp__simple-mcp__agent_complete_run, mcp__simple-mcp__agent_execute, mcp__simple-mcp__agent_status, mcp__simple-mcp__jira_search_issues, mcp__simple-mcp__jira_create_issue, mcp__simple-mcp__jira_transition_issue, mcp__simple-mcp__github_list_prs, mcp__simple-mcp__github_get_my_prs, mcp__simple-mcp__github_get_pr_diff, mcp__simple-mcp__github_search_code, mcp__simple-mcp__github_review_pr
 model: sonnet
 ---
 
 You drive simple-mcp tracked runs. Workflow for every task:
 
 1. agent_list — find the best pre-built agent for this goal
-2. agent_start_run with that agent + goal → get systemPrompt, requiredTools, tasks
-3. Execute work using ONLY the tools in requiredTools
-4. agent_record_step after every meaningful tool call
-5. agent_update_task for each planned task as you complete it
-6. agent_complete_run with the final result
+2. Choose the mode:
+   - Direct MCP tool calls (jira_*, github_*) when the task is a simple
+     lookup or mutation
+   - agent_start_run for client-driven tracked reasoning (you stay in charge)
+   - agent_execute for handing off fully autonomous work to simple-mcp's
+     server-side engine (e.g., confluence-reader, database-explorer,
+     local-repo-analysis — these run entirely inside simple-mcp)
+3. For client-driven runs:
+   a. agent_start_run with agentId + goal → get systemPrompt, requiredTools
+   b. Execute work using ONLY the tools in requiredTools
+   c. agent_record_step after every meaningful tool call
+   d. agent_update_task for each planned task as you complete it
+   e. agent_complete_run with the final result
 
-Never skip tracking calls — the whole point is that every run is visible
-in the admin panel at localhost:3100 and survives across sessions.</code></pre>
+Never skip tracking calls on client-driven runs — the whole point is that
+every run is visible in the admin panel at localhost:3100 and survives
+across sessions.</code></pre>
 
       <p>Four more subagents — <code>security-reviewer</code>, <code>correctness-reviewer</code>, <code>performance-reviewer</code>, <code>test-reviewer</code> — make up the PR review team. We cover those in the next chapter.</p>
     </section>
@@ -1991,7 +2012,7 @@ for (const r of reviews) console.log(`**${r.reviewer}**: ${r.summary}`);</code><
 
       <div class="callout ok">
         <span class="callout-label">Why this beats /simplify alone</span>
-        <code>/simplify</code> is Anthropic's built-in 3-reviewer pipeline (routine issues, no configuration). Your custom 4-reviewer pipeline is for sensitive domains — auth, payments, PII, DB writes — where you want specialists with Opus-level judgment and structured output your CI can parse. Use <code>/simplify</code> as the default and the custom pipeline on demand. More on this in the next chapter.
+        <code>/simplify</code> is Anthropic's built-in 3-reviewer pipeline (routine issues, no configuration). The custom 4-reviewer pipeline described here is for sensitive domains — auth, payments, PII, data mutations — where specialists with Opus-level judgment and structured JSON output (parseable by CI) are worth the extra cost. Use <code>/simplify</code> as the default; use the custom pipeline on demand.
       </div>
     </section>
 
@@ -2309,8 +2330,8 @@ codex "adversarial review of this branch — try to break this code"</code></pre
         </li>
         <li>
           <h4>Delegate data retrieval</h4>
-          <p><em>"Use mcp-operator to query the last 50 failed orders for user 4827 and group by error"</em></p>
-          <p>db_query hook ensures read-only. mcp-operator returns the failure pattern.</p>
+          <p><em>"Use mcp-operator to run the database-explorer agent for the last 50 failed orders for user 4827, grouped by error"</em></p>
+          <p>mcp-operator calls <code>agent_execute</code> with <code>database-explorer</code>. simple-mcp's engine runs the schema inspection and queries, returns the failure pattern. The run appears in the admin panel.</p>
         </li>
         <li>
           <h4>Form hypothesis in main session</h4>
@@ -2431,8 +2452,8 @@ codex "adversarial review of this branch — try to break this code"</code></pre
         </li>
       </ol>
 
-      <h2>Your Friday ritual</h2>
-      <p>15 minutes. Every Friday. Open <code>localhost:3100/agent-executions</code> and look for:</p>
+      <h2>A recurring review ritual</h2>
+      <p>15 minutes, weekly. Open <code>localhost:3100/agent-executions</code> and look for:</p>
 
       <ul>
         <li>Runs over 100k tokens — investigate why</li>
@@ -2442,7 +2463,7 @@ codex "adversarial review of this branch — try to break this code"</code></pre
       </ul>
 
       <h2>Governance — hard limits</h2>
-      <p>Set these defaults for any <code>agent_start_run</code> from Claude Code:</p>
+      <p>Recommended defaults for any <code>agent_start_run</code> from Claude Code:</p>
 
       <pre><span class="c-lang">call args</span><code>{
   "config": {
@@ -2452,169 +2473,211 @@ codex "adversarial review of this branch — try to break this code"</code></pre
   }
 }</code></pre>
 
-      <p>Your current defaults in <code>simple-mcp</code> (25 / 100 / 200k) are fine for server-side <code>agent_execute</code> but too loose for client-driven runs. Tighter defaults catch runaway loops faster.</p>
+      <p>simple-mcp's built-in defaults (25 / 100 / 200k) are appropriate for server-side <code>agent_execute</code> runs, where the engine benefits from headroom to plan and reflect. Tighter limits for client-driven runs catch runaway loops faster — Claude Code has its own reasoning budget; simple-mcp just tracks the execution.</p>
 
-      <h2>Your simple-mcp admin panel as unified dashboard</h2>
-      <p>You already have this. Use it intentionally:</p>
+      <h2>The admin panel as unified dashboard</h2>
+      <p>Pages worth opening regularly:</p>
       <ul>
         <li><code>/agent-executions</code> — every tracked run. Iterations, tool calls, tokens, duration. Catches runaway loops.</li>
-        <li><code>/databases</code> — your token consumption log. Review weekly; anything &gt;100k tokens warrants investigation.</li>
+        <li><code>/databases</code> — token consumption log. Review weekly; anything &gt;100k tokens warrants investigation.</li>
         <li>Filter by agent — which pre-built agents are actually being used? Deprecate the dead ones.</li>
       </ul>
 
       <div class="callout ok">
         <span class="callout-label">The power of one dashboard</span>
-        Everything — Claude Code sessions, Codex runs, cloud routines (once bridged), subagent calls — flows into one admin panel. When someone asks "what did we do last Tuesday with the payment module?" there's one place to look. This single-pane-of-glass is worth more than any individual feature.
+        Everything — Claude Code sessions, Codex runs, cloud routines (once bridged per Chapter 16 P1·02), subagent calls — flows into one admin panel. When someone asks "what did the deploy agent do last Tuesday?", there's one place to look. This single-pane-of-glass is worth more than any individual feature.
       </div>
     </section>
 
     <!-- ============ CH 15: simple-mcp current state ============ -->
     <section class="chapter" id="ch-mcp-now">
-      <div class="chapter-eyebrow">Chapter fifteen · Your MCP</div>
-      <h1>Where <em>simple-mcp</em> stands</h1>
-      <p class="lede">An honest assessment of what your MCP already does well and where the gaps are.</p>
+      <div class="chapter-eyebrow">Chapter fifteen · simple-mcp reference</div>
+      <h1>What <em>simple-mcp</em> provides</h1>
+      <p class="lede">A feature reference for the current state of the repo. Every capability listed below is shipping as of v0.4 and backs the patterns described earlier in this handbook.</p>
 
-      <h2>What you already have (and got right)</h2>
+      <h2>Core capabilities</h2>
 
       <div class="tier-box">
         <div class="tier-label">✓ 01</div>
         <div class="tier-body">
-          <h4>Tracked agent runs</h4>
-          <p><code>agent_start_run</code> / <code>agent_record_step</code> / <code>agent_update_task</code> / <code>agent_complete_run</code>. Client-driven, observable, persisted. This is the architectural keystone.</p>
+          <h4>MCP tool surface</h4>
+          <p>Jira: <code>jira_search_issues</code>, <code>jira_create_issue</code>, <code>jira_transition_issue</code>. GitHub: <code>github_list_prs</code>, <code>github_get_my_prs</code>, <code>github_review_pr</code>, <code>github_get_pr_diff</code>, <code>github_search_code</code>. Agents: <code>agent_execute</code>, <code>agent_status</code>, <code>agent_list</code>. System: <code>health_check</code>, <code>list_connections</code>. Accessible from any MCP-compatible client over stdio or SSE.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">✓ 02</div>
         <div class="tier-body">
-          <h4>Seven pre-built agents with delegation</h4>
-          <p>jira-triage, pr-review, code-search, sprint-planning, local-repo-analysis, confluence-reader, database-explorer. Depth-2 delegation, guardrails built in.</p>
+          <h4>Seven pre-built autonomous agents</h4>
+          <p><code>jira-triage</code>, <code>pr-review</code>, <code>code-search</code>, <code>sprint-planning</code>, <code>local-repo-analysis</code>, <code>confluence-reader</code>, <code>database-explorer</code>. Each agent has declared dependencies (integrations it needs), a system prompt, and a curated tool list. Dependency readiness is exposed through <code>agent_list</code> and visible in the admin panel.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">✓ 03</div>
         <div class="tier-body">
-          <h4>Admin panel with execution detail</h4>
-          <p>Visual run list, detail pages with auto-refresh, cancel for active runs. This is your unified dashboard.</p>
+          <h4>Dual-mode execution</h4>
+          <p>Server-side autonomous via <code>agent_execute</code>: simple-mcp reasons with Anthropic, plans tasks, invokes tools, reflects, self-corrects until completion or a guardrail fires. Client-driven tracked runs via <code>agent_start_run</code> / <code>agent_record_step</code> / <code>agent_update_task</code> / <code>agent_complete_run</code>: Claude Code or Codex owns the reasoning, simple-mcp persists execution history without charging a second reasoning loop.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">✓ 04</div>
         <div class="tier-body">
-          <h4>Encrypted credential vault</h4>
-          <p>AES-256-CBC. One place for GitHub, Jira, Confluence, DB credentials. Shared by both Claude Code and Codex.</p>
+          <h4>Guardrails on every execution</h4>
+          <p>Max iterations (default 25), max tool calls (default 100), max tokens (default 200,000), 5-minute timeout, cycle detection on 3 identical calls, delegation depth cap of 2. All configurable per-run via the <code>config</code> parameter.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">✓ 05</div>
         <div class="tier-body">
-          <h4>Both .claude/ and .codex/ configs</h4>
-          <p>Three Codex roles (BA, senior dev, reviewer). The shared-instruction architecture is already set up correctly.</p>
+          <h4>React 19 admin panel</h4>
+          <p>Connection management, PR dashboard, review history, agent configuration, and the execution monitoring UI with auto-refreshing detail pages, cancel buttons for active runs, and full metrics (iterations, tool calls, input/output tokens, duration). TanStack Router + TanStack Query; file-based routing; type-safe API client.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">✓ 06</div>
         <div class="tier-body">
-          <h4>Release pipeline</h4>
-          <p>release-please + conventional commits + automated CHANGELOG. Your own PR merges trigger releases. This is how a well-run open-source project ships.</p>
+          <h4>Encrypted credential vault</h4>
+          <p>AES-256-CBC encryption for all stored credentials (Jira email + API token, GitHub PAT). One vault serves both Claude Code and Codex — the same integrations are accessible from either client without re-configuration.</p>
         </div>
       </div>
 
-      <h2>Gaps, ordered by priority for the agentic workflow we've designed</h2>
+      <div class="tier-box">
+        <div class="tier-label">✓ 07</div>
+        <div class="tier-body">
+          <h4>Both <code>.claude/</code> and <code>.codex/</code> configurations</h4>
+          <p>The repo ships with a universal <code>AGENTS.md</code> and <code>CLAUDE.md</code>. Three Codex roles live in <code>.codex/agents/</code>: <code>business-analyst</code> for requirements, <code>senior-fullstack-typescript-developer</code> for implementation, <code>typescript-pr-reviewer</code> for review. Matching skills under <code>.codex/skills/</code>. This is a working reference implementation of the shared-instruction pattern described in Chapter 4.</p>
+        </div>
+      </div>
 
-      <p>These aren't criticisms — they're the delta between "great local MCP" and "the hub for everything in this handbook." Nine concrete modifications in the next chapter.</p>
+      <div class="tier-box">
+        <div class="tier-label">✓ 08</div>
+        <div class="tier-body">
+          <h4>HTTP API for external callers</h4>
+          <p>Hono server on port 3101 exposes <code>POST /api/agents/execute</code>, <code>GET /api/agents/runs</code>, <code>GET /api/agents/runs/:runId</code>, <code>POST /api/agents/runs/:runId/cancel</code>. Useful for scripting, CI integration, and the automation tiers described in Chapter 10.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">✓ 09</div>
+        <div class="tier-body">
+          <h4>Inter-agent delegation</h4>
+          <p>Agents can delegate sub-tasks to other agents via an internal <code>delegate_to_agent</code> tool. Max depth 2. Parent context is summarised to 2000 characters when passed to the child. Both parent and child runs are persisted and visible in the admin panel — full lineage.</p>
+        </div>
+      </div>
+
+      <div class="tier-box">
+        <div class="tier-label">✓ 10</div>
+        <div class="tier-body">
+          <h4>Release pipeline</h4>
+          <p><code>release-please</code> + conventional commits + automated CHANGELOG. PR merges to <code>main</code> trigger CI (<code>pnpm typecheck</code>, <code>pnpm test</code>, <code>pnpm build</code>). A release PR is opened and updated by the workflow; merging it bumps the version, tags, and publishes a GitHub Release.</p>
+        </div>
+      </div>
+
+      <h2>Proposed extensions</h2>
+
+      <p>The next chapter collects extensions discussed over the design of this handbook. They are <em>proposals</em>, not bug reports — the current repo is usable as-is for every workflow described in Parts I–IV. The extensions address specific scenarios (deployed cloud routines, machine-wide cost tracking, discoverability of workspace skills) that become interesting once teams adopt simple-mcp beyond a single developer's laptop.</p>
     </section>
 
     <!-- ============ CH 16: simple-mcp upgrades ============ -->
     <section class="chapter" id="ch-mcp-upgrades">
-      <div class="chapter-eyebrow">Chapter sixteen · Your MCP</div>
-      <h1>Modifications to <em>add</em></h1>
-      <p class="lede">Nine concrete upgrades to simple-mcp. First three are critical for the pipelines in this handbook. Last six are incremental improvements.</p>
+      <div class="chapter-eyebrow">Chapter sixteen · simple-mcp reference</div>
+      <h1>Proposed <em>extensions</em></h1>
+      <p class="lede">Eight proposed extensions to simple-mcp. They address specific scenarios that become interesting once the workflows in this handbook are adopted at team or production scale. Contributions welcome — see the repo's issues tab.</p>
 
-      <h2>Critical — do these first</h2>
+      <div class="callout note">
+        <span class="callout-label">Scope</span>
+        These are design proposals, not committed roadmap items. Priority labels (P1/P2/P3) reflect impact on the workflows in this handbook, not project priorities. The existing <code>pr-review</code> and six sibling agents are fully functional today — these extensions are about <em>additional</em> capabilities.
+      </div>
+
+      <h2>P1 — Highest impact on handbook workflows</h2>
 
       <div class="tier-box">
         <div class="tier-label">P1 · 01</div>
         <div class="tier-body">
-          <h4>Add a pr-review agent to the registry</h4>
-          <p>The multi-agent PR review pipeline in Chapter 8 calls <code>agent_start_run</code> with <code>agentId: "pr-review"</code>. You need to register it in your agent registry.</p>
-          <pre><span class="c-lang">src/backend/agents/registry.ts</span><code>{
-  id: "pr-review",
-  name: "Multi-agent PR review",
-  description: "Parallel security, performance, correctness, and test reviewers",
+          <h4>Register additional pre-built agents</h4>
+          <p>The seven existing agents cover common workflows. Two additions would complete the handbook's pipeline coverage:</p>
+          <pre><span class="c-lang">src/backend/agents/registry.ts</span><code>// For /batch-style mass-migration orchestration
+{
+  id: "multi-batch",
+  name: "Multi-batch orchestrator",
+  description: "Fans out a pattern-based change across many files or repos",
   requiredIntegrations: ["github"],
-  systemPrompt: "See .claude/skills/pr-review/SKILL.md",
-  requiredTools: [
-    "github_get_pr_diff",
-    "agent_record_step",
-    "agent_complete_run"
-  ],
-  tasks: [
-    { id: "fetch-diff", title: "Fetch PR diff" },
-    { id: "dispatch-reviewers", title: "Dispatch 4 parallel reviewers" },
-    { id: "merge-findings", title: "Merge and deduplicate findings" },
-    { id: "report", title: "Present to user" }
-  ]
+  systemPrompt: "Orchestrate N parallel sub-runs via delegate_to_agent...",
+  requiredTools: ["github_search_code", "agent_execute"]
+}
+
+// For scheduled security scans (cloud-routine friendly)
+{
+  id: "nightly-security",
+  name: "Nightly security scan",
+  description: "Scans dependencies and recent changes for CVEs + secrets",
+  requiredIntegrations: ["github"],
+  systemPrompt: "Check package manifests for CVEs; open claude/sec-&lt;date&gt; PR on findings",
+  requiredTools: ["github_search_code", "github_list_prs"]
 }</code></pre>
-          <p>Also add agents for <code>multi-batch</code> (for /batch orchestration) and <code>nightly-security</code> (for the cloud routine).</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">P1 · 02</div>
         <div class="tier-body">
-          <h4>Remote-accessible deployment mode for routines</h4>
-          <p>Routines run on Anthropic cloud. They can't reach <code>localhost:3101</code>. Three options, pick one:</p>
+          <h4>Remote-accessible deployment mode</h4>
+          <p>As of v0.4, simple-mcp binds to <code>localhost</code>. Claude Code routines and any other cloud-hosted agent can't reach it. Three viable approaches:</p>
           <ul>
-            <li><strong>Option A (easiest): Bearer-token HTTP endpoint.</strong> Add a <code>CLAUDE_MCP_PUBLIC_URL</code> env var and a <code>CLAUDE_MCP_API_TOKEN</code>. Deploy to Fly.io or Render. Routines POST to <code>$PUBLIC_URL/api/agents/runs/:id/steps</code> with <code>Authorization: Bearer $TOKEN</code>.</li>
-            <li><strong>Option B (middleweight): HTTPS MCP transport.</strong> Add <code>CLAUDE_MCP_TRANSPORT=http</code> support with auth. Routines connect as a real MCP server.</li>
-            <li><strong>Option C (workaround): GitHub-webhook bridge.</strong> Routine opens a PR on a <code>claude/</code> branch. Your local <code>/loop</code> picks it up and writes to simple-mcp locally.</li>
+            <li><strong>Option A (easiest): Bearer-token HTTP endpoint.</strong> Add <code>CLAUDE_MCP_PUBLIC_URL</code> and <code>CLAUDE_MCP_API_TOKEN</code> env vars. Deploy to Fly.io, Render, or similar. Cloud callers POST to <code>$PUBLIC_URL/api/agents/execute</code> with <code>Authorization: Bearer $TOKEN</code>.</li>
+            <li><strong>Option B (middleweight): HTTPS MCP transport.</strong> Add <code>CLAUDE_MCP_TRANSPORT=http</code> support with bearer auth. Cloud callers connect as a proper remote MCP server.</li>
+            <li><strong>Option C (workaround): GitHub-webhook bridge.</strong> Cloud routine opens a PR on a <code>claude/</code> branch. Local simple-mcp instance picks it up via <code>/loop</code> and writes locally.</li>
           </ul>
-          <p>Start with A. C is a decent backup if you don't want public exposure.</p>
+          <p>Recommendation: start with A. C is a decent backup that avoids public exposure.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">P1 · 03</div>
         <div class="tier-body">
-          <h4>Per-run budget enforcement</h4>
-          <p>The handbook recommends <code>maxIterations: 10, maxTokens: 50000</code> as defaults for client-driven runs. Right now clients pass these as config; simple-mcp should enforce them server-side so a buggy Claude Code session can't blow through your budget.</p>
-          <p>Add a <code>guardrails</code> column to the runs table, enforce on every <code>agent_record_step</code>:</p>
-          <pre><span class="c-lang">typescript</span><code>if (run.inputTokensUsed + delta &gt; run.guardrails.maxTokens) {
+          <h4>Per-run budget enforcement on client-driven runs</h4>
+          <p>Server-side <code>agent_execute</code> already enforces guardrails (iterations / tool calls / tokens). Client-driven runs (<code>agent_start_run</code> + <code>agent_record_step</code>) currently rely on the caller to respect limits. Extension: store guardrails on the run at start time; reject steps that would breach them.</p>
+          <pre><span class="c-lang">typescript</span><code>// on agent_record_step
+if (run.inputTokensUsed + delta &gt; run.guardrails.maxTokens) {
   await updateRunStatus(runId, "cancelled", "budget_exceeded");
   throw new Error("Run exceeded token budget");
 }</code></pre>
+          <p>Protects against buggy client sessions that keep recording steps past their configured budget.</p>
         </div>
       </div>
 
-      <h2>Important — add these second</h2>
+      <h2>P2 — Team-scale observability</h2>
 
       <div class="tier-box">
         <div class="tier-label">P2 · 04</div>
         <div class="tier-body">
-          <h4>Skill &amp; subagent registry</h4>
-          <p>Right now your admin panel shows executions but not the skills/subagents that ran them. Add tables + UI for:</p>
+          <h4>Skill &amp; subagent registry in the admin panel</h4>
+          <p>The admin panel tracks executions but not the <em>definitions</em> (skills, subagents) that produced them. Add tables + UI for:</p>
           <ul>
-            <li>Skills discovered in <code>.claude/skills/</code> of connected repos — with description, last-used timestamp, and find-rate</li>
+            <li>Skills discovered in <code>.claude/skills/</code> of connected repos — with description, last-triggered timestamp, and invocation count</li>
             <li>Subagents discovered in <code>.claude/agents/</code> — same metadata</li>
           </ul>
-          <p>This makes your admin panel the source of truth for "what capabilities does this workspace have?" — and surfaces dead skills/agents your Friday review needs to find.</p>
+          <p>Makes the admin panel the source of truth for "what capabilities does this workspace have?" and surfaces dead skills/agents during review.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">P2 · 05</div>
         <div class="tier-body">
-          <h4>Hook event ingestion</h4>
-          <p>Your <code>record-to-mcp.sh</code> hook POSTs to <code>/api/agents/runs/:id/steps</code>. Formalize this:</p>
+          <h4>HTTP hook-ingestion endpoint</h4>
+          <p>Claude Code hooks (described in Chapter 5) can't call MCP tools directly — they're shell scripts. They need an HTTP target:</p>
           <pre><span class="c-lang">endpoints</span><code>POST /api/hooks/event
   body: { eventName, tool, toolInput, toolOutput, runId?, sessionId }
-  → stores to hook_events table, correlates to run if runId present</code></pre>
-          <p>Then your admin panel can show a "session timeline" with every hook fire alongside every tool call and subagent. This is the full audit trail.</p>
+  → stores to hook_events table, correlates to run if runId present
+
+POST /api/agents/runs/:runId/steps
+  body: { title, summary, kind }
+  → thin wrapper that calls agent_record_step internally</code></pre>
+          <p>Enables the <code>record-to-mcp.sh</code> and <code>finalize-mcp-run.sh</code> hooks described in Chapter 5 to work as written, and gives the admin panel a full session timeline (every hook fire alongside every tool call and subagent).</p>
         </div>
       </div>
 
@@ -2622,24 +2685,24 @@ codex "adversarial review of this branch — try to break this code"</code></pre
         <div class="tier-label">P2 · 06</div>
         <div class="tier-body">
           <h4>Cost tracking with per-model breakdown</h4>
-          <p>You track input/output tokens. Add:</p>
+          <p>Input/output tokens are already tracked per run. Extensions:</p>
           <ul>
-            <li><code>model</code> column on each step (sonnet-4-6, opus-4-7, etc.)</li>
-            <li>Computed USD cost based on current per-model pricing</li>
-            <li>Daily/weekly/monthly rollups</li>
-            <li>Budget alerts (Slack webhook on 80% / 100% of monthly cap)</li>
+            <li><code>model</code> column on each step (e.g., <code>claude-sonnet-4-6</code>, <code>claude-opus-4-7</code>)</li>
+            <li>Computed USD cost based on a pricing table</li>
+            <li>Daily / weekly / monthly rollups in the admin panel</li>
+            <li>Optional budget alerts via Slack webhook on 80% / 100% of a configured monthly cap</li>
           </ul>
-          <p>This is what turns your admin panel from "dashboard" to "cost control."</p>
+          <p>Turns the admin panel from "execution dashboard" into "cost control dashboard."</p>
         </div>
       </div>
 
-      <h2>Nice to have — do these when you have time</h2>
+      <h2>P3 — Polish &amp; governance</h2>
 
       <div class="tier-box">
         <div class="tier-label">P3 · 07</div>
         <div class="tier-body">
-          <h4>MCP tool permission matrix per agent</h4>
-          <p>Right now agents declare <code>requiredTools</code>. Make it enforceable: at <code>agent_start_run</code>, the run's tool whitelist is stored. <code>agent_record_step</code> rejects tools not in the whitelist. Prevents agent-scope drift.</p>
+          <h4>Enforced MCP tool permission matrix per agent</h4>
+          <p>Agents currently declare <code>requiredTools</code>. Make it authoritative: at <code>agent_start_run</code>, store the run's tool whitelist. Reject <code>agent_record_step</code> for tools outside the whitelist. Prevents scope drift when a caller accidentally uses a tool the agent shouldn't need.</p>
         </div>
       </div>
 
@@ -2647,84 +2710,37 @@ codex "adversarial review of this branch — try to break this code"</code></pre
         <div class="tier-label">P3 · 08</div>
         <div class="tier-body">
           <h4>Run replay and diff</h4>
-          <p>For any completed run, offer "replay with same config." Great for debugging agent logic. Plus "diff between runs" for comparing agent versions.</p>
+          <p>For any completed run, expose "replay with same config" — useful for debugging agent logic after a prompt change. Plus "diff between runs" for comparing agent versions side-by-side. Both are backend-cheap (the data is already persisted) but admin-panel changes.</p>
         </div>
       </div>
 
       <div class="tier-box">
         <div class="tier-label">P3 · 09</div>
         <div class="tier-body">
-          <h4>Webhook fan-out</h4>
-          <p>When a run completes, fire a webhook. Subscribers (Slack, Linear, your CI) get a structured payload. This is how your simple-mcp becomes a node in a larger automation graph, not just a Claude-Code companion.</p>
+          <h4>Webhook fan-out on run completion</h4>
+          <p>When a run completes, fire a configured webhook with a structured payload. Subscribers (Slack, Linear, CI, external dashboards) get notified without polling. This is how simple-mcp grows from "Claude Code companion" into "node in a larger automation graph."</p>
         </div>
       </div>
 
-      <h2>What this roadmap adds up to</h2>
+      <h2>What these extensions add up to</h2>
 
       <blockquote>
-        Your simple-mcp becomes the observability, governance, and orchestration layer for all agentic work on this machine — Claude Code, Codex, and cloud routines — with one credential vault, one run history, one cost dashboard.
-        <cite>— the north star for simple-mcp v2</cite>
+        simple-mcp becomes the observability, governance, and orchestration layer for all agentic work on a machine or team — Claude Code, Codex, and cloud routines — with one credential vault, one run history, one cost dashboard.
+        <cite>— the north star for simple-mcp v1</cite>
       </blockquote>
+
+      <p>None of these require rewriting existing code. They are additive — each module sits next to what's already there. P1s can be targeted in a single iteration; P2s and P3s over subsequent minor versions.</p>
+
+      <div class="callout ok">
+        <span class="callout-label">Contributing</span>
+        If you're interested in implementing any of these, open an issue at <a href="https://github.com/heshansw/simple-mcp/issues">github.com/heshansw/simple-mcp/issues</a> first to discuss scope and approach. Conventional Commits on branches that merge to <code>main</code> — the release pipeline handles versioning from there.
+      </div>
+    </section>
 
       <p>None of this requires rewriting what you have. These are additive — each module sits next to what's already there. Ship P1 in a week, P2 over the following month, P3 as time allows.</p>
     </section>
 
-    <!-- ============ APPENDIX A: ROLLOUT ============ -->
-    <section class="chapter" id="ch-rollout">
-      <div class="chapter-eyebrow">Appendix A</div>
-      <h1>Week-by-week <em>rollout</em></h1>
-      <p class="lede">Don't build everything in one day. Here's the order that actually works, calibrated to let each layer's value become visible before adding the next.</p>
-
-      <ol class="steps">
-        <li>
-          <h4>Day 1 — Bootstrap</h4>
-          <p>AGENTS.md, CLAUDE.md, .mcp.json. Connect simple-mcp integrations in admin panel. Test that Claude Code can call simple-mcp tools. Don't build any hooks or subagents yet.</p>
-        </li>
-        <li>
-          <h4>Day 2 — Two hooks only</h4>
-          <p><code>auto-format.sh</code> and <code>typecheck-touched.sh</code>. These give the biggest quality-of-life jump. Feel the difference. Notice how Claude starts fixing its own typos without you saying anything.</p>
-        </li>
-        <li>
-          <h4>Day 3 — explorer and implementer subagents</h4>
-          <p>Use them on one real task. Notice your main context stays clean for the first time.</p>
-        </li>
-        <li>
-          <h4>Day 4 — PR review pipeline</h4>
-          <p>Four reviewer subagents + pr-review skill + review-orchestrator. Run it on a real PR. Compare wall-clock against what you'd have done manually.</p>
-        </li>
-        <li>
-          <h4>Day 5 — The rest of the hooks</h4>
-          <p>block-destructive, block-secrets, block-write-sql, record-to-mcp, finalize-mcp-run. Full workflow end-to-end.</p>
-        </li>
-        <li>
-          <h4>Day 6 — Workflow skills</h4>
-          <p>from-jira, open-pr, run-tests, compact-policy. These encode your team's PR process so Claude doesn't reinvent it.</p>
-        </li>
-        <li>
-          <h4>Day 7 — First review + simple-mcp P1 upgrade</h4>
-          <p>Open the admin panel. Any run over 50k tokens — figure out why. Tune subagent tool whitelists (tighter = cheaper). Trim CLAUDE.md of anything a hook now handles. Start on P1-01 from Chapter 16 — register the pr-review agent in simple-mcp.</p>
-        </li>
-        <li>
-          <h4>Week 2 — Automation layer</h4>
-          <p>Build your first <code>/loop</code> (triage-jira or check-ci). Then <code>/simplify</code> and <code>/batch</code> in daily use. Codex adversarial review on the first sensitive PR.</p>
-        </li>
-        <li>
-          <h4>Week 3 — Cloud routines</h4>
-          <p>Deploy simple-mcp to a reachable URL (P1-02). Set up one cloud routine — GitHub-webhook on PR-opened that runs /simplify. Biggest single lift to team velocity.</p>
-        </li>
-        <li>
-          <h4>Month 2 — simple-mcp P2</h4>
-          <p>Skill &amp; subagent registry, hook event ingestion, cost tracking. Your admin panel becomes a full observability dashboard.</p>
-        </li>
-      </ol>
-
-      <div class="callout ok">
-        <span class="callout-label">The real work</span>
-        After month one, you iterate. Every time you notice yourself repeating an instruction → make it a hook or skill. Every time an agent reads too many files → more subagents. Every time you want a second opinion → another reviewer. The goal isn't to have every hook and subagent from day one — it's to build the ones that solve real friction, and let your simple-mcp admin panel tell you where the friction is.
-      </div>
-    </section>
-
-    <!-- ============ APPENDIX B: PITFALLS ============ -->
+    <!-- ============ APPENDIX A: PITFALLS ============ -->
     <section class="chapter" id="ch-pitfalls">
       <div class="chapter-eyebrow">Appendix B</div>
       <h1>Pitfalls &amp; <em>gotchas</em></h1>
@@ -2895,23 +2911,63 @@ codex "adversarial review of this branch — try to break this code"</code></pre
         </div>
         <div>
           <dt>/compact</dt>
-          <dd>Compress conversation history. Uses your compact-policy skill.</dd>
+          <dd>Compress conversation history. Uses the compact-policy skill if defined.</dd>
         </div>
       </dl>
 
-      <h2>simple-mcp tools you'll use daily</h2>
+      <h2>simple-mcp MCP tools</h2>
       <dl class="glossary">
+        <div>
+          <dt>jira_search_issues</dt>
+          <dd>JQL-based Jira issue search.</dd>
+        </div>
+        <div>
+          <dt>jira_create_issue</dt>
+          <dd>Create a new Jira issue. Guard with confirmation hook.</dd>
+        </div>
+        <div>
+          <dt>jira_transition_issue</dt>
+          <dd>Move a Jira issue to a different status.</dd>
+        </div>
+        <div>
+          <dt>github_list_prs</dt>
+          <dd>List PRs in a repository.</dd>
+        </div>
+        <div>
+          <dt>github_get_my_prs</dt>
+          <dd>PRs assigned to, requested from, or created by the current user.</dd>
+        </div>
+        <div>
+          <dt>github_get_pr_diff</dt>
+          <dd>Full PR diff — used by pr-review pipeline.</dd>
+        </div>
+        <div>
+          <dt>github_review_pr</dt>
+          <dd>Post an AI-powered review with inline comments.</dd>
+        </div>
+        <div>
+          <dt>github_search_code</dt>
+          <dd>Search code across GitHub repositories.</dd>
+        </div>
         <div>
           <dt>agent_list</dt>
           <dd>Enumerate pre-built agents + their readiness status.</dd>
         </div>
         <div>
+          <dt>agent_execute</dt>
+          <dd>Server-side autonomous run — simple-mcp owns the reasoning loop.</dd>
+        </div>
+        <div>
+          <dt>agent_status</dt>
+          <dd>Check progress or result of a run by runId.</dd>
+        </div>
+        <div>
           <dt>agent_start_run</dt>
-          <dd>Start a tracked run. Returns runId + systemPrompt + requiredTools.</dd>
+          <dd>Begin a client-driven tracked run. Returns runId + systemPrompt + requiredTools.</dd>
         </div>
         <div>
           <dt>agent_record_step</dt>
-          <dd>Record a step inside a tracked run. Call after every meaningful tool call.</dd>
+          <dd>Record a step on a tracked run (observability).</dd>
         </div>
         <div>
           <dt>agent_update_task</dt>
@@ -2919,19 +2975,47 @@ codex "adversarial review of this branch — try to break this code"</code></pre
         </div>
         <div>
           <dt>agent_complete_run</dt>
-          <dd>Finalize a run with completed/failed/cancelled status.</dd>
+          <dd>Finalize a tracked run with completed/failed/cancelled status.</dd>
         </div>
         <div>
-          <dt>jira_search_issues</dt>
-          <dd>JQL-based issue search.</dd>
+          <dt>health_check</dt>
+          <dd>Check server health and integration connection statuses.</dd>
         </div>
         <div>
-          <dt>github_get_pr_diff</dt>
-          <dd>Full PR diff — used by pr-review skill.</dd>
+          <dt>list_connections</dt>
+          <dd>List all configured integrations and their status.</dd>
+        </div>
+      </dl>
+
+      <h2>simple-mcp pre-built agents</h2>
+      <dl class="glossary">
+        <div>
+          <dt>jira-triage</dt>
+          <dd>Automated issue triage and classification. Requires Jira.</dd>
         </div>
         <div>
-          <dt>db_query</dt>
-          <dd>Read-only SQL (enforced by block-write-sql.sh hook).</dd>
+          <dt>pr-review</dt>
+          <dd>AI-powered PR review with inline GitHub comments. Requires GitHub.</dd>
+        </div>
+        <div>
+          <dt>code-search</dt>
+          <dd>Semantic code search across repositories. Requires GitHub.</dd>
+        </div>
+        <div>
+          <dt>sprint-planning</dt>
+          <dd>Sprint planning, backlog grooming, capacity analysis. Requires Jira.</dd>
+        </div>
+        <div>
+          <dt>local-repo-analysis</dt>
+          <dd>Analyse local repository structure and patterns. Requires local filesystem folder.</dd>
+        </div>
+        <div>
+          <dt>confluence-reader</dt>
+          <dd>Read and search Confluence documentation. Requires Jira connection.</dd>
+        </div>
+        <div>
+          <dt>database-explorer</dt>
+          <dd>Explore schemas, run queries, suggest optimisations. Requires MySQL or PostgreSQL.</dd>
         </div>
       </dl>
 
