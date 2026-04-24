@@ -12,6 +12,7 @@ const GITHUB_API_BASE = "https://api.github.com";
 export interface GitHubDependencies {
   logger: Logger;
   getToken: () => Promise<string | null>;
+  getTokenForConnection?: (connectionName: string) => Promise<string | null>;
 }
 
 export type GitHubPullRequest = {
@@ -105,6 +106,12 @@ export interface GitHubService {
     params: GitHubReviewPullRequestParams
   ): Promise<Result<GitHubReview, DomainError>>;
 
+  /** Submit a PR review using a specific named connection (e.g. "Codex (Local)") */
+  reviewPullRequestAs(
+    params: GitHubReviewPullRequestParams,
+    connectionName: string
+  ): Promise<Result<GitHubReview, DomainError>>;
+
   createPullRequest(
     params: GitHubCreatePullRequestParams
   ): Promise<Result<GitHubPullRequest, DomainError>>;
@@ -155,7 +162,7 @@ async function githubFetch<T>(
 export function createGitHubService(
   deps: GitHubDependencies
 ): GitHubService {
-  const { logger, getToken } = deps;
+  const { logger, getToken, getTokenForConnection } = deps;
 
   async function resolveToken(): Promise<string> {
     const token = await getToken();
@@ -286,6 +293,78 @@ export function createGitHubService(
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         logger.error({ error: msg, params }, "Failed to submit PR review");
+        return err(integrationError("github", msg));
+      }
+    },
+
+    async reviewPullRequestAs(
+      params: GitHubReviewPullRequestParams,
+      connectionName: string
+    ): Promise<Result<GitHubReview, DomainError>> {
+      try {
+        if (!getTokenForConnection) {
+          return err(
+            integrationError(
+              "github",
+              "Connection selection not configured — getTokenForConnection not provided"
+            )
+          );
+        }
+        const token = await getTokenForConnection(connectionName);
+        if (!token) {
+          return err(
+            integrationError(
+              "github",
+              `No token found for GitHub connection "${connectionName}". Check that the connection exists and has credentials.`
+            )
+          );
+        }
+
+        logger.info(
+          {
+            owner: params.owner,
+            repo: params.repo,
+            prNumber: params.prNumber,
+            event: params.event,
+            connectionName,
+          },
+          "Submitting PR review as specific connection"
+        );
+
+        const reviewPayload: Record<string, unknown> = {
+          body: params.body,
+          event: params.event,
+        };
+
+        if (params.comments && params.comments.length > 0) {
+          reviewPayload.comments = params.comments.map((c) => ({
+            path: c.path,
+            position: c.position,
+            body: c.body,
+          }));
+        }
+
+        const review = await githubFetch<GitHubReview>(
+          `/repos/${params.owner}/${params.repo}/pulls/${params.prNumber}/reviews`,
+          token,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(reviewPayload),
+          }
+        );
+
+        logger.info(
+          { reviewId: review.id, state: review.state, connectionName },
+          "PR review submitted as connection"
+        );
+        return ok(review);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.error(
+          { error: msg, params, connectionName },
+          "Failed to submit PR review as connection"
+        );
         return err(integrationError("github", msg));
       }
     },

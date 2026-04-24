@@ -47,6 +47,13 @@ export const SubmitReviewInputSchema = z.object({
       "Inline comments on specific lines in the diff. Each comment targets a specific file " +
       "and position in the diff. Use github_get_pr_diff first to see the diffs and determine positions."
     ),
+  connectionName: z
+    .string()
+    .optional()
+    .describe(
+      'Optional: name of the GitHub connection to submit as (e.g. "Codex (Local)"). ' +
+      "If omitted, uses the default GitHub connection."
+    ),
   inputTokensEstimate: z
     .number()
     .int()
@@ -101,7 +108,7 @@ export function registerReviewPrTool(
       try {
         const input = SubmitReviewInputSchema.parse(args);
 
-        const result = await deps.githubService.reviewPullRequest({
+        const reviewParams = {
           owner: input.owner,
           repo: input.repo,
           prNumber: input.prNumber,
@@ -112,7 +119,11 @@ export function registerReviewPrTool(
             position: c.position,
             body: c.body,
           })),
-        });
+        };
+
+        const result = input.connectionName
+          ? await deps.githubService.reviewPullRequestAs(reviewParams, input.connectionName)
+          : await deps.githubService.reviewPullRequest(reviewParams);
 
         if (isErr(result)) {
           return {
