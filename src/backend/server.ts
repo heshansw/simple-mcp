@@ -42,6 +42,7 @@ import {
   sprintPlanningAgent,
   localRepoAnalysisAgent,
   confluenceReaderAgent,
+  confluenceWriterAgent,
   databaseExplorerAgent,
   reactFrontendDevAgent,
   javaBackendDevAgent,
@@ -51,6 +52,7 @@ import {
   backendPrReviewerAgent,
   frontendPrReviewerAgent,
   securityReviewerAgent,
+  githubPrWorkflowAgent,
   frontendOrchestratorAgent,
   backendOrchestratorAgent,
   fullstackOrchestratorAgent,
@@ -98,6 +100,7 @@ import { registerReviewPrTool } from "./tools/github/review-pr.tool.js";
 import { registerSearchCodeTool } from "./tools/github/search-code.tool.js";
 import { registerGetPrDiffTool } from "./tools/github/get-pr-diff.tool.js";
 import { registerGetMyPrsTool } from "./tools/github/get-my-prs.tool.js";
+import { registerCreatePrTool } from "./tools/github/create-pr.tool.js";
 import { registerHealthCheckTool } from "./tools/system/health-check.tool.js";
 import { registerListConnectionsTool } from "./tools/system/list-connections.tool.js";
 import { registerListEventsTool } from "./tools/google-calendar/list-events.tool.js";
@@ -115,6 +118,9 @@ import { registerFsListWorkspacesTool } from "./tools/local-filesystem/fs-list-w
 import { registerConfluenceSearchPagesTool } from "./tools/confluence/confluence-search-pages.tool.js";
 import { registerConfluenceGetPageTool } from "./tools/confluence/confluence-get-page.tool.js";
 import { registerConfluenceListSpacesTool } from "./tools/confluence/confluence-list-spaces.tool.js";
+import { registerConfluenceCreatePageTool } from "./tools/confluence/confluence-create-page.tool.js";
+import { registerConfluenceUpdatePageTool } from "./tools/confluence/confluence-update-page.tool.js";
+import { registerConfluenceDeletePageTool } from "./tools/confluence/confluence-delete-page.tool.js";
 import { registerDbListSchemasTool } from "./tools/local-database/db-list-schemas.tool.js";
 import { registerDbListTablesTool } from "./tools/local-database/db-list-tables.tool.js";
 import { registerDbDescribeTableTool } from "./tools/local-database/db-describe-table.tool.js";
@@ -210,6 +216,24 @@ export async function createServer(
 
   // GitHub service resolves its token from the first connected GitHub connection
   // that actually has stored credentials (skip local MCP client placeholders).
+  const resolveGitHubTokenByName = async (connectionName: string): Promise<string | null> => {
+    const allConns = await connectionsRepo.findAll();
+    const match = allConns.find(
+      (c) =>
+        c.integrationType === "github" &&
+        c.status === "connected" &&
+        c.name === connectionName
+    );
+    if (!match) return null;
+    const cred = await credentialsRepo.findByConnectionId(match.id);
+    if (!cred) return null;
+    try {
+      return encryptionService.decrypt(cred.encryptedData, cred.iv);
+    } catch {
+      return null;
+    }
+  };
+
   const githubService = createGitHubService({
     logger,
     getToken: async () => {
@@ -229,6 +253,7 @@ export async function createServer(
       }
       return null;
     },
+    getTokenForConnection: resolveGitHubTokenByName,
   });
 
   // Google Calendar service — only created if OAuth credentials are configured
@@ -391,6 +416,7 @@ export async function createServer(
   registerSearchCodeTool(mcpServer, githubToolDeps);
   registerGetPrDiffTool(mcpServer, { ...githubToolDeps, reviewsRepo });
   registerGetMyPrsTool(mcpServer, githubToolDeps);
+  registerCreatePrTool(mcpServer, githubToolDeps);
   registerHealthCheckTool(mcpServer, { logger, connectionManager } as any);
   registerListConnectionsTool(mcpServer, { logger, connectionManager } as any);
 
@@ -469,12 +495,26 @@ export async function createServer(
       }).catch((e) => logger.error({ error: e }, "Failed to record confluence activity"));
       return result;
     },
+    // Write methods delegated directly — tools handle their own telemetry
+    createPage: (input) => confluenceService.createPage(input),
+    updatePage: (input) => confluenceService.updatePage(input),
+    deletePage: (input) => confluenceService.deletePage(input),
   };
   const confluenceToolDeps = { confluenceService: trackedConfluenceService, logger };
   registerConfluenceSearchPagesTool(mcpServer, confluenceToolDeps);
   registerConfluenceGetPageTool(mcpServer, confluenceToolDeps);
   registerConfluenceListSpacesTool(mcpServer, confluenceToolDeps);
-  logger.info("Confluence MCP tools registered");
+
+  // Confluence write tools — pass activity repo directly (tools handle their own telemetry)
+  const confluenceWriteToolDeps = {
+    confluenceService: confluenceService,
+    confluenceActivityRepo,
+    logger,
+  };
+  registerConfluenceCreatePageTool(mcpServer, confluenceWriteToolDeps);
+  registerConfluenceUpdatePageTool(mcpServer, confluenceWriteToolDeps);
+  registerConfluenceDeletePageTool(mcpServer, confluenceWriteToolDeps);
+  logger.info("Confluence MCP tools registered (read + write)");
 
   // Local database tools — always registered (gated by connection resolution at invocation)
   const dbToolDeps = { dbQueryService: databaseQueryService, dbQueryActivityRepo, logger };
@@ -496,6 +536,7 @@ export async function createServer(
   agentRegistry.register(sprintPlanningAgent);
   agentRegistry.register(localRepoAnalysisAgent);
   agentRegistry.register(confluenceReaderAgent);
+  agentRegistry.register(confluenceWriterAgent);
   agentRegistry.register(databaseExplorerAgent);
 
   // Specialist agents (REQ-6.1)
@@ -507,6 +548,9 @@ export async function createServer(
   agentRegistry.register(backendPrReviewerAgent);
   agentRegistry.register(frontendPrReviewerAgent);
   agentRegistry.register(securityReviewerAgent);
+
+  // Workflow agents
+  agentRegistry.register(githubPrWorkflowAgent);
 
   // Orchestrator agents (REQ-6.2)
   agentRegistry.register(frontendOrchestratorAgent);
@@ -618,8 +662,11 @@ export async function createServer(
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
-  toolHandlerRegistry.register("github_submit_review", "Submit a review on a GitHub pull request", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, prNumber: { type: "number" }, body: { type: "string" }, event: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] } }, required: ["owner", "repo", "prNumber", "body", "event"] }, async (args) => {
-    const result = await githubService.reviewPullRequest({ owner: args.owner as string, repo: args.repo as string, prNumber: args.prNumber as number, body: args.body as string, event: args.event as "APPROVE" | "REQUEST_CHANGES" | "COMMENT" });
+  toolHandlerRegistry.register("github_submit_review", "Submit a review on a GitHub pull request", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, prNumber: { type: "number" }, body: { type: "string" }, event: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] }, connectionName: { type: "string", description: "Optional: name of the GitHub connection to submit as" } }, required: ["owner", "repo", "prNumber", "body", "event"] }, async (args) => {
+    const reviewParams = { owner: args.owner as string, repo: args.repo as string, prNumber: args.prNumber as number, body: args.body as string, event: args.event as "APPROVE" | "REQUEST_CHANGES" | "COMMENT" };
+    const result = args.connectionName
+      ? await githubService.reviewPullRequestAs(reviewParams, args.connectionName as string)
+      : await githubService.reviewPullRequest(reviewParams);
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
@@ -709,6 +756,35 @@ export async function createServer(
   });
   toolHandlerRegistry.register("confluence_list_spaces", "List Confluence spaces", { type: "object", properties: { type: { type: "string" }, maxResults: { type: "number" } } }, async (args) => {
     const result = await confluenceService.listSpaces((args.type as "global" | "personal" | "all") ?? "all", (args.maxResults as number) ?? 50);
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("confluence_create_page", "Create a Confluence page", { type: "object", properties: { spaceKey: { type: "string" }, title: { type: "string" }, body: { type: "object" }, parentId: { type: "string" } }, required: ["spaceKey", "title", "body"] }, async (args) => {
+    const parentId = args.parentId as string | undefined;
+    const result = await confluenceService.createPage({
+      spaceKey: args.spaceKey as string,
+      title: args.title as string,
+      body: args.body as import("@shared/schemas/confluence.schema.js").ConfluenceAdfDocument,
+      ...(parentId !== undefined ? { parentId } : {}),
+    });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("confluence_update_page", "Update a Confluence page", { type: "object", properties: { pageId: { type: "string" }, title: { type: "string" }, body: { type: "object" }, versionNumber: { type: "number" } }, required: ["pageId"] }, async (args) => {
+    const title = args.title as string | undefined;
+    const body = args.body as import("@shared/schemas/confluence.schema.js").ConfluenceAdfDocument | undefined;
+    const versionNumber = args.versionNumber as number | undefined;
+    const result = await confluenceService.updatePage({
+      pageId: args.pageId as string,
+      ...(title !== undefined ? { title } : {}),
+      ...(body !== undefined ? { body } : {}),
+      ...(versionNumber !== undefined ? { versionNumber } : {}),
+    });
+    if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
+    return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
+  });
+  toolHandlerRegistry.register("confluence_delete_page", "Delete a Confluence page", { type: "object", properties: { pageId: { type: "string" } }, required: ["pageId"] }, async (args) => {
+    const result = await confluenceService.deletePage({ pageId: args.pageId as string });
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
