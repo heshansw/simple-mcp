@@ -122,6 +122,7 @@ export type JiraCreateIssueParams = {
   description?: string;
   descriptionMarkdown?: string;
   descriptionAdf?: JiraAdfDocument;
+  parent?: string;
 };
 
 export type JiraAddCommentParams = {
@@ -142,6 +143,7 @@ export type JiraUpdateIssueParams = {
   priority?: string;
   assigneeAccountId?: string | null;
   dueDate?: string | null;
+  parent?: string | null;
 };
 
 export type JiraFindUsersParams = {
@@ -332,6 +334,11 @@ export function createJiraService(
     if (params.dueDate !== undefined) {
       fields.duedate = params.dueDate;
       updatedFields.push("dueDate");
+    }
+
+    if (params.parent !== undefined) {
+      fields.parent = params.parent === null ? null : { key: params.parent };
+      updatedFields.push("parent");
     }
 
     return ok({ fields, updatedFields, ...(mode !== undefined ? { mode } : {}) });
@@ -719,6 +726,10 @@ export function createJiraService(
             return descriptionResult;
           }
           fields.description = descriptionResult.value.adf;
+        }
+
+        if (params.parent !== undefined) {
+          fields.parent = { key: params.parent };
         }
 
         return await jiraFetch<JiraCreateIssueResponse>(siteUrl, auth, "/issue", {
