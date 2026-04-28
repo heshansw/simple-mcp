@@ -93,6 +93,7 @@ import { registerGetCommentsTool } from "./tools/jira/get-comments.tool.js";
 import { registerAddCommentTool } from "./tools/jira/add-comment.tool.js";
 import { registerUpdateIssueDescriptionTool } from "./tools/jira/update-issue-description.tool.js";
 import { registerUpdateIssueTool } from "./tools/jira/update-issue.tool.js";
+import { registerLinkIssuesTool } from "./tools/jira/link-issues.tool.js";
 import { registerListPrsTool } from "./tools/github/list-prs.tool.js";
 import { registerReviewPrTool } from "./tools/github/review-pr.tool.js";
 import { registerSearchCodeTool } from "./tools/github/search-code.tool.js";
@@ -386,6 +387,7 @@ export async function createServer(
   registerAddCommentTool(mcpServer, jiraToolDeps);
   registerUpdateIssueDescriptionTool(mcpServer, jiraToolDeps);
   registerUpdateIssueTool(mcpServer, jiraToolDeps);
+  registerLinkIssuesTool(mcpServer, jiraToolDeps);
   registerListPrsTool(mcpServer, githubToolDeps);
   registerReviewPrTool(mcpServer, { ...githubToolDeps, reviewsRepo });
   registerSearchCodeTool(mcpServer, githubToolDeps);
