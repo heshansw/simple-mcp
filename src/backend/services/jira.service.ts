@@ -122,6 +122,7 @@ export type JiraCreateIssueParams = {
   description?: string;
   descriptionMarkdown?: string;
   descriptionAdf?: JiraAdfDocument;
+  parent?: string;
 };
 
 export type JiraAddCommentParams = {
@@ -142,6 +143,7 @@ export type JiraUpdateIssueParams = {
   priority?: string;
   assigneeAccountId?: string | null;
   dueDate?: string | null;
+  parent?: string | null;
 };
 
 export type JiraFindUsersParams = {
@@ -159,6 +161,19 @@ export type JiraAssignIssueParams = {
   assigneeDisplayName?: string;
   assigneeEmailAddress?: string;
   unassign?: boolean;
+};
+
+export type JiraLinkIssuesParams = {
+  inwardIssueKey: string;
+  outwardIssueKey: string;
+  linkType: string;
+};
+
+export type JiraLinkIssuesResponse = {
+  success: true;
+  inwardIssueKey: string;
+  outwardIssueKey: string;
+  linkType: string;
 };
 
 // ── Credentials shape ──────────────────────────────────────────────────
@@ -238,6 +253,10 @@ export interface JiraServiceResult {
     issueKey: string,
     targetStatusName: string
   ): Promise<Result<JiraChangeStatusResponse, DomainError>>;
+
+  linkIssues(
+    params: JiraLinkIssuesParams
+  ): Promise<Result<JiraLinkIssuesResponse, DomainError>>;
 }
 
 // ── Implementation ─────────────────────────────────────────────────────
@@ -332,6 +351,11 @@ export function createJiraService(
     if (params.dueDate !== undefined) {
       fields.duedate = params.dueDate;
       updatedFields.push("dueDate");
+    }
+
+    if (params.parent !== undefined) {
+      fields.parent = params.parent === null ? null : { key: params.parent };
+      updatedFields.push("parent");
     }
 
     return ok({ fields, updatedFields, ...(mode !== undefined ? { mode } : {}) });
@@ -721,6 +745,10 @@ export function createJiraService(
           fields.description = descriptionResult.value.adf;
         }
 
+        if (params.parent !== undefined) {
+          fields.parent = { key: params.parent };
+        }
+
         return await jiraFetch<JiraCreateIssueResponse>(siteUrl, auth, "/issue", {
           method: "POST",
           body: JSON.stringify({ fields }),
@@ -1066,6 +1094,46 @@ export function createJiraService(
         logger.error({ error, issueKey: params.issueKey }, "Failed to assign Jira issue");
         return err(
           integrationError("jira", "Failed to assign issue: unexpected error")
+        );
+      }
+    },
+
+    async linkIssues(
+      params: JiraLinkIssuesParams
+    ): Promise<Result<JiraLinkIssuesResponse, DomainError>> {
+      try {
+        const connResult = await resolveConnection();
+        if (connResult._tag === "Err") return connResult;
+        const { siteUrl, auth } = connResult.value;
+
+        const result = await jiraFetch<undefined>(
+          siteUrl,
+          auth,
+          "/issueLink",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              type: { name: params.linkType },
+              inwardIssue: { key: params.inwardIssueKey },
+              outwardIssue: { key: params.outwardIssueKey },
+            }),
+          }
+        );
+
+        if (result._tag === "Err") {
+          return result;
+        }
+
+        return ok({
+          success: true,
+          inwardIssueKey: params.inwardIssueKey,
+          outwardIssueKey: params.outwardIssueKey,
+          linkType: params.linkType,
+        });
+      } catch (error) {
+        logger.error({ error, params }, "Failed to link Jira issues");
+        return err(
+          integrationError("jira", "Failed to link issues: unexpected error")
         );
       }
     },

@@ -17,6 +17,9 @@ const CreateIssueInputObjectSchema = z.object({
   descriptionAdf: JiraAdfDocumentSchema.optional().describe(
     "Raw Atlassian Document Format (ADF) document for the issue description. Use this for exact Jira rendering, including tables and task lists."
   ),
+  parent: z.string().min(1).optional().describe(
+    "Parent issue key (e.g. 'PROJ-123') to set as the parent/epic for this new issue."
+  ),
 });
 
 export const CreateIssueInputSchema = CreateIssueInputObjectSchema.superRefine((value, ctx) => {
@@ -56,7 +59,7 @@ export function registerCreateIssueTool(
 ): void {
   server.tool(
     "jira_create_issue",
-    "Create a new Jira issue",
+    "Create a new Jira issue with optional parent (epic) link",
     CreateIssueInputObjectSchema.shape,
     async (args: unknown) => {
       try {

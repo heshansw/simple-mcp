@@ -20,6 +20,9 @@ const UpdateIssueInputObjectSchema = z.object({
   priority: z.string().min(1).optional(),
   assigneeAccountId: z.string().min(1).nullable().optional(),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  parent: z.string().min(1).nullable().optional().describe(
+    "Parent issue key (e.g. 'PROJ-123') to set as the parent/epic. Set to null to remove the parent link."
+  ),
 });
 
 export const UpdateIssueInputSchema = UpdateIssueInputObjectSchema.superRefine((value, ctx) => {
@@ -46,6 +49,7 @@ export const UpdateIssueInputSchema = UpdateIssueInputObjectSchema.superRefine((
     value.priority,
     value.assigneeAccountId,
     value.dueDate,
+    value.parent,
   ].some((item) => item !== undefined);
 
   if (!hasUpdateField) {
@@ -78,7 +82,7 @@ export function registerUpdateIssueTool(
 ): void {
   server.tool(
     "jira_update_issue",
-    "Update editable Jira issue fields including summary, description, labels, priority, assignee, and due date.",
+    "Update editable Jira issue fields including summary, description, labels, priority, assignee, due date, and parent (epic).",
     UpdateIssueInputObjectSchema.shape,
     async (args: unknown) => {
       try {
