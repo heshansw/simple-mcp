@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.4.0...simple-mcp-v0.5.0) (2026-04-28)
+
+
+### Features
+
+* **jira:** add parent/epic field to create and update issue tools ([#18](https://github.com/heshansw/simple-mcp/issues/18)) ([e79fb8a](https://github.com/heshansw/simple-mcp/commit/e79fb8a7e7e2f3ecdad6c3a08eb868a22dddb0ea))
+
 ## [0.4.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.3.0...simple-mcp-v0.4.0) (2026-04-12)
 
 
