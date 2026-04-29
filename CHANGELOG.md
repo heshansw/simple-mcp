@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.7.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.6.0...simple-mcp-v0.7.0) (2026-04-29)
+
+
+### Features
+
+* **github:** add model field to review draft attribution ([#25](https://github.com/heshansw/simple-mcp/issues/25)) ([93fc3f6](https://github.com/heshansw/simple-mcp/commit/93fc3f65dc90034252582d2c312eb6d0fd5f25b9))
+
+
+### Bug Fixes
+
+* **github:** improve review comment attribution format ([#23](https://github.com/heshansw/simple-mcp/issues/23)) ([1f7f8e2](https://github.com/heshansw/simple-mcp/commit/1f7f8e25d465d3979254459811e6a458cf98b737))
+
 ## [0.6.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.5.0...simple-mcp-v0.6.0) (2026-04-29)
 
 
