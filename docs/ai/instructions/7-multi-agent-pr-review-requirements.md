@@ -164,6 +164,7 @@ Transitions:
 | `agentId` | text | NOT NULL | Agent definition ID that produced this draft |
 | `aiTool` | text | NOT NULL | `claude \| gemini \| codex` |
 | `runId` | text | nullable | `agent_runs.id` for the run that produced this draft (if run via engine) |
+| `model` | text | nullable | AI model identifier (e.g. `claude-sonnet-4`, `gemini-2.5-pro`, `o3`) |
 | `verdict` | text | NOT NULL | `APPROVE \| REQUEST_CHANGES \| COMMENT` |
 | `body` | text | NOT NULL | Overall review summary written by the reviewing agent |
 | `commentsJson` | text | NOT NULL, default `[]` | JSON array of inline comment objects (see schema below) |
@@ -298,10 +299,15 @@ Priority: `REQUEST_CHANGES` > `COMMENT` > `APPROVE`.
 
 #### 2.3.3 Attribution Format
 
-Every inline comment must include an attribution **footer** at the END of the comment (never at the top), separated by a horizontal rule. Category icons are prepended to the finding text.
+Every inline comment must include an attribution **footer** at the END of the comment (never at the top), separated by a horizontal rule. Category icons are prepended to the finding text. Each AI tool attribution line includes the provider's logo via Simple Icons CDN.
 
 **Category icons:**
 - 🐛 bug · 🔒 security · ⚡ performance · 🎨 style · 🧪 test · 📝 docs · 💡 other
+
+**AI tool logos (via `cdn.simpleicons.org`):**
+- Claude → `<img src="https://cdn.simpleicons.org/anthropic" width="14" height="14" />`
+- Gemini → `<img src="https://cdn.simpleicons.org/googlegemini" width="14" height="14" />`
+- Codex → `<img src="https://cdn.simpleicons.org/openai" width="14" height="14" />`
 
 For single-source comments:
 
@@ -309,8 +315,10 @@ For single-source comments:
 {icon} {finding text}
 
 ---
-🤖 **Agent:** {AgentName} · **AI:** {AiTool}
+<img src="https://cdn.simpleicons.org/{logo}" width="14" height="14" /> **{AiTool}** · Agent: `{AgentName}` · Model: `{Model}`
 ```
+
+If the `model` field is null, omit the Model part from the attribution line.
 
 For merged comments with multiple attributions:
 
@@ -318,8 +326,8 @@ For merged comments with multiple attributions:
 {icon} {merged finding text}
 
 ---
-🤖 **Agent:** {AgentName1} · **AI:** {AiTool1}
-🤖 **Agent:** {AgentName2} · **AI:** {AiTool2}
+<img src="https://cdn.simpleicons.org/anthropic" width="14" height="14" /> **Claude** · Agent: `{AgentName1}` · Model: `{Model1}`
+<img src="https://cdn.simpleicons.org/googlegemini" width="14" height="14" /> **Gemini** · Agent: `{AgentName2}` · Model: `{Model2}`
 ```
 
 The overall review body must begin with a preamble:
@@ -327,10 +335,10 @@ The overall review body must begin with a preamble:
 ```
 > 🔍 **Multi-Agent Review** — This review was produced by multiple AI agents and their findings have been deduplicated and merged.
 
-| Agent | AI Tool | Verdict |
-|---|---|---|
-| {AgentName1} | {AiTool1} | {Verdict1} |
-| {AgentName2} | {AiTool2} | {Verdict2} |
+| | AI Tool | Agent | Model | Verdict |
+|---|---|---|---|---|
+| <img src="https://cdn.simpleicons.org/{logo1}" width="14" height="14" /> | {AiTool1} | {AgentName1} | `{Model1}` | {Verdict1} |
+| <img src="https://cdn.simpleicons.org/{logo2}" width="14" height="14" /> | {AiTool2} | {AgentName2} | `{Model2}` | {Verdict2} |
 
 {synthesised summary body}
 ```

@@ -39,6 +39,7 @@ function makeDraft(aiTool: string = "claude") {
     agentId: AGENT_ID,
     aiTool,
     runId: null,
+    model: null,
     verdict: "APPROVE",
     body: "Looks great",
     commentsJson: "[]",
