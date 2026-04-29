@@ -539,7 +539,7 @@ export async function createServer(
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
-  toolHandlerRegistry.register("jira_create_issue", "Create a new Jira issue", { type: "object", properties: { projectKey: { type: "string" }, summary: { type: "string" }, issueType: { type: "string" }, description: { type: "string" }, descriptionMarkdown: { type: "string" }, descriptionAdf: { type: "object" } }, required: ["projectKey", "summary", "issueType"] }, async (args) => {
+  toolHandlerRegistry.register("jira_create_issue", "Create a new Jira issue", { type: "object", properties: { projectKey: { type: "string" }, summary: { type: "string" }, issueType: { type: "string" }, description: { type: "string" }, descriptionMarkdown: { type: "string" }, descriptionAdf: { type: "object" }, parent: { type: "string" } }, required: ["projectKey", "summary", "issueType"] }, async (args) => {
     const result = await jiraService.createIssue({
       projectKey: args.projectKey as string,
       summary: args.summary as string,
@@ -547,6 +547,7 @@ export async function createServer(
       ...(args.description !== undefined ? { description: args.description as string } : {}),
       ...(args.descriptionMarkdown !== undefined ? { descriptionMarkdown: args.descriptionMarkdown as string } : {}),
       ...(args.descriptionAdf !== undefined ? { descriptionAdf: args.descriptionAdf as import("@shared/schemas/jira.schema").JiraAdfDocument } : {}),
+      ...(args.parent !== undefined ? { parent: args.parent as string } : {}),
     });
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
@@ -626,6 +627,10 @@ export async function createServer(
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
   toolHandlerRegistry.register("jira_add_comment", "Add a comment to a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, body: { type: "string" }, bodyMarkdown: { type: "string" }, bodyAdf: { type: "object" }, mentions: { type: "array", items: { type: "object" } } }, required: ["issueKey"] }, async (args) => {
+    const bodyFieldCount = [args.body, args.bodyMarkdown, args.bodyAdf].filter((v) => v !== undefined).length;
+    if (bodyFieldCount !== 1) {
+      return { content: [{ type: "text" as const, text: "Error: Provide exactly one of body, bodyMarkdown, or bodyAdf" }], isError: true };
+    }
     const result = await jiraService.addComment({
       issueKey: args.issueKey as string,
       ...(args.body !== undefined ? { body: args.body as string } : {}),
@@ -650,7 +655,7 @@ export async function createServer(
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
-  toolHandlerRegistry.register("jira_update_issue", "Update editable fields on a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, summary: { type: "string" }, description: { type: "string" }, descriptionMarkdown: { type: "string" }, descriptionAdf: { type: "object" }, labels: { type: "array", items: { type: "string" } }, priority: { type: "string" }, assigneeAccountId: { type: ["string", "null"] }, dueDate: { type: ["string", "null"] } }, required: ["issueKey"] }, async (args) => {
+  toolHandlerRegistry.register("jira_update_issue", "Update editable fields on a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, summary: { type: "string" }, description: { type: "string" }, descriptionMarkdown: { type: "string" }, descriptionAdf: { type: "object" }, labels: { type: "array", items: { type: "string" } }, priority: { type: "string" }, assigneeAccountId: { type: ["string", "null"] }, dueDate: { type: ["string", "null"] }, parent: { type: ["string", "null"] } }, required: ["issueKey"] }, async (args) => {
     const result = await jiraService.updateIssue({
       issueKey: args.issueKey as string,
       ...(args.summary !== undefined ? { summary: args.summary as string } : {}),
@@ -661,6 +666,7 @@ export async function createServer(
       ...(args.priority !== undefined ? { priority: args.priority as string } : {}),
       ...(args.assigneeAccountId !== undefined ? { assigneeAccountId: args.assigneeAccountId as string | null } : {}),
       ...(args.dueDate !== undefined ? { dueDate: args.dueDate as string | null } : {}),
+      ...(args.parent !== undefined ? { parent: args.parent as string | null } : {}),
     });
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
