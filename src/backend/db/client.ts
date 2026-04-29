@@ -243,6 +243,7 @@ async function createTables(
     "ALTER TABLE connections ADD COLUMN database_dialect TEXT",
     "ALTER TABLE connections ADD COLUMN allow_writes INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE connections ADD COLUMN db_permissions TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE review_session_drafts ADD COLUMN model TEXT",
   ];
 
   for (const sql of migrations) {
