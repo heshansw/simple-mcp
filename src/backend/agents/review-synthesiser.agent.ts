@@ -64,27 +64,15 @@ Every inline comment in the consolidated review MUST include an attribution foot
 
 Each draft now includes a \`model\` field (e.g. "claude-sonnet-4", "gemini-2.5-pro", "o3") identifying the exact AI model used. Include it in the attribution.
 
-For single-source comments:
-\`\`\`
-{category icon} {finding text}
+AI tool logo images — use these exact image tags for attribution lines (replace {logo} with the correct slug):
+- Claude: \`<img src="https://cdn.simpleicons.org/anthropic" width="14" height="14" />\`
+- Gemini: \`<img src="https://cdn.simpleicons.org/googlegemini" width="14" height="14" />\`
+- Codex:  \`<img src="https://cdn.simpleicons.org/openai" width="14" height="14" />\`
 
----
-🤖 **Agent:** {AgentName} · **AI:** {AiTool} · **Model:** \`{Model}\`
-\`\`\`
-
-If the model field is null or missing, omit the Model part:
-\`\`\`
-🤖 **Agent:** {AgentName} · **AI:** {AiTool}
-\`\`\`
-
-For merged comments found by multiple agents:
-\`\`\`
-{category icon} {merged finding text}
-
----
-🤖 **Agent:** {AgentName1} · **AI:** {AiTool1} · **Model:** \`{Model1}\`
-🤖 **Agent:** {AgentName2} · **AI:** {AiTool2} · **Model:** \`{Model2}\`
-\`\`\`
+Logo-to-aiTool mapping:
+- \`claude\` → \`anthropic\`
+- \`gemini\` → \`googlegemini\`
+- \`codex\` → \`openai\`
 
 Category icons — prepend to the finding text based on comment category:
 - 🐛 bug
@@ -95,13 +83,35 @@ Category icons — prepend to the finding text based on comment category:
 - 📝 docs
 - 💡 other (suggestions/praise)
 
+For single-source comments:
+\`\`\`
+{category icon} {finding text}
+
+---
+<img src="https://cdn.simpleicons.org/{logo}" width="14" height="14" /> **{AiTool}** · Agent: \`{AgentName}\` · Model: \`{Model}\`
+\`\`\`
+
+If the model field is null or missing, omit the Model part:
+\`\`\`
+<img src="https://cdn.simpleicons.org/{logo}" width="14" height="14" /> **{AiTool}** · Agent: \`{AgentName}\`
+\`\`\`
+
+For merged comments found by multiple agents:
+\`\`\`
+{category icon} {merged finding text}
+
+---
+<img src="https://cdn.simpleicons.org/anthropic" width="14" height="14" /> **Claude** · Agent: \`{AgentName1}\` · Model: \`{Model1}\`
+<img src="https://cdn.simpleicons.org/googlegemini" width="14" height="14" /> **Gemini** · Agent: \`{AgentName2}\` · Model: \`{Model2}\`
+\`\`\`
+
 Example of a complete inline comment:
 \`\`\`
 🐛 The delete-then-insert upsert is not atomic. Consider using INSERT OR REPLACE.
 
 ---
-🤖 **Agent:** backend-pr-reviewer · **AI:** Claude · **Model:** \`claude-sonnet-4\`
-🤖 **Agent:** backend-pr-reviewer · **AI:** Gemini · **Model:** \`gemini-2.5-pro\`
+<img src="https://cdn.simpleicons.org/anthropic" width="14" height="14" /> **Claude** · Agent: \`backend-pr-reviewer\` · Model: \`claude-sonnet-4\`
+<img src="https://cdn.simpleicons.org/googlegemini" width="14" height="14" /> **Gemini** · Agent: \`backend-pr-reviewer\` · Model: \`gemini-2.5-pro\`
 \`\`\`
 
 ## Review Body Preamble
@@ -110,10 +120,10 @@ The overall review body MUST begin with:
 \`\`\`
 > 🔍 **Multi-Agent Review** — This review was produced by multiple AI agents and their findings have been deduplicated and merged.
 
-| Agent | AI Tool | Model | Verdict |
-|---|---|---|---|
-| {AgentName1} | {AiTool1} | \`{Model1}\` | {Verdict1} |
-| {AgentName2} | {AiTool2} | \`{Model2}\` | {Verdict2} |
+| | AI Tool | Agent | Model | Verdict |
+|---|---|---|---|---|
+| <img src="https://cdn.simpleicons.org/{logo1}" width="14" height="14" /> | {AiTool1} | {AgentName1} | \`{Model1}\` | {Verdict1} |
+| <img src="https://cdn.simpleicons.org/{logo2}" width="14" height="14" /> | {AiTool2} | {AgentName2} | \`{Model2}\` | {Verdict2} |
 
 {synthesised summary body}
 \`\`\`
