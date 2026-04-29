@@ -298,27 +298,39 @@ Priority: `REQUEST_CHANGES` > `COMMENT` > `APPROVE`.
 
 #### 2.3.3 Attribution Format
 
-Every comment in the consolidated review must include attribution in the format:
+Every inline comment must include an attribution **footer** at the END of the comment (never at the top), separated by a horizontal rule. Category icons are prepended to the finding text.
+
+**Category icons:**
+- 🐛 bug · 🔒 security · ⚡ performance · 🎨 style · 🧪 test · 📝 docs · 💡 other
+
+For single-source comments:
 
 ```
-{finding text}
+{icon} {finding text}
 
-**[{AgentName} — {AiTool}]**
+---
+🤖 **Agent:** {AgentName} · **AI:** {AiTool}
 ```
 
 For merged comments with multiple attributions:
 
 ```
-{merged finding text}
+{icon} {merged finding text}
 
-**[{AgentName} — {AiTool1}, {AgentName2} — {AiTool2}]**
+---
+🤖 **Agent:** {AgentName1} · **AI:** {AiTool1}
+🤖 **Agent:** {AgentName2} · **AI:** {AiTool2}
 ```
 
 The overall review body must begin with a preamble:
 
 ```
-> This review was produced by multiple AI agents: {list of aiTool values that submitted drafts}.
-> Findings have been deduplicated and merged. See inline comments for per-finding attribution.
+> 🔍 **Multi-Agent Review** — This review was produced by multiple AI agents and their findings have been deduplicated and merged.
+
+| Agent | AI Tool | Verdict |
+|---|---|---|
+| {AgentName1} | {AiTool1} | {Verdict1} |
+| {AgentName2} | {AiTool2} | {Verdict2} |
 
 {synthesised summary body}
 ```

@@ -60,28 +60,53 @@ Priority: REQUEST_CHANGES > COMMENT > APPROVE
 
 ## Attribution Format
 
-Every inline comment in the consolidated review MUST include attribution:
+Every inline comment in the consolidated review MUST include an attribution footer at the END of the comment (never at the top). Use a horizontal rule to separate the finding from the attribution.
 
 For single-source comments:
 \`\`\`
 {finding text}
 
-**[{AgentName} — {AiTool}]**
+---
+🤖 **Agent:** {AgentName} · **AI:** {AiTool}
 \`\`\`
 
-For merged comments with multiple attributions:
+For merged comments found by multiple agents:
 \`\`\`
 {merged finding text}
 
-**[{AgentName} — {AiTool1}, {AgentName2} — {AiTool2}]**
+---
+🤖 **Agent:** {AgentName1} · **AI:** {AiTool1}
+🤖 **Agent:** {AgentName2} · **AI:** {AiTool2}
+\`\`\`
+
+Category icons — prepend to the finding text based on comment category:
+- 🐛 bug
+- 🔒 security
+- ⚡ performance
+- 🎨 style
+- 🧪 test
+- 📝 docs
+- 💡 other (suggestions/praise)
+
+Example of a complete inline comment:
+\`\`\`
+🐛 The delete-then-insert upsert is not atomic. Consider using INSERT OR REPLACE.
+
+---
+🤖 **Agent:** backend-pr-reviewer · **AI:** Claude
+🤖 **Agent:** backend-pr-reviewer · **AI:** Gemini
 \`\`\`
 
 ## Review Body Preamble
 
 The overall review body MUST begin with:
 \`\`\`
-> This review was produced by multiple AI agents: {comma-separated list of aiTool values that submitted drafts}.
-> Findings have been deduplicated and merged. See inline comments for per-finding attribution.
+> 🔍 **Multi-Agent Review** — This review was produced by multiple AI agents and their findings have been deduplicated and merged.
+
+| Agent | AI Tool | Verdict |
+|---|---|---|
+| {AgentName1} | {AiTool1} | {Verdict1} |
+| {AgentName2} | {AiTool2} | {Verdict2} |
 
 {synthesised summary body}
 \`\`\`
