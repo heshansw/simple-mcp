@@ -20,6 +20,12 @@ Built with TypeScript, the MCP SDK, Hono, React 19, TanStack Router/Query, SQLit
 | `github_review_pr` | AI-powered pull request review with inline comments |
 | `github_get_pr_diff` | Get the diff for a pull request |
 | `github_search_code` | Search code across GitHub repositories |
+| `start_pr_review_session` | Start a multi-agent parallel PR review session |
+| `store_agent_review_draft` | Save an agent's review draft (without posting to GitHub) |
+| `get_review_session_drafts` | Retrieve all review drafts for a session |
+| `publish_consolidated_review` | Post a merged, deduplicated review to GitHub |
+| `get_repo_review_config` | Read per-repo AI tool configuration |
+| `set_repo_review_config` | Enable/disable AI tools per repository |
 | `agent_execute` | Start an autonomous agent execution with a goal |
 | `agent_status` | Check the progress or result of an agent run |
 | `agent_list` | List all agents with dependency readiness status |
@@ -76,6 +82,67 @@ Users of simple-mcp tool can track and detect agentic ochestration on task manag
 | Local Repo Analysis | `local-repo-analysis` | Local Filesystem | Analyse local repository structure and code |
 | Confluence Reader | `confluence-reader` | Jira | Read and search Confluence pages and spaces |
 | Database Explorer | `database-explorer` | MySQL / PostgreSQL | Explore database schemas, run queries, suggest optimisations |
+| Review Synthesiser | `review-synthesiser` | GitHub | Merge and deduplicate multi-agent PR review drafts into a single consolidated review |
+
+### Multi-Agent Parallel PR Review
+
+Multiple AI tools can review a pull request simultaneously, with their findings deduplicated and merged into a single consolidated GitHub review.
+
+**How it works:**
+
+```
+User: "Review PR #25"
+  │
+  ▼
+simple-mcp looks up repo config
+  → Claude: enabled (default)  ✓
+  → Gemini: enabled (default)  ✓
+  → Codex:  disabled (opt-in)  ✗
+  │
+  ├── agent_start_run → Claude Code reviews the PR
+  ├── agent_start_run → Gemini CLI reviews the PR
+  │       (both run in parallel, store draft findings)
+  │
+  ▼ All drafts received
+  │
+  Review Synthesiser agent merges, deduplicates, and attributes
+  │
+  ▼
+  Single consolidated review posted to GitHub
+  with per-finding attribution: [Agent — AI Tool]
+```
+
+**Key features:**
+
+- **Per-repository AI tool configuration** — configure which AI tools review which repos via MCP tools or admin panel
+- **Claude and Gemini enabled by default** for all repositories; Codex is opt-in only
+- **No AI API keys on the server** — each external client (Claude Code, Gemini CLI, Codex CLI) drives its own LLM loop
+- **Draft storage** — each agent stores findings without posting to GitHub, allowing synthesis before publishing
+- **Deduplication** — identical findings from multiple agents are merged with dual attribution
+- **Verdict escalation** — `REQUEST_CHANGES` > `COMMENT` > `APPROVE` (most conservative wins)
+- **Position validation** — invalid diff positions are silently dropped rather than aborting the review
+
+| MCP Tool | Description |
+|---|---|
+| `start_pr_review_session` | Create a review session, returns enabled agents to dispatch |
+| `store_agent_review_draft` | Save an agent's draft findings (idempotent per session+aiTool) |
+| `get_review_session_drafts` | Retrieve all drafts for a session |
+| `publish_consolidated_review` | Merge and post the final review to GitHub |
+| `get_repo_review_config` | Read AI tool config for a repository |
+| `set_repo_review_config` | Enable/disable AI tools per repository |
+
+**Example flow (via Claude Code):**
+
+```
+1. Call start_pr_review_session for owner/repo PR #25
+   → Returns sessionId + enabledAgents list
+
+2. For each agent, call agent_start_run with the suggestedGoal
+   → Each AI client reviews the PR and calls store_agent_review_draft
+
+3. Call agent_start_run with review-synthesiser agent
+   → Synthesiser reads all drafts, deduplicates, publishes consolidated review
+```
 
 ### Agent Execution Engine
 

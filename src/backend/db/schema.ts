@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const connectionsTable = sqliteTable("connections", {
   id: text("id").primaryKey(),
@@ -191,5 +191,49 @@ export const reviewsTable = sqliteTable("reviews", {
   outputTokensEstimate: integer("output_tokens_estimate"),
   startedAt: text("started_at").notNull(),
   completedAt: text("completed_at"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const repoReviewConfigsTable = sqliteTable(
+  "repo_review_configs",
+  {
+    id: text("id").primaryKey(),
+    owner: text("owner").notNull(),
+    repo: text("repo").notNull(),
+    agentId: text("agent_id").notNull(),
+    aiTool: text("ai_tool").notNull(), // "claude" | "gemini" | "codex"
+    enabled: integer("enabled").notNull().default(1),
+    requiresExplicitSelection: integer("requires_explicit_selection").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => ({
+    ownerRepoToolUnique: uniqueIndex("repo_review_configs_owner_repo_tool_unique")
+      .on(table.owner, table.repo, table.aiTool),
+  })
+);
+
+export const reviewSessionsTable = sqliteTable("review_sessions", {
+  id: text("id").primaryKey(),
+  owner: text("owner").notNull(),
+  repo: text("repo").notNull(),
+  prNumber: integer("pr_number").notNull(),
+  status: text("status").notNull().default("pending"), // pending | reviewing | synthesising | completed | failed
+  errorMessage: text("error_message"), // nullable
+  createdAt: text("created_at").notNull(),
+  completedAt: text("completed_at"), // nullable
+});
+
+export const reviewSessionDraftsTable = sqliteTable("review_session_drafts", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .references(() => reviewSessionsTable.id),
+  agentId: text("agent_id").notNull(),
+  aiTool: text("ai_tool").notNull(), // "claude" | "gemini" | "codex"
+  runId: text("run_id"), // nullable
+  verdict: text("verdict").notNull(), // APPROVE | REQUEST_CHANGES | COMMENT
+  body: text("body").notNull(),
+  commentsJson: text("comments_json").notNull().default("[]"),
   createdAt: text("created_at").notNull(),
 });

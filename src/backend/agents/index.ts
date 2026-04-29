@@ -20,3 +20,6 @@ export { securityReviewerAgent } from "./security-reviewer.agent.js";
 export { frontendOrchestratorAgent } from "./frontend-orchestrator.agent.js";
 export { backendOrchestratorAgent } from "./backend-orchestrator.agent.js";
 export { fullstackOrchestratorAgent } from "./fullstack-orchestrator.agent.js";
+
+// ── Multi-agent review agents (REQ-7.3) ──────────────────────────────
+export { reviewSynthesiserAgent } from "./review-synthesiser.agent.js";

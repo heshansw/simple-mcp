@@ -65,6 +65,22 @@ export function createAgentRunStepId(value: string): AgentRunStepId {
 // Integration type literal
 export type IntegrationType = "jira" | "github" | "google-calendar" | "local-filesystem" | "mysql" | "postgres";
 
+export type ReviewSessionId = Brand<string, "ReviewSessionId">;
+export type ReviewSessionDraftId = Brand<string, "ReviewSessionDraftId">;
+export type RepoReviewConfigId = Brand<string, "RepoReviewConfigId">;
+
+export function createReviewSessionId(value: string): ReviewSessionId {
+  return value as ReviewSessionId;
+}
+
+export function createReviewSessionDraftId(value: string): ReviewSessionDraftId {
+  return value as ReviewSessionDraftId;
+}
+
+export function createRepoReviewConfigId(value: string): RepoReviewConfigId {
+  return value as RepoReviewConfigId;
+}
+
 // Utility types
 export type Prettify<T> = {
   [K in keyof T]: T[K];
