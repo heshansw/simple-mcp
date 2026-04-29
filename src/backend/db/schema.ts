@@ -232,6 +232,7 @@ export const reviewSessionDraftsTable = sqliteTable("review_session_drafts", {
   agentId: text("agent_id").notNull(),
   aiTool: text("ai_tool").notNull(), // "claude" | "gemini" | "codex"
   runId: text("run_id"), // nullable
+  model: text("model"), // nullable — AI model used (e.g. "claude-sonnet-4", "gemini-2.5-pro")
   verdict: text("verdict").notNull(), // APPROVE | REQUEST_CHANGES | COMMENT
   body: text("body").notNull(),
   commentsJson: text("comments_json").notNull().default("[]"),

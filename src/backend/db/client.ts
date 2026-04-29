@@ -208,6 +208,7 @@ async function createTables(
       agent_id TEXT NOT NULL,
       ai_tool TEXT NOT NULL,
       run_id TEXT,
+      model TEXT,
       verdict TEXT NOT NULL,
       body TEXT NOT NULL,
       comments_json TEXT NOT NULL DEFAULT '[]',

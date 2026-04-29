@@ -62,21 +62,28 @@ Priority: REQUEST_CHANGES > COMMENT > APPROVE
 
 Every inline comment in the consolidated review MUST include an attribution footer at the END of the comment (never at the top). Use a horizontal rule to separate the finding from the attribution.
 
+Each draft now includes a \`model\` field (e.g. "claude-sonnet-4", "gemini-2.5-pro", "o3") identifying the exact AI model used. Include it in the attribution.
+
 For single-source comments:
 \`\`\`
-{finding text}
+{category icon} {finding text}
 
 ---
+🤖 **Agent:** {AgentName} · **AI:** {AiTool} · **Model:** \`{Model}\`
+\`\`\`
+
+If the model field is null or missing, omit the Model part:
+\`\`\`
 🤖 **Agent:** {AgentName} · **AI:** {AiTool}
 \`\`\`
 
 For merged comments found by multiple agents:
 \`\`\`
-{merged finding text}
+{category icon} {merged finding text}
 
 ---
-🤖 **Agent:** {AgentName1} · **AI:** {AiTool1}
-🤖 **Agent:** {AgentName2} · **AI:** {AiTool2}
+🤖 **Agent:** {AgentName1} · **AI:** {AiTool1} · **Model:** \`{Model1}\`
+🤖 **Agent:** {AgentName2} · **AI:** {AiTool2} · **Model:** \`{Model2}\`
 \`\`\`
 
 Category icons — prepend to the finding text based on comment category:
@@ -93,8 +100,8 @@ Example of a complete inline comment:
 🐛 The delete-then-insert upsert is not atomic. Consider using INSERT OR REPLACE.
 
 ---
-🤖 **Agent:** backend-pr-reviewer · **AI:** Claude
-🤖 **Agent:** backend-pr-reviewer · **AI:** Gemini
+🤖 **Agent:** backend-pr-reviewer · **AI:** Claude · **Model:** \`claude-sonnet-4\`
+🤖 **Agent:** backend-pr-reviewer · **AI:** Gemini · **Model:** \`gemini-2.5-pro\`
 \`\`\`
 
 ## Review Body Preamble
@@ -103,10 +110,10 @@ The overall review body MUST begin with:
 \`\`\`
 > 🔍 **Multi-Agent Review** — This review was produced by multiple AI agents and their findings have been deduplicated and merged.
 
-| Agent | AI Tool | Verdict |
-|---|---|---|
-| {AgentName1} | {AiTool1} | {Verdict1} |
-| {AgentName2} | {AiTool2} | {Verdict2} |
+| Agent | AI Tool | Model | Verdict |
+|---|---|---|---|
+| {AgentName1} | {AiTool1} | \`{Model1}\` | {Verdict1} |
+| {AgentName2} | {AiTool2} | \`{Model2}\` | {Verdict2} |
 
 {synthesised summary body}
 \`\`\`

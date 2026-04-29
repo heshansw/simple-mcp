@@ -52,6 +52,7 @@ export function registerGetReviewSessionDraftsTool(
             agentId: d.agentId,
             aiTool: d.aiTool,
             runId: d.runId,
+            model: d.model ?? null,
             verdict: d.verdict,
             body: d.body,
             comments: JSON.parse(d.commentsJson),

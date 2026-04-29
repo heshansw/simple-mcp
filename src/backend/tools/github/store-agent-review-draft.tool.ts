@@ -54,6 +54,7 @@ export function registerStoreAgentReviewDraftTool(
           agentId: input.agentId,
           aiTool: input.aiTool,
           runId: input.runId ?? null,
+          model: input.model ?? null,
           verdict: input.verdict,
           body: input.body,
           commentsJson: JSON.stringify(input.comments),

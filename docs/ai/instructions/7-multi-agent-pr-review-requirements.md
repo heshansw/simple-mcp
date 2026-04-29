@@ -164,6 +164,7 @@ Transitions:
 | `agentId` | text | NOT NULL | Agent definition ID that produced this draft |
 | `aiTool` | text | NOT NULL | `claude \| gemini \| codex` |
 | `runId` | text | nullable | `agent_runs.id` for the run that produced this draft (if run via engine) |
+| `model` | text | nullable | AI model identifier (e.g. `claude-sonnet-4`, `gemini-2.5-pro`, `o3`) |
 | `verdict` | text | NOT NULL | `APPROVE \| REQUEST_CHANGES \| COMMENT` |
 | `body` | text | NOT NULL | Overall review summary written by the reviewing agent |
 | `commentsJson` | text | NOT NULL, default `[]` | JSON array of inline comment objects (see schema below) |
@@ -309,8 +310,10 @@ For single-source comments:
 {icon} {finding text}
 
 ---
-🤖 **Agent:** {AgentName} · **AI:** {AiTool}
+🤖 **Agent:** {AgentName} · **AI:** {AiTool} · **Model:** `{Model}`
 ```
+
+If the `model` field is null, omit the Model part from the attribution line.
 
 For merged comments with multiple attributions:
 
@@ -318,8 +321,8 @@ For merged comments with multiple attributions:
 {icon} {merged finding text}
 
 ---
-🤖 **Agent:** {AgentName1} · **AI:** {AiTool1}
-🤖 **Agent:** {AgentName2} · **AI:** {AiTool2}
+🤖 **Agent:** {AgentName1} · **AI:** {AiTool1} · **Model:** `{Model1}`
+🤖 **Agent:** {AgentName2} · **AI:** {AiTool2} · **Model:** `{Model2}`
 ```
 
 The overall review body must begin with a preamble:
@@ -327,10 +330,10 @@ The overall review body must begin with a preamble:
 ```
 > 🔍 **Multi-Agent Review** — This review was produced by multiple AI agents and their findings have been deduplicated and merged.
 
-| Agent | AI Tool | Verdict |
-|---|---|---|
-| {AgentName1} | {AiTool1} | {Verdict1} |
-| {AgentName2} | {AiTool2} | {Verdict2} |
+| Agent | AI Tool | Model | Verdict |
+|---|---|---|---|
+| {AgentName1} | {AiTool1} | `{Model1}` | {Verdict1} |
+| {AgentName2} | {AiTool2} | `{Model2}` | {Verdict2} |
 
 {synthesised summary body}
 ```

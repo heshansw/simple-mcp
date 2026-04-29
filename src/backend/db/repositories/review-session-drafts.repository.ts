@@ -12,6 +12,7 @@ export interface ReviewSessionDraftsRepository {
     agentId: string;
     aiTool: string;
     runId?: string | null;
+    model?: string | null;
     verdict: string;
     body: string;
     commentsJson: string;
@@ -44,6 +45,7 @@ export function createReviewSessionDraftsRepository(db: DrizzleDB): ReviewSessio
           .set({
             agentId: data.agentId,
             runId: data.runId ?? null,
+            model: data.model ?? null,
             verdict: data.verdict,
             body: data.body,
             commentsJson: data.commentsJson,
@@ -67,6 +69,7 @@ export function createReviewSessionDraftsRepository(db: DrizzleDB): ReviewSessio
         agentId: data.agentId,
         aiTool: data.aiTool,
         runId: data.runId ?? null,
+        model: data.model ?? null,
         verdict: data.verdict,
         body: data.body,
         commentsJson: data.commentsJson,

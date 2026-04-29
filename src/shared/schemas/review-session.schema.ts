@@ -37,6 +37,9 @@ export const StoreAgentReviewDraftInputSchema = z.object({
   agentId: z.string().min(1),
   aiTool: AiToolSchema,
   runId: z.string().nullable().optional(),
+  model: z.string().min(1).optional().describe(
+    "AI model used for analysis (e.g. 'claude-sonnet-4', 'gemini-2.5-pro', 'o3')"
+  ),
   verdict: ReviewVerdictSchema,
   body: z.string().min(1),
   comments: z.array(DraftCommentSchema).default([]),
