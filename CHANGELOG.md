@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.5.0...simple-mcp-v0.6.0) (2026-04-29)
+
+
+### Features
+
+* **github:** add multi-agent parallel PR review system ([#21](https://github.com/heshansw/simple-mcp/issues/21)) ([2406fd4](https://github.com/heshansw/simple-mcp/commit/2406fd43865590ad0de413f0015aa40c00d84b9a))
+
 ## [0.5.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.4.0...simple-mcp-v0.5.0) (2026-04-28)
 
 
