@@ -179,6 +179,40 @@ async function createTables(
       duration_ms INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS repo_review_configs (
+      id TEXT PRIMARY KEY,
+      owner TEXT NOT NULL,
+      repo TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      ai_tool TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      requires_explicit_selection INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS repo_review_configs_owner_repo_tool_unique
+      ON repo_review_configs(owner, repo, ai_tool);
+    CREATE TABLE IF NOT EXISTS review_sessions (
+      id TEXT PRIMARY KEY,
+      owner TEXT NOT NULL,
+      repo TEXT NOT NULL,
+      pr_number INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      completed_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS review_session_drafts (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES review_sessions(id),
+      agent_id TEXT NOT NULL,
+      ai_tool TEXT NOT NULL,
+      run_id TEXT,
+      verdict TEXT NOT NULL,
+      body TEXT NOT NULL,
+      comments_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       owner TEXT NOT NULL,

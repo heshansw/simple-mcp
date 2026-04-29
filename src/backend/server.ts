@@ -54,6 +54,7 @@ import {
   frontendOrchestratorAgent,
   backendOrchestratorAgent,
   fullstackOrchestratorAgent,
+  reviewSynthesiserAgent,
 } from "./agents/index.js";
 
 import {
@@ -69,6 +70,9 @@ import type { ToolHandlerRegistry } from "./agents/engine/index.js";
 import { createAgentRunsRepository } from "./db/repositories/agent-runs.repository.js";
 import { createAgentTasksRepository } from "./db/repositories/agent-tasks.repository.js";
 import { createAgentRunStepsRepository } from "./db/repositories/agent-run-steps.repository.js";
+import { createRepoReviewConfigsRepository } from "./db/repositories/repo-review-configs.repository.js";
+import { createReviewSessionsRepository } from "./db/repositories/review-sessions.repository.js";
+import { createReviewSessionDraftsRepository } from "./db/repositories/review-session-drafts.repository.js";
 
 import { registerAgentExecuteTool } from "./tools/system/agent-execute.tool.js";
 import { registerAgentStatusTool } from "./tools/system/agent-status.tool.js";
@@ -99,6 +103,12 @@ import { registerReviewPrTool } from "./tools/github/review-pr.tool.js";
 import { registerSearchCodeTool } from "./tools/github/search-code.tool.js";
 import { registerGetPrDiffTool } from "./tools/github/get-pr-diff.tool.js";
 import { registerGetMyPrsTool } from "./tools/github/get-my-prs.tool.js";
+import { registerGetRepoReviewConfigTool } from "./tools/github/get-repo-review-config.tool.js";
+import { registerSetRepoReviewConfigTool } from "./tools/github/set-repo-review-config.tool.js";
+import { registerStartPrReviewSessionTool } from "./tools/github/start-pr-review-session.tool.js";
+import { registerStoreAgentReviewDraftTool } from "./tools/github/store-agent-review-draft.tool.js";
+import { registerGetReviewSessionDraftsTool } from "./tools/github/get-review-session-drafts.tool.js";
+import { registerPublishConsolidatedReviewTool } from "./tools/github/publish-consolidated-review.tool.js";
 import { registerHealthCheckTool } from "./tools/system/health-check.tool.js";
 import { registerListConnectionsTool } from "./tools/system/list-connections.tool.js";
 import { registerListEventsTool } from "./tools/google-calendar/list-events.tool.js";
@@ -168,6 +178,9 @@ export async function createServer(
   const agentRunsRepo = createAgentRunsRepository(db);
   const agentTasksRepo = createAgentTasksRepository(db);
   const agentRunStepsRepo = createAgentRunStepsRepository(db);
+  const repoReviewConfigsRepo = createRepoReviewConfigsRepository(db);
+  const reviewSessionsRepo = createReviewSessionsRepository(db);
+  const reviewSessionDraftsRepo = createReviewSessionDraftsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -393,6 +406,12 @@ export async function createServer(
   registerSearchCodeTool(mcpServer, githubToolDeps);
   registerGetPrDiffTool(mcpServer, { ...githubToolDeps, reviewsRepo });
   registerGetMyPrsTool(mcpServer, githubToolDeps);
+  registerGetRepoReviewConfigTool(mcpServer, { repoReviewConfigsRepo, logger });
+  registerSetRepoReviewConfigTool(mcpServer, { repoReviewConfigsRepo, logger });
+  registerStartPrReviewSessionTool(mcpServer, { repoReviewConfigsRepo, reviewSessionsRepo, logger });
+  registerStoreAgentReviewDraftTool(mcpServer, { reviewSessionsRepo, reviewSessionDraftsRepo, logger });
+  registerGetReviewSessionDraftsTool(mcpServer, { reviewSessionsRepo, reviewSessionDraftsRepo, logger });
+  registerPublishConsolidatedReviewTool(mcpServer, { githubService, reviewsRepo, reviewSessionsRepo, logger });
   registerHealthCheckTool(mcpServer, { logger, connectionManager } as any);
   registerListConnectionsTool(mcpServer, { logger, connectionManager } as any);
 
@@ -515,6 +534,9 @@ export async function createServer(
   agentRegistry.register(backendOrchestratorAgent);
   agentRegistry.register(fullstackOrchestratorAgent);
 
+  // Multi-agent review agents (REQ-7.3)
+  agentRegistry.register(reviewSynthesiserAgent);
+
   logger.info(
     { agentCount: agentRegistry.getAll().length },
     "Agent registry populated"
@@ -626,6 +648,91 @@ export async function createServer(
     if (result._tag === "Err") return { content: [{ type: "text" as const, text: `Error: ${errText(result.error)}` }], isError: true };
     return { content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }] };
   });
+
+  // Multi-agent review tools (REQ-7)
+  toolHandlerRegistry.register("get_repo_review_config", "Get AI tool configuration for a repository's multi-agent review system", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" } }, required: ["owner", "repo"] }, async (args) => {
+    try {
+      const configs = await repoReviewConfigsRepo.findByOwnerRepo(args.owner as string, args.repo as string);
+      return { content: [{ type: "text" as const, text: JSON.stringify({ owner: args.owner, repo: args.repo, configs: configs.map((c) => ({ id: c.id, aiTool: c.aiTool, agentId: c.agentId, enabled: c.enabled === 1, requiresExplicitSelection: c.requiresExplicitSelection === 1, createdAt: c.createdAt, updatedAt: c.updatedAt })) }, null, 2) }] };
+    } catch (e) { return { content: [{ type: "text" as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }; }
+  });
+  toolHandlerRegistry.register("set_repo_review_config", "Enable or disable an AI tool for a repository's multi-agent review system", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, aiTool: { type: "string", enum: ["claude", "gemini", "codex"] }, enabled: { type: "boolean" }, agentId: { type: "string" }, requiresExplicitSelection: { type: "boolean" } }, required: ["owner", "repo", "aiTool", "enabled"] }, async (args) => {
+    try {
+      const aiTool = args.aiTool as string;
+      const enabled = args.enabled as boolean;
+      const reqExplicit = args.requiresExplicitSelection as boolean | undefined;
+      if (aiTool === "codex" && enabled && reqExplicit !== false) {
+        const existing = await repoReviewConfigsRepo.findByOwnerRepo(args.owner as string, args.repo as string);
+        const codexCfg = existing.find((c) => c.aiTool === "codex");
+        if (!codexCfg || codexCfg.requiresExplicitSelection === 1) {
+          return { content: [{ type: "text" as const, text: 'Cannot enable codex: it requires explicit opt-in. Pass "requiresExplicitSelection": false to confirm.' }], isError: true };
+        }
+      }
+      const config = await repoReviewConfigsRepo.upsertConfig({ owner: args.owner as string, repo: args.repo as string, aiTool, agentId: (args.agentId as string) ?? "backend-pr-reviewer", enabled: enabled ? 1 : 0, requiresExplicitSelection: reqExplicit !== undefined ? (reqExplicit ? 1 : 0) : undefined });
+      return { content: [{ type: "text" as const, text: JSON.stringify({ updated: true, config: { id: config.id, owner: config.owner, repo: config.repo, aiTool: config.aiTool, agentId: config.agentId, enabled: config.enabled === 1, requiresExplicitSelection: config.requiresExplicitSelection === 1, createdAt: config.createdAt, updatedAt: config.updatedAt } }, null, 2) }] };
+    } catch (e) { return { content: [{ type: "text" as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }; }
+  });
+  toolHandlerRegistry.register("start_pr_review_session", "Start a multi-agent parallel PR review session", { type: "object", properties: { owner: { type: "string" }, repo: { type: "string" }, prNumber: { type: "number" } }, required: ["owner", "repo", "prNumber"] }, async (args) => {
+    try {
+      const owner = args.owner as string; const repo = args.repo as string; const prNumber = args.prNumber as number;
+      const existingSession = await reviewSessionsRepo.findActiveByPr(owner, repo, prNumber);
+      if (existingSession) {
+        const configs = await repoReviewConfigsRepo.findByOwnerRepo(owner, repo);
+        const enabled = configs.filter((c) => c.enabled === 1);
+        return { content: [{ type: "text" as const, text: JSON.stringify({ sessionId: existingSession.id, owner, repo, prNumber, status: existingSession.status, enabledAgents: enabled.map((c) => ({ aiTool: c.aiTool, agentId: c.agentId, suggestedGoal: `Review PR #${prNumber} in ${owner}/${repo}. When complete, store your findings using store_agent_review_draft with sessionId=${existingSession.id}.` })), instructions: `Session ${existingSession.id} already exists.` }, null, 2) }] };
+      }
+      let configs = await repoReviewConfigsRepo.findByOwnerRepo(owner, repo);
+      if (configs.length === 0) configs = await repoReviewConfigsRepo.createDefaults(owner, repo);
+      const enabled = configs.filter((c) => c.enabled === 1);
+      if (enabled.length === 0) return { content: [{ type: "text" as const, text: JSON.stringify({ error: "No AI tools are enabled for this repository. Use set_repo_review_config to enable at least one.", owner, repo }) }], isError: true };
+      const session = await reviewSessionsRepo.create({ owner, repo, prNumber });
+      return { content: [{ type: "text" as const, text: JSON.stringify({ sessionId: session.id, owner, repo, prNumber, status: session.status, enabledAgents: enabled.map((c) => ({ aiTool: c.aiTool, agentId: c.agentId, suggestedGoal: `Review PR #${prNumber} in ${owner}/${repo}. When complete, store your findings using store_agent_review_draft with sessionId=${session.id}.` })), instructions: `Session ${session.id} created. Call agent_start_run for each entry in enabledAgents using the suggestedGoal. When all drafts are stored, run agent_start_run with agentId=review-synthesiser and goal: "Synthesise review session ${session.id} for PR #${prNumber} in ${owner}/${repo}".` }, null, 2) }] };
+    } catch (e) { return { content: [{ type: "text" as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }; }
+  });
+  toolHandlerRegistry.register("store_agent_review_draft", "Save a reviewing agent's draft without posting to GitHub", { type: "object", properties: { sessionId: { type: "string" }, agentId: { type: "string" }, aiTool: { type: "string", enum: ["claude", "gemini", "codex"] }, runId: { type: "string" }, verdict: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] }, body: { type: "string" }, comments: { type: "array" } }, required: ["sessionId", "agentId", "aiTool", "verdict", "body"] }, async (args) => {
+    try {
+      const sessionId = args.sessionId as string;
+      const session = await reviewSessionsRepo.findById(sessionId);
+      if (!session) return { content: [{ type: "text" as const, text: "Session not found" }], isError: true };
+      if (session.status === "completed" || session.status === "failed") return { content: [{ type: "text" as const, text: "Session is already closed" }], isError: true };
+      const comments = (args.comments as Array<{ path: string; position: number; body: string; category: string }>) ?? [];
+      const draft = await reviewSessionDraftsRepo.upsertDraft({ sessionId, agentId: args.agentId as string, aiTool: args.aiTool as string, runId: (args.runId as string) ?? null, verdict: args.verdict as string, body: args.body as string, commentsJson: JSON.stringify(comments) });
+      return { content: [{ type: "text" as const, text: JSON.stringify({ draftId: draft.id, sessionId: draft.sessionId, aiTool: draft.aiTool, commentCount: comments.length }, null, 2) }] };
+    } catch (e) { return { content: [{ type: "text" as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }; }
+  });
+  toolHandlerRegistry.register("get_review_session_drafts", "Retrieve all stored review drafts for a session", { type: "object", properties: { sessionId: { type: "string" } }, required: ["sessionId"] }, async (args) => {
+    try {
+      const sessionId = args.sessionId as string;
+      const session = await reviewSessionsRepo.findById(sessionId);
+      if (!session) return { content: [{ type: "text" as const, text: "Session not found" }], isError: true };
+      const drafts = await reviewSessionDraftsRepo.findBySessionId(sessionId);
+      return { content: [{ type: "text" as const, text: JSON.stringify({ sessionId: session.id, sessionStatus: session.status, prNumber: session.prNumber, owner: session.owner, repo: session.repo, drafts: drafts.map((d) => ({ id: d.id, agentId: d.agentId, aiTool: d.aiTool, runId: d.runId, verdict: d.verdict, body: d.body, comments: JSON.parse(d.commentsJson), createdAt: d.createdAt })) }, null, 2) }] };
+    } catch (e) { return { content: [{ type: "text" as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }; }
+  });
+  toolHandlerRegistry.register("publish_consolidated_review", "Post a consolidated GitHub review with merged findings from all agent drafts", { type: "object", properties: { sessionId: { type: "string" }, owner: { type: "string" }, repo: { type: "string" }, prNumber: { type: "number" }, verdict: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"] }, body: { type: "string" }, comments: { type: "array" } }, required: ["sessionId", "owner", "repo", "prNumber", "verdict", "body"] }, async (args) => {
+    try {
+      const sessionId = args.sessionId as string;
+      const session = await reviewSessionsRepo.findById(sessionId);
+      if (!session) return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Session not found", sessionId }) }], isError: true };
+      if (session.status === "completed" || session.status === "failed") return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Session is already closed", sessionId }) }], isError: true };
+      if (session.status === "reviewing") await reviewSessionsRepo.updateStatus(sessionId, "synthesising");
+      const rawComments = (args.comments as Array<{ path: string; position: number; body: string }>) ?? [];
+      const validComments = rawComments.filter((c) => c.position > 0);
+      const commentsDropped = rawComments.length - validComments.length;
+      if (commentsDropped > 0) logger.warn({ sessionId, commentsDropped }, "Dropped comments with invalid positions");
+      const verdict = args.verdict as "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+      const reviewResult = await githubService.reviewPullRequest({ owner: args.owner as string, repo: args.repo as string, prNumber: args.prNumber as number, body: args.body as string, event: verdict, comments: validComments.map((c) => ({ path: c.path, position: c.position, body: c.body })) });
+      if (reviewResult._tag === "Err") {
+        await reviewSessionsRepo.updateStatus(sessionId, "failed", domainErrorMessage(reviewResult.error));
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "Failed to post review to GitHub", sessionId }) }], isError: true };
+      }
+      const review = reviewResult.value;
+      await reviewSessionsRepo.updateStatus(sessionId, "completed");
+      try { await reviewsRepo.createCompleted({ owner: args.owner as string, repo: args.repo as string, prNumber: args.prNumber as number, prTitle: "", prAuthor: "", verdict, inlineCommentCount: validComments.length, reviewBody: args.body as string, filesChanged: 0, additions: 0, deletions: 0, githubReviewId: review.id, githubReviewUrl: review.html_url, inputTokensEstimate: null, outputTokensEstimate: null, completedAt: new Date().toISOString() }); } catch (dbErr) { logger.error({ error: dbErr }, "Failed to persist consolidated review to DB"); }
+      return { content: [{ type: "text" as const, text: JSON.stringify({ sessionId, githubReviewId: review.id, githubReviewUrl: review.html_url, verdict, inlineCommentsPosted: validComments.length, commentsDropped }, null, 2) }] };
+    } catch (e) { return { content: [{ type: "text" as const, text: `Error: ${e instanceof Error ? e.message : String(e)}` }], isError: true }; }
+  });
+
   toolHandlerRegistry.register("jira_add_comment", "Add a comment to a Jira issue", { type: "object", properties: { issueKey: { type: "string" }, body: { type: "string" }, bodyMarkdown: { type: "string" }, bodyAdf: { type: "object" }, mentions: { type: "array", items: { type: "object" } } }, required: ["issueKey"] }, async (args) => {
     const bodyFieldCount = [args.body, args.bodyMarkdown, args.bodyAdf].filter((v) => v !== undefined).length;
     if (bodyFieldCount !== 1) {
