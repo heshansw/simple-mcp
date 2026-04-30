@@ -55,7 +55,7 @@ export function registerStartPrReviewSessionTool(
             enabledAgents: enabledConfigs.map((c) => ({
               aiTool: c.aiTool,
               agentId: c.agentId,
-              suggestedGoal: `Review PR #${existingSession.prNumber} in ${existingSession.owner}/${existingSession.repo}. When complete, store your findings using store_agent_review_draft with sessionId=${existingSession.id}.`,
+              suggestedGoal: `Review PR #${existingSession.prNumber} in ${existingSession.owner}/${existingSession.repo} as ${c.agentId}. When complete, store your findings using store_agent_review_draft with sessionId=${existingSession.id}, agentId=${c.agentId}, aiTool=${c.aiTool}.`,
             })),
             instructions: `Session ${existingSession.id} already exists. Call agent_start_run for each entry in enabledAgents using the suggestedGoal. When all drafts are stored, run agent_start_run with agentId=review-synthesiser and goal: "Synthesise review session ${existingSession.id} for PR #${existingSession.prNumber} in ${existingSession.owner}/${existingSession.repo}".`,
           };
@@ -89,7 +89,7 @@ export function registerStartPrReviewSessionTool(
               {
                 type: "text" as const,
                 text: JSON.stringify({
-                  error: "No AI tools are enabled for this repository. Use set_repo_review_config to enable at least one.",
+                  error: "No agents are enabled for this repository. Use set_repo_review_config to enable at least one.",
                   owner: input.owner,
                   repo: input.repo,
                 }),
@@ -124,7 +124,7 @@ export function registerStartPrReviewSessionTool(
           };
         }
 
-        // Step 6: Return session + agents
+        // Step 6: Return session + agents (one entry per enabled agentId+aiTool pair)
         const result = {
           sessionId: session.id,
           owner: session.owner,
@@ -134,7 +134,7 @@ export function registerStartPrReviewSessionTool(
           enabledAgents: enabledConfigs.map((c) => ({
             aiTool: c.aiTool,
             agentId: c.agentId,
-            suggestedGoal: `Review PR #${input.prNumber} in ${input.owner}/${input.repo}. When complete, store your findings using store_agent_review_draft with sessionId=${session.id}.`,
+            suggestedGoal: `Review PR #${input.prNumber} in ${input.owner}/${input.repo} as ${c.agentId}. When complete, store your findings using store_agent_review_draft with sessionId=${session.id}, agentId=${c.agentId}, aiTool=${c.aiTool}.`,
           })),
           instructions: `Session ${session.id} created. Call agent_start_run for each entry in enabledAgents using the suggestedGoal. When all drafts are stored, run agent_start_run with agentId=review-synthesiser and goal: "Synthesise review session ${session.id} for PR #${input.prNumber} in ${input.owner}/${input.repo}".`,
         };

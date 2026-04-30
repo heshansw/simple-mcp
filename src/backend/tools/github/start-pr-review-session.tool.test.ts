@@ -85,6 +85,9 @@ function createMockDeps(
     findByOwnerRepo: vi.fn().mockResolvedValue([]),
     upsertConfig: vi.fn(),
     createDefaults: vi.fn().mockResolvedValue(DEFAULT_CONFIGS),
+    insertConfig: vi.fn(),
+    deleteConfig: vi.fn(),
+    countEnabledForRepo: vi.fn().mockResolvedValue(0),
   };
 
   const reviewSessionsRepo: ReviewSessionsRepository = {
@@ -305,7 +308,7 @@ describe("registerStartPrReviewSessionTool (MCP transport)", () => {
 
       expect(result.isError).toBe(true);
       const body = parseResponse(result);
-      expect(body.error).toContain("No AI tools are enabled");
+      expect(body.error).toContain("No agents are enabled");
       expect(body.owner).toBe(OWNER);
       expect(body.repo).toBe(REPO);
     });

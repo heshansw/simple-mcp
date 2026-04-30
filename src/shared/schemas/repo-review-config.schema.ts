@@ -21,11 +21,28 @@ export const GetRepoReviewConfigInputSchema = z.object({
   repo: z.string().min(1),
 });
 
+// agentId is now REQUIRED (breaking change from doc 7 spec where it was optional)
 export const SetRepoReviewConfigInputSchema = z.object({
   owner: z.string().min(1),
   repo: z.string().min(1),
+  agentId: z.string().min(1),  // required
   aiTool: AiToolSchema,
   enabled: z.boolean(),
-  agentId: z.string().min(1).optional(),
   requiresExplicitSelection: z.boolean().optional(),
+});
+
+export const AddRepoReviewAgentInputSchema = z.object({
+  owner: z.string().min(1),
+  repo: z.string().min(1),
+  agentId: z.string().min(1),
+  aiTool: AiToolSchema,
+  enabled: z.boolean().default(true),
+  requiresExplicitSelection: z.boolean().default(false),
+});
+
+export const RemoveRepoReviewAgentInputSchema = z.object({
+  owner: z.string().min(1),
+  repo: z.string().min(1),
+  agentId: z.string().min(1),
+  aiTool: AiToolSchema,
 });

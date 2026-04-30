@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 
 export const connectionsTable = sqliteTable("connections", {
   id: text("id").primaryKey(),
@@ -208,8 +208,10 @@ export const repoReviewConfigsTable = sqliteTable(
     updatedAt: text("updated_at").notNull(),
   },
   (table) => ({
-    ownerRepoToolUnique: uniqueIndex("repo_review_configs_owner_repo_tool_unique")
-      .on(table.owner, table.repo, table.aiTool),
+    ownerRepoAgentToolUnique: uniqueIndex("repo_review_configs_owner_repo_agent_tool_unique")
+      .on(table.owner, table.repo, table.agentId, table.aiTool),
+    ownerRepoIdx: index("repo_review_configs_owner_repo_idx")
+      .on(table.owner, table.repo),
   })
 );
 
@@ -234,6 +236,40 @@ export const reviewSessionDraftsTable = sqliteTable("review_session_drafts", {
   runId: text("run_id"), // nullable
   model: text("model"), // nullable — AI model used (e.g. "claude-sonnet-4", "gemini-2.5-pro")
   verdict: text("verdict").notNull(), // APPROVE | REQUEST_CHANGES | COMMENT
+  body: text("body").notNull(),
+  commentsJson: text("comments_json").notNull().default("[]"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const codeReviewSessionsTable = sqliteTable("code_review_sessions", {
+  id: text("id").primaryKey(),
+  repoPath: text("repo_path").notNull(),
+  repoName: text("repo_name").notNull(),
+  repoOwner: text("repo_owner"),              // nullable — extracted from git remote if available
+  diffMode: text("diff_mode").notNull(),      // "staged" | "unstaged" | "branch"
+  branchName: text("branch_name"),            // nullable — only set when diffMode = "branch"
+  status: text("status").notNull().default("pending"), // pending | reviewing | synthesising | completed | failed
+  diffContent: text("diff_content").notNull(),
+  filesChanged: integer("files_changed").notNull().default(0),
+  additions: integer("additions").notNull().default(0),
+  deletions: integer("deletions").notNull().default(0),
+  reportMarkdown: text("report_markdown"),    // nullable — set on completion
+  reportUrl: text("report_url"),              // nullable — admin panel URL
+  errorMessage: text("error_message"),        // nullable
+  createdAt: text("created_at").notNull(),
+  completedAt: text("completed_at"),          // nullable
+});
+
+export const codeReviewDraftsTable = sqliteTable("code_review_drafts", {
+  id: text("id").primaryKey(),
+  codeReviewSessionId: text("code_review_session_id")
+    .notNull()
+    .references(() => codeReviewSessionsTable.id),
+  agentId: text("agent_id").notNull(),
+  aiTool: text("ai_tool").notNull(),          // "claude" | "gemini" | "codex"
+  runId: text("run_id"),                      // nullable
+  model: text("model"),                       // nullable
+  verdict: text("verdict").notNull(),         // APPROVE | REQUEST_CHANGES | COMMENT
   body: text("body").notNull(),
   commentsJson: text("comments_json").notNull().default("[]"),
   createdAt: text("created_at").notNull(),

@@ -81,6 +81,17 @@ export function createRepoReviewConfigId(value: string): RepoReviewConfigId {
   return value as RepoReviewConfigId;
 }
 
+export type CodeReviewSessionId = Brand<string, "CodeReviewSessionId">;
+export type CodeReviewDraftId = Brand<string, "CodeReviewDraftId">;
+
+export function createCodeReviewSessionId(value: string): CodeReviewSessionId {
+  return value as CodeReviewSessionId;
+}
+
+export function createCodeReviewDraftId(value: string): CodeReviewDraftId {
+  return value as CodeReviewDraftId;
+}
+
 // Utility types
 export type Prettify<T> = {
   [K in keyof T]: T[K];

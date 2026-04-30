@@ -73,6 +73,8 @@ import { createAgentRunStepsRepository } from "./db/repositories/agent-run-steps
 import { createRepoReviewConfigsRepository } from "./db/repositories/repo-review-configs.repository.js";
 import { createReviewSessionsRepository } from "./db/repositories/review-sessions.repository.js";
 import { createReviewSessionDraftsRepository } from "./db/repositories/review-session-drafts.repository.js";
+import { createCodeReviewSessionsRepository } from "./db/repositories/code-review-sessions.repository.js";
+import { createCodeReviewDraftsRepository } from "./db/repositories/code-review-drafts.repository.js";
 
 import { registerAgentExecuteTool } from "./tools/system/agent-execute.tool.js";
 import { registerAgentStatusTool } from "./tools/system/agent-status.tool.js";
@@ -109,6 +111,11 @@ import { registerStartPrReviewSessionTool } from "./tools/github/start-pr-review
 import { registerStoreAgentReviewDraftTool } from "./tools/github/store-agent-review-draft.tool.js";
 import { registerGetReviewSessionDraftsTool } from "./tools/github/get-review-session-drafts.tool.js";
 import { registerPublishConsolidatedReviewTool } from "./tools/github/publish-consolidated-review.tool.js";
+import { registerAddRepoReviewAgentTool } from "./tools/github/add-repo-review-agent.tool.js";
+import { registerRemoveRepoReviewAgentTool } from "./tools/github/remove-repo-review-agent.tool.js";
+import { registerStartCodeReviewSessionTool } from "./tools/github/start-code-review-session.tool.js";
+import { registerPublishCodeReviewReportTool } from "./tools/github/publish-code-review-report.tool.js";
+import { registerGetCodeReviewSessionDraftsTool } from "./tools/github/get-code-review-session-drafts.tool.js";
 import { registerHealthCheckTool } from "./tools/system/health-check.tool.js";
 import { registerListConnectionsTool } from "./tools/system/list-connections.tool.js";
 import { registerListEventsTool } from "./tools/google-calendar/list-events.tool.js";
@@ -181,6 +188,8 @@ export async function createServer(
   const repoReviewConfigsRepo = createRepoReviewConfigsRepository(db);
   const reviewSessionsRepo = createReviewSessionsRepository(db);
   const reviewSessionDraftsRepo = createReviewSessionDraftsRepository(db);
+  const codeReviewSessionsRepo = createCodeReviewSessionsRepository(db);
+  const codeReviewDraftsRepo = createCodeReviewDraftsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -409,9 +418,13 @@ export async function createServer(
   registerGetRepoReviewConfigTool(mcpServer, { repoReviewConfigsRepo, logger });
   registerSetRepoReviewConfigTool(mcpServer, { repoReviewConfigsRepo, logger });
   registerStartPrReviewSessionTool(mcpServer, { repoReviewConfigsRepo, reviewSessionsRepo, logger });
-  registerStoreAgentReviewDraftTool(mcpServer, { reviewSessionsRepo, reviewSessionDraftsRepo, logger });
+  registerStoreAgentReviewDraftTool(mcpServer, { reviewSessionsRepo, reviewSessionDraftsRepo, codeReviewSessionsRepo, codeReviewDraftsRepo, logger });
   registerGetReviewSessionDraftsTool(mcpServer, { reviewSessionsRepo, reviewSessionDraftsRepo, logger });
   registerPublishConsolidatedReviewTool(mcpServer, { githubService, reviewsRepo, reviewSessionsRepo, logger });
+  registerRemoveRepoReviewAgentTool(mcpServer, { repoReviewConfigsRepo, logger });
+  registerStartCodeReviewSessionTool(mcpServer, { repoReviewConfigsRepo, codeReviewSessionsRepo, logger });
+  registerPublishCodeReviewReportTool(mcpServer, { codeReviewSessionsRepo, adminPort: config.CLAUDE_MCP_ADMIN_PORT ?? 3000, logger });
+  registerGetCodeReviewSessionDraftsTool(mcpServer, { codeReviewSessionsRepo, codeReviewDraftsRepo, logger });
   registerHealthCheckTool(mcpServer, { logger, connectionManager } as any);
   registerListConnectionsTool(mcpServer, { logger, connectionManager } as any);
 
@@ -536,6 +549,9 @@ export async function createServer(
 
   // Multi-agent review agents (REQ-7.3)
   agentRegistry.register(reviewSynthesiserAgent);
+
+  // Register add-repo-review-agent tool here (after agentRegistry is populated)
+  registerAddRepoReviewAgentTool(mcpServer, { repoReviewConfigsRepo, agentRegistry, logger });
 
   logger.info(
     { agentCount: agentRegistry.getAll().length },

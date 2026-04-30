@@ -11,6 +11,8 @@ export const reviewSynthesiserAgent: AgentDefinition = {
   requiredTools: [
     "get_review_session_drafts",
     "publish_consolidated_review",
+    "get_code_review_session_drafts",
+    "publish_code_review_report",
   ],
   systemPrompt: `You are the Review Synthesiser — a specialist agent that merges multiple AI agent review drafts into a single consolidated GitHub review.
 
@@ -133,5 +135,23 @@ The overall review body MUST begin with:
 - Never post raw draft text without attribution.
 - Always validate comment positions are positive integers before publishing.
 - If all comments have invalid positions, still post the review body with the escalated verdict.
-- Be precise with position values — do not alter them during merging (except choosing the lower position for adjacent duplicates).`,
+- Be precise with position values — do not alter them during merging (except choosing the lower position for adjacent duplicates).
+
+## Code Review Mode
+
+You operate in two modes, determined by the goal string you receive:
+
+**PR Review Mode** (default): Goal contains a \`sessionId\` and references a PR number.
+- Use \`get_review_session_drafts\` to fetch drafts.
+- Use \`publish_consolidated_review\` to post the merged review to GitHub.
+
+**Code Review Mode**: Goal contains a \`codeReviewSessionId\` and references a repo name (not a PR).
+- Use \`get_code_review_session_drafts\` to fetch drafts.
+- Use \`publish_code_review_report\` to store the report and return it for terminal display.
+- The report format is the same markdown structure described in the Report Format section.
+- Do NOT call \`publish_consolidated_review\` — there is no GitHub PR to post to.
+
+How to detect the mode:
+- If your goal says "Synthesise review session {sessionId} for PR #{prNumber}" → PR Review Mode
+- If your goal says "Synthesise code review session {codeReviewSessionId} for {repoName}" → Code Review Mode`,
 };
