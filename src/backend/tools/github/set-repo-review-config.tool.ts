@@ -21,8 +21,8 @@ export function registerSetRepoReviewConfigTool(
     {
       title: "Set Repo Review Config",
       description:
-        "Enable or disable a specific AI tool for a repository's multi-agent review system. " +
-        "If no config exists for the (owner, repo, aiTool) combination, creates it. " +
+        "Enable or disable a specific agent+AI tool combination for a repository's multi-agent review system. " +
+        "Upserts by (owner, repo, agentId, aiTool). " +
         "Codex requires explicit opt-in: pass requiresExplicitSelection=false to enable it.",
       inputSchema: SetRepoReviewConfigInputSchema,
     },
@@ -33,21 +33,22 @@ export function registerSetRepoReviewConfigTool(
         // Business rule: codex cannot be enabled when requiresExplicitSelection is true
         // unless the caller explicitly passes requiresExplicitSelection: false
         if (input.aiTool === "codex" && input.enabled === true) {
-          // Check if the caller is explicitly opting in
           if (input.requiresExplicitSelection !== false) {
-            // Check existing config
+            // Check existing config for this specific agent+tool combination
             const existing = await deps.repoReviewConfigsRepo.findByOwnerRepo(
               input.owner,
               input.repo
             );
-            const codexConfig = existing.find((c) => c.aiTool === "codex");
+            const codexConfig = existing.find(
+              (c) => c.aiTool === "codex" && c.agentId === input.agentId
+            );
 
             if (!codexConfig || codexConfig.requiresExplicitSelection === 1) {
               return {
                 content: [
                   {
                     type: "text" as const,
-                    text: 'Cannot enable codex: it requires explicit opt-in. Pass "requiresExplicitSelection": false in the same call to confirm.',
+                    text: 'codex requires explicit opt-in. Pass requiresExplicitSelection: false to confirm you intend to enable it.',
                   },
                 ],
                 isError: true,
@@ -59,8 +60,8 @@ export function registerSetRepoReviewConfigTool(
         const config = await deps.repoReviewConfigsRepo.upsertConfig({
           owner: input.owner,
           repo: input.repo,
+          agentId: input.agentId,
           aiTool: input.aiTool,
-          agentId: input.agentId ?? "backend-pr-reviewer",
           enabled: input.enabled ? 1 : 0,
           requiresExplicitSelection:
             input.requiresExplicitSelection !== undefined
@@ -74,8 +75,8 @@ export function registerSetRepoReviewConfigTool(
             id: config.id,
             owner: config.owner,
             repo: config.repo,
-            aiTool: config.aiTool,
             agentId: config.agentId,
+            aiTool: config.aiTool,
             enabled: config.enabled === 1,
             requiresExplicitSelection: config.requiresExplicitSelection === 1,
             createdAt: config.createdAt,
@@ -84,7 +85,7 @@ export function registerSetRepoReviewConfigTool(
         };
 
         deps.logger.info(
-          { owner: input.owner, repo: input.repo, aiTool: input.aiTool, enabled: input.enabled },
+          { owner: input.owner, repo: input.repo, agentId: input.agentId, aiTool: input.aiTool, enabled: input.enabled },
           "Repo review config updated"
         );
 

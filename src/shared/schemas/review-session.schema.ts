@@ -33,17 +33,23 @@ export const DraftCommentSchema = z.object({
 export type DraftComment = z.infer<typeof DraftCommentSchema>;
 
 export const StoreAgentReviewDraftInputSchema = z.object({
-  sessionId: z.string().min(1),
+  sessionId: z.string().min(1).nullable().optional(),
+  codeReviewSessionId: z.string().min(1).nullable().optional(),
   agentId: z.string().min(1),
   aiTool: AiToolSchema,
   runId: z.string().nullable().optional(),
-  model: z.string().min(1).optional().describe(
-    "AI model used for analysis (e.g. 'claude-sonnet-4', 'gemini-2.5-pro', 'o3')"
-  ),
+  model: z.string().nullable().optional(),
   verdict: ReviewVerdictSchema,
   body: z.string().min(1),
   comments: z.array(DraftCommentSchema).default([]),
-});
+}).refine(
+  (data) => {
+    const hasSession = data.sessionId != null && data.sessionId.length > 0;
+    const hasCodeSession = data.codeReviewSessionId != null && data.codeReviewSessionId.length > 0;
+    return hasSession !== hasCodeSession; // XOR — exactly one must be set
+  },
+  { message: "Provide either sessionId or codeReviewSessionId, not both and not neither." }
+);
 
 export const GetReviewSessionDraftsInputSchema = z.object({
   sessionId: z.string().min(1),

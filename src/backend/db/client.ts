@@ -190,8 +190,39 @@ async function createTables(
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS repo_review_configs_owner_repo_tool_unique
-      ON repo_review_configs(owner, repo, ai_tool);
+    CREATE TABLE IF NOT EXISTS code_review_sessions (
+      id TEXT PRIMARY KEY,
+      repo_path TEXT NOT NULL,
+      repo_name TEXT NOT NULL,
+      repo_owner TEXT,
+      diff_mode TEXT NOT NULL,
+      branch_name TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      diff_content TEXT NOT NULL,
+      files_changed INTEGER NOT NULL DEFAULT 0,
+      additions INTEGER NOT NULL DEFAULT 0,
+      deletions INTEGER NOT NULL DEFAULT 0,
+      report_markdown TEXT,
+      report_url TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      completed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS code_review_sessions_repo_path_idx ON code_review_sessions(repo_path);
+    CREATE INDEX IF NOT EXISTS code_review_sessions_status_idx ON code_review_sessions(status);
+    CREATE TABLE IF NOT EXISTS code_review_drafts (
+      id TEXT PRIMARY KEY,
+      code_review_session_id TEXT NOT NULL REFERENCES code_review_sessions(id),
+      agent_id TEXT NOT NULL,
+      ai_tool TEXT NOT NULL,
+      run_id TEXT,
+      model TEXT,
+      verdict TEXT NOT NULL,
+      body TEXT NOT NULL,
+      comments_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS code_review_drafts_session_idx ON code_review_drafts(code_review_session_id);
     CREATE TABLE IF NOT EXISTS review_sessions (
       id TEXT PRIMARY KEY,
       owner TEXT NOT NULL,
@@ -244,6 +275,10 @@ async function createTables(
     "ALTER TABLE connections ADD COLUMN allow_writes INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE connections ADD COLUMN db_permissions TEXT NOT NULL DEFAULT '{}'",
     "ALTER TABLE review_session_drafts ADD COLUMN model TEXT",
+    // Feature A: Replace (owner, repo, aiTool) unique index with (owner, repo, agentId, aiTool)
+    "DROP INDEX IF EXISTS repo_review_configs_owner_repo_tool_unique",
+    "CREATE UNIQUE INDEX IF NOT EXISTS repo_review_configs_owner_repo_agent_tool_unique ON repo_review_configs(owner, repo, agent_id, ai_tool)",
+    "CREATE INDEX IF NOT EXISTS repo_review_configs_owner_repo_idx ON repo_review_configs(owner, repo)",
   ];
 
   for (const sql of migrations) {

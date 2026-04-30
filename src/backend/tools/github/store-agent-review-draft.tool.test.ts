@@ -84,9 +84,25 @@ function createMockDeps(
     findBySessionAndTool: vi.fn().mockResolvedValue(undefined),
   };
 
+  const codeReviewSessionsRepo = {
+    create: vi.fn(),
+    findById: vi.fn().mockResolvedValue(undefined),
+    findByRepoPath: vi.fn().mockResolvedValue([]),
+    listAll: vi.fn().mockResolvedValue([]),
+    updateStatus: vi.fn(),
+    completeSession: vi.fn(),
+  };
+
+  const codeReviewDraftsRepo = {
+    upsertDraft: vi.fn().mockResolvedValue(makeDraft()),
+    findBySessionId: vi.fn().mockResolvedValue([]),
+  };
+
   return {
     reviewSessionsRepo,
     reviewSessionDraftsRepo,
+    codeReviewSessionsRepo,
+    codeReviewDraftsRepo,
     logger: { info: vi.fn(), error: vi.fn() },
     ...overrides,
   };

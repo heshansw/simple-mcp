@@ -156,6 +156,7 @@ describe("SetRepoReviewConfigInputSchema", () => {
   const validInput = {
     owner: "octocat",
     repo: "hello-world",
+    agentId: "backend-pr-reviewer",
     aiTool: "claude",
     enabled: true,
   };

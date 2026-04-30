@@ -26,13 +26,14 @@ export function createReviewSessionDraftsRepository(db: DrizzleDB): ReviewSessio
     async upsertDraft(data) {
       const now = new Date().toISOString();
 
-      // Check for existing draft for this (sessionId, aiTool)
+      // Check for existing draft for this (sessionId, agentId, aiTool)
       const existing = await db
         .select()
         .from(reviewSessionDraftsTable)
         .where(
           and(
             eq(reviewSessionDraftsTable.sessionId, data.sessionId),
+            eq(reviewSessionDraftsTable.agentId, data.agentId),
             eq(reviewSessionDraftsTable.aiTool, data.aiTool)
           )
         )
@@ -43,7 +44,6 @@ export function createReviewSessionDraftsRepository(db: DrizzleDB): ReviewSessio
         await db
           .update(reviewSessionDraftsTable)
           .set({
-            agentId: data.agentId,
             runId: data.runId ?? null,
             model: data.model ?? null,
             verdict: data.verdict,

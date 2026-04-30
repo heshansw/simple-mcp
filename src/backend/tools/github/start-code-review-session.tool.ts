@@ -60,13 +60,13 @@ function extractOwnerRepo(repoPath: string): { owner: string; repo: string } | n
 
     // SSH format: git@github.com:owner/repo.git
     const sshMatch = url.match(/git@[^:]+:([^/]+)\/([^/.]+)(?:\.git)?$/);
-    if (sshMatch) {
+    if (sshMatch && sshMatch[1] && sshMatch[2]) {
       return { owner: sshMatch[1], repo: sshMatch[2] };
     }
 
     // HTTPS format: https://github.com/owner/repo.git
     const httpsMatch = url.match(/https?:\/\/[^/]+\/([^/]+)\/([^/.]+)(?:\.git)?$/);
-    if (httpsMatch) {
+    if (httpsMatch && httpsMatch[1] && httpsMatch[2]) {
       return { owner: httpsMatch[1], repo: httpsMatch[2] };
     }
 
