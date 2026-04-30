@@ -35,24 +35,10 @@ export function registerStoreAgentReviewDraftTool(
     },
     async (args) => {
       try {
+        // XOR between sessionId and codeReviewSessionId is enforced by Zod .refine()
         const input = StoreAgentReviewDraftInputSchema.parse(args);
 
-        const hasSession = input.sessionId != null && input.sessionId.length > 0;
         const hasCodeSession = input.codeReviewSessionId != null && input.codeReviewSessionId.length > 0;
-
-        // XOR is enforced by Zod refinement, but double-check for clarity
-        if (hasSession && hasCodeSession) {
-          return {
-            content: [{ type: "text" as const, text: "Provide either sessionId or codeReviewSessionId, not both." }],
-            isError: true,
-          };
-        }
-        if (!hasSession && !hasCodeSession) {
-          return {
-            content: [{ type: "text" as const, text: "Either sessionId or codeReviewSessionId must be provided." }],
-            isError: true,
-          };
-        }
 
         if (hasCodeSession) {
           // Code review path

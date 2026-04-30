@@ -20,6 +20,7 @@ export type StartCodeReviewSessionToolDeps = {
 const DIFF_SIZE_LIMIT = 524288; // 500 KB
 const DIFF_TIMEOUT_MS = 30000;
 const REMOTE_TIMEOUT_MS = 5000;
+const MAX_ACTIVE_SESSIONS = 50;
 
 function parseDiffStats(diffContent: string): { filesChanged: number; additions: number; deletions: number } {
   let filesChanged = 0;
@@ -93,6 +94,24 @@ export function registerStartCodeReviewSessionTool(
     async (args) => {
       try {
         const input = StartCodeReviewSessionInputSchema.parse(args);
+
+        // Path traversal protection — reject paths with '..' segments
+        if (input.repoPath.includes("..")) {
+          return {
+            content: [{ type: "text" as const, text: "Invalid repoPath: path must not contain '..' segments." }],
+            isError: true,
+          };
+        }
+
+        // Rate-limit guard — prevent disk exhaustion from rapid session creation
+        const activeSessions = await deps.codeReviewSessionsRepo.listAll(MAX_ACTIVE_SESSIONS + 1);
+        const reviewingSessions = activeSessions.filter((s) => s.status === "reviewing" || s.status === "synthesising");
+        if (reviewingSessions.length >= MAX_ACTIVE_SESSIONS) {
+          return {
+            content: [{ type: "text" as const, text: `Too many active code review sessions (${reviewingSessions.length}). Complete or delete existing sessions before starting new ones.` }],
+            isError: true,
+          };
+        }
 
         // Build git diff command args based on diffMode
         const gitArgs: string[] = ["diff"];
