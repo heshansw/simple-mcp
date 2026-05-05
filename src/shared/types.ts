@@ -63,7 +63,7 @@ export function createAgentRunStepId(value: string): AgentRunStepId {
 }
 
 // Integration type literal
-export type IntegrationType = "jira" | "github" | "google-calendar" | "local-filesystem" | "mysql" | "postgres";
+export type IntegrationType = "jira" | "github" | "google" | "local-filesystem" | "mysql" | "postgres";
 
 export type ReviewSessionId = Brand<string, "ReviewSessionId">;
 export type ReviewSessionDraftId = Brand<string, "ReviewSessionDraftId">;

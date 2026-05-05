@@ -23,3 +23,6 @@ export { fullstackOrchestratorAgent } from "./fullstack-orchestrator.agent.js";
 
 // ── Multi-agent review agents (REQ-7.3) ──────────────────────────────
 export { reviewSynthesiserAgent } from "./review-synthesiser.agent.js";
+
+// ── Google Meet agents ───────────────────────────────────────────────
+export { meetingSummarizerAgent } from "./meeting-summarizer.agent.js";

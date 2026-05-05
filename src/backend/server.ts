@@ -18,13 +18,15 @@ import { createConfluenceActivityRepository } from "./db/repositories/confluence
 import { createFolderAccessRepository } from "./db/repositories/folder-access.repository.js";
 import { createRepoWorkspacesRepository } from "./db/repositories/repo-workspaces.repository.js";
 import { createDbQueryActivityRepository } from "./db/repositories/db-query-activity.repository.js";
+import { createMeetTranscriptsRepository } from "./db/repositories/meet-transcripts.repository.js";
 
 import { createEncryptionService } from "./services/encryption.service.js";
 import { createConnectionManagerService } from "./services/connection-manager.service.js";
 import { createJiraService } from "./services/jira.service.js";
 import { createGitHubService } from "./services/github.service.js";
 import { createGoogleCalendarService } from "./services/google-calendar.service.js";
-import type { GoogleTokenBundle } from "./services/google-calendar.service.js";
+import { createGoogleMeetService } from "./services/google-meet.service.js";
+import type { GoogleTokenBundle } from "../shared/schemas/google-common.schema.js";
 import { createLocalFilesystemService } from "./services/local-filesystem.service.js";
 import { createConfluenceService } from "./services/confluence.service.js";
 import { createDatabaseQueryService } from "./services/database-query.service.js";
@@ -55,6 +57,7 @@ import {
   backendOrchestratorAgent,
   fullstackOrchestratorAgent,
   reviewSynthesiserAgent,
+  meetingSummarizerAgent,
 } from "./agents/index.js";
 
 import {
@@ -83,6 +86,7 @@ import { registerAgentUpdateTaskTool } from "./tools/system/agent-update-task.to
 import { registerAgentCompleteRunTool } from "./tools/system/agent-complete-run.tool.js";
 
 import { createMaintenanceScheduler } from "./maintenance/scheduler.js";
+import { createTranscriptSyncTask } from "./maintenance/transcript-sync.js";
 import { createStdioTransport } from "./transports/stdio.transport.js";
 import { createSSETransport } from "./transports/sse.transport.js";
 
@@ -115,6 +119,11 @@ import { registerListEventsTool } from "./tools/google-calendar/list-events.tool
 import { registerCreateEventTool } from "./tools/google-calendar/create-event.tool.js";
 import { registerCheckAvailabilityTool } from "./tools/google-calendar/check-availability.tool.js";
 import { registerListAvailableRoomsTool } from "./tools/google-calendar/list-available-rooms.tool.js";
+import { registerCheckPrerequisitesTool } from "./tools/google-meet/check-prerequisites.tool.js";
+import { registerListMeetingsTool } from "./tools/google-meet/list-meetings.tool.js";
+import { registerGetTranscriptTool } from "./tools/google-meet/get-transcript.tool.js";
+import { registerSearchTranscriptsTool } from "./tools/google-meet/search-transcripts.tool.js";
+import { registerSyncTranscriptsTool } from "./tools/google-meet/sync-transcripts.tool.js";
 import { registerFsListDirectoryTool } from "./tools/local-filesystem/fs-list-directory.tool.js";
 import { registerFsReadFileTool } from "./tools/local-filesystem/fs-read-file.tool.js";
 import { registerFsSearchFilesTool } from "./tools/local-filesystem/fs-search-files.tool.js";
@@ -181,6 +190,7 @@ export async function createServer(
   const repoReviewConfigsRepo = createRepoReviewConfigsRepository(db);
   const reviewSessionsRepo = createReviewSessionsRepository(db);
   const reviewSessionDraftsRepo = createReviewSessionDraftsRepository(db);
+  const meetTranscriptsRepo = createMeetTranscriptsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -245,39 +255,57 @@ export async function createServer(
     },
   });
 
+  // Shared Google OAuth callbacks — used by both Calendar and Meet services
+  const getGoogleConnectionInfo = async (): Promise<{ connectionId: string; tokens: GoogleTokenBundle } | null> => {
+    const allConns = await connectionsRepo.findAll();
+    const googleConn = allConns.find(
+      (c) => c.integrationType === "google" && c.status === "connected"
+    );
+    if (!googleConn) return null;
+    const cred = await credentialsRepo.findByConnectionId(googleConn.id);
+    if (!cred) return null;
+    try {
+      const raw = encryptionService.decrypt(cred.encryptedData, cred.iv);
+      const tokens = JSON.parse(raw) as GoogleTokenBundle;
+      if (!tokens.access_token || !tokens.refresh_token || !tokens.expiry) return null;
+      return { connectionId: googleConn.id, tokens };
+    } catch {
+      return null;
+    }
+  };
+
+  const storeGoogleUpdatedTokens = async (connectionId: string, tokens: GoogleTokenBundle): Promise<void> => {
+    const tokenJson = JSON.stringify(tokens);
+    const { encryptedData, iv } = encryptionService.encrypt(tokenJson);
+    const existing = await credentialsRepo.findByConnectionId(connectionId);
+    if (existing) {
+      await credentialsRepo.update(existing.id, { encryptedData, iv });
+    } else {
+      await credentialsRepo.create({ connectionId, encryptedData, iv });
+    }
+  };
+
+  const hasGoogleOAuth = !!(config.GOOGLE_OAUTH_CLIENT_ID && config.GOOGLE_OAUTH_CLIENT_SECRET);
+
   // Google Calendar service — only created if OAuth credentials are configured
-  const googleCalendarService = config.GOOGLE_OAUTH_CLIENT_ID && config.GOOGLE_OAUTH_CLIENT_SECRET
+  const googleCalendarService = hasGoogleOAuth
     ? createGoogleCalendarService({
         logger,
-        clientId: config.GOOGLE_OAUTH_CLIENT_ID,
-        clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET,
-        getConnectionInfo: async () => {
-          const allConns = await connectionsRepo.findAll();
-          const gcalConn = allConns.find(
-            (c) => c.integrationType === "google-calendar" && c.status === "connected"
-          );
-          if (!gcalConn) return null;
-          const cred = await credentialsRepo.findByConnectionId(gcalConn.id);
-          if (!cred) return null;
-          try {
-            const raw = encryptionService.decrypt(cred.encryptedData, cred.iv);
-            const tokens = JSON.parse(raw) as GoogleTokenBundle;
-            if (!tokens.access_token || !tokens.refresh_token || !tokens.expiry) return null;
-            return { connectionId: gcalConn.id, tokens };
-          } catch {
-            return null;
-          }
-        },
-        storeUpdatedTokens: async (connectionId: string, tokens: GoogleTokenBundle) => {
-          const tokenJson = JSON.stringify(tokens);
-          const { encryptedData, iv } = encryptionService.encrypt(tokenJson);
-          const existing = await credentialsRepo.findByConnectionId(connectionId);
-          if (existing) {
-            await credentialsRepo.update(existing.id, { encryptedData, iv });
-          } else {
-            await credentialsRepo.create({ connectionId, encryptedData, iv });
-          }
-        },
+        clientId: config.GOOGLE_OAUTH_CLIENT_ID!,
+        clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET!,
+        getConnectionInfo: getGoogleConnectionInfo,
+        storeUpdatedTokens: storeGoogleUpdatedTokens,
+      })
+    : null;
+
+  // Google Meet service — shares OAuth connection with Calendar
+  const googleMeetService = hasGoogleOAuth
+    ? createGoogleMeetService({
+        logger,
+        clientId: config.GOOGLE_OAUTH_CLIENT_ID!,
+        clientSecret: config.GOOGLE_OAUTH_CLIENT_SECRET!,
+        getConnectionInfo: getGoogleConnectionInfo,
+        storeUpdatedTokens: storeGoogleUpdatedTokens,
       })
     : null;
 
@@ -427,6 +455,19 @@ export async function createServer(
     logger.info("Google Calendar tools skipped — GOOGLE_OAUTH_CLIENT_ID/SECRET not configured");
   }
 
+  // Google Meet tools — only register if service is available
+  if (googleMeetService) {
+    const meetToolDeps = { googleMeetService, logger };
+    registerCheckPrerequisitesTool(mcpServer, meetToolDeps);
+    registerListMeetingsTool(mcpServer, meetToolDeps);
+    registerGetTranscriptTool(mcpServer, meetToolDeps);
+    registerSearchTranscriptsTool(mcpServer, { meetTranscriptsRepo, logger });
+    // Note: registerSyncTranscriptsTool depends on scheduler, registered after scheduler is created
+    logger.info("Google Meet MCP tools registered");
+  } else {
+    logger.info("Google Meet tools skipped — GOOGLE_OAUTH_CLIENT_ID/SECRET not configured");
+  }
+
   // Local filesystem tools — always registered (operations are gated by folder registration)
   const fsToolDeps = { fsService: localFilesystemService, logger };
   registerFsListDirectoryTool(mcpServer, fsToolDeps);
@@ -536,6 +577,9 @@ export async function createServer(
 
   // Multi-agent review agents (REQ-7.3)
   agentRegistry.register(reviewSynthesiserAgent);
+
+  // Google Meet agents
+  agentRegistry.register(meetingSummarizerAgent);
 
   logger.info(
     { agentCount: agentRegistry.getAll().length },
@@ -1466,9 +1510,9 @@ export async function createServer(
     });
   });
 
-  // ── Google Calendar OAuth endpoints ───────────────────────────────────
+  // ── Google OAuth endpoints (Calendar + Meet) ─────────────────────────
 
-  httpApp.get("/api/connections/google-calendar/oauth/start", async (c) => {
+  httpApp.get("/api/connections/google/oauth/start", async (c) => {
     if (!config.GOOGLE_OAUTH_CLIENT_ID || !config.GOOGLE_OAUTH_CLIENT_SECRET) {
       return c.json(
         { error: "Google OAuth client credentials not configured" },
@@ -1479,17 +1523,20 @@ export async function createServer(
     // Generate a CSRF state nonce
     const nonce = randomBytes(32).toString("hex");
     const NONCE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-    await oauthNoncesRepo.create(nonce, "google-calendar", NONCE_TTL_MS);
+    await oauthNoncesRepo.create(nonce, "google", NONCE_TTL_MS);
 
     // Clean up expired nonces periodically
     await oauthNoncesRepo.deleteExpired();
 
-    const redirectUri = `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}/api/connections/google-calendar/oauth/callback`;
+    const redirectUri = `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}/api/connections/google/oauth/callback`;
 
     const scopes = [
+      // Calendar scopes
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events",
       "https://www.googleapis.com/auth/admin.directory.resource.calendar.readonly",
+      // Meet scopes — conference records, transcripts, participants
+      "https://www.googleapis.com/auth/meetings.space.readonly",
     ];
 
     const params = new URLSearchParams({
@@ -1507,7 +1554,7 @@ export async function createServer(
     return c.json({ url: consentUrl });
   });
 
-  httpApp.get("/api/connections/google-calendar/oauth/callback", async (c) => {
+  httpApp.get("/api/connections/google/oauth/callback", async (c) => {
     const code = c.req.query("code");
     const state = c.req.query("state");
 
@@ -1528,7 +1575,7 @@ export async function createServer(
       return c.json({ error: "Google OAuth client credentials not configured" }, { status: 500 });
     }
 
-    const redirectUri = `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}/api/connections/google-calendar/oauth/callback`;
+    const redirectUri = `http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}/api/connections/google/oauth/callback`;
 
     // Exchange code for tokens
     try {
@@ -1568,15 +1615,15 @@ export async function createServer(
         expiry: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
       };
 
-      // Find or create the Google Calendar connection
+      // Find or create the unified Google connection
       const allConns = await connectionsRepo.findAll();
-      let gcalConn = allConns.find((conn) => conn.integrationType === "google-calendar");
+      let gcalConn = allConns.find((conn) => conn.integrationType === "google");
 
       if (!gcalConn) {
         gcalConn = await connectionsRepo.create({
-          name: "Google Calendar",
-          integrationType: "google-calendar",
-          baseUrl: "https://www.googleapis.com/calendar/v3",
+          name: "Google",
+          integrationType: "google",
+          baseUrl: "https://www.googleapis.com",
           authMethod: "oauth2",
           status: "connected",
         });
@@ -1595,7 +1642,7 @@ export async function createServer(
         await credentialsRepo.create({ connectionId: gcalConn.id, encryptedData, iv });
       }
 
-      logger.info("Google Calendar OAuth flow completed successfully");
+      logger.info("Google OAuth flow completed successfully (Calendar + Meet)");
 
       // Redirect to admin panel connections page
       return c.redirect(`http://localhost:${config.CLAUDE_MCP_ADMIN_PORT}/connections`);
@@ -2108,7 +2155,27 @@ export async function createServer(
     }
   );
 
-  logger.info("Maintenance scheduler configured with 2 tasks");
+  // Google Meet transcript sync — 30 minute interval
+  if (googleMeetService) {
+    const transcriptSyncTask = createTranscriptSyncTask({
+      logger,
+      googleMeetService,
+      meetTranscriptsRepo,
+      serverSettingsRepo,
+      encryptionService,
+      getConnectionId: async () => {
+        const info = await getGoogleConnectionInfo();
+        return info?.connectionId ?? null;
+      },
+    });
+    scheduler.registerTask("transcript-sync", 30 * 60 * 1000, transcriptSyncTask);
+    logger.info("Google Meet transcript sync task registered (30 min interval)");
+
+    // Register sync tool (depends on scheduler being available)
+    registerSyncTranscriptsTool(mcpServer, { scheduler, logger });
+  }
+
+  logger.info("Maintenance scheduler configured");
 
   // Cleanup function
   const cleanup = async (): Promise<void> => {

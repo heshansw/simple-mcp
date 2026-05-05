@@ -155,12 +155,15 @@ export function useTestConnection() {
 
 // Google Calendar OAuth
 
-export function useGoogleCalendarOAuthStart() {
+export function useGoogleOAuthStart() {
   return useMutation({
     mutationFn: async () => {
       return apiClient.get<{ url: string }>(
-        "/connections/google-calendar/oauth/start"
+        "/connections/google/oauth/start"
       );
     },
   });
 }
+
+/** @deprecated Use useGoogleOAuthStart instead */
+export const useGoogleCalendarOAuthStart = useGoogleOAuthStart;

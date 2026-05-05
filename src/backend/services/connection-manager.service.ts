@@ -29,7 +29,7 @@ export interface ConnectionManagerService {
   getConnection(id: string): Promise<Result<Connection, DomainError>>;
   createConnection(data: {
     name: string;
-    integrationType: "jira" | "github" | "google-calendar" | "local-filesystem" | "mysql" | "postgres";
+    integrationType: "jira" | "github" | "google" | "local-filesystem" | "mysql" | "postgres";
     baseUrl?: string;
     authMethod: "oauth2" | "api_token" | "personal_access_token" | "connection_string" | "username_password";
     databaseDialect?: string;
@@ -97,7 +97,7 @@ export function createConnectionManagerService(
 
     async createConnection(data: {
       name: string;
-      integrationType: "jira" | "github" | "google-calendar" | "local-filesystem" | "mysql" | "postgres";
+      integrationType: "jira" | "github" | "google" | "local-filesystem" | "mysql" | "postgres";
       baseUrl?: string;
       authMethod: "oauth2" | "api_token" | "personal_access_token" | "connection_string" | "username_password";
       databaseDialect?: string;
@@ -112,7 +112,7 @@ export function createConnectionManagerService(
           );
         }
 
-        const validTypes = ["jira", "github", "google-calendar", "local-filesystem", "mysql", "postgres"];
+        const validTypes = ["jira", "github", "google", "local-filesystem", "mysql", "postgres"];
         if (!validTypes.includes(data.integrationType)) {
           return err(
             validationError("Invalid integration type", {

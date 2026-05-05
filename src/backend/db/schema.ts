@@ -224,6 +224,24 @@ export const reviewSessionsTable = sqliteTable("review_sessions", {
   completedAt: text("completed_at"), // nullable
 });
 
+export const meetTranscriptsTable = sqliteTable("meet_transcripts", {
+  id: text("id").primaryKey(),
+  connectionId: text("connection_id")
+    .notNull()
+    .references(() => connectionsTable.id),
+  conferenceRecordName: text("conference_record_name").notNull().unique(),
+  meetingTitle: text("meeting_title"), // nullable
+  meetingStartTime: text("meeting_start_time").notNull(),
+  meetingEndTime: text("meeting_end_time").notNull(),
+  spaceName: text("space_name"), // nullable
+  participantNames: text("participant_names").notNull().default("[]"), // JSON array of display names
+  entryCount: integer("entry_count").notNull().default(0),
+  encryptedContent: text("encrypted_content").notNull(), // AES-256-CBC encrypted full transcript JSON
+  iv: text("iv").notNull(),
+  syncedAt: text("synced_at").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export const reviewSessionDraftsTable = sqliteTable("review_session_drafts", {
   id: text("id").primaryKey(),
   sessionId: text("session_id")

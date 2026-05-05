@@ -1,7 +1,8 @@
 import type { Logger } from "pino";
 import type { CredentialsRepository } from "../db/repositories/credentials.repository.js";
 import type { EncryptionService } from "../services/encryption.service.js";
-import type { GoogleCalendarServiceResult, GoogleTokenBundle } from "../services/google-calendar.service.js";
+import type { GoogleCalendarServiceResult } from "../services/google-calendar.service.js";
+import type { GoogleTokenBundle } from "../../shared/schemas/google-common.schema.js";
 
 const TOKEN_EXPIRY_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes before actual expiry
 
@@ -58,7 +59,7 @@ export function createTokenRefreshTask(
 
         // Handle Google Calendar OAuth2 token refresh
         if (
-          connection.integrationType === "google-calendar" &&
+          connection.integrationType === "google" &&
           deps.googleCalendarService
         ) {
           try {

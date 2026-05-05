@@ -7,7 +7,7 @@ import {
   useStoreCredentials,
   useRemoveCredentials,
   useTestConnection,
-  useGoogleCalendarOAuthStart,
+  useGoogleOAuthStart,
 } from "@frontend/api/connections.api";
 import { StatusBadge } from "@frontend/components/status-badge";
 import { LoadingSpinner } from "@frontend/components/loading-spinner";
@@ -30,7 +30,7 @@ export function ConnectionDetailPage() {
   const storeCredentials = useStoreCredentials();
   const removeCredentials = useRemoveCredentials();
   const testConnection = useTestConnection();
-  const googleOAuth = useGoogleCalendarOAuthStart();
+  const googleOAuth = useGoogleOAuthStart();
   const [isEditing, setIsEditing] = useState(false);
   const [token, setToken] = useState("");
   const [jiraEmail, setJiraEmail] = useState("");
@@ -100,7 +100,7 @@ export function ConnectionDetailPage() {
   };
 
   const isJira = connection?.integrationType === "jira";
-  const isGoogleCalendar = connection?.integrationType === "google-calendar";
+  const isGoogle = connection?.integrationType === "google";
   const isLocalMcpClient = isLocalMcpClientConnectionName(connection.name);
 
   const handleGoogleReAuth = async () => {
@@ -418,7 +418,7 @@ export function ConnectionDetailPage() {
           <h2 style={{ marginTop: "0", fontSize: "1.125rem", marginBottom: "1rem" }}>
             {isLocalMcpClient
               ? "Local MCP Client"
-              : isGoogleCalendar
+              : isGoogle
               ? "Google OAuth Authentication"
               : "Credentials / Access Token"}
           </h2>
@@ -445,8 +445,8 @@ export function ConnectionDetailPage() {
                 Configure Claude or Codex in the local MCP client config. This admin-panel row is only a dedicated local-client marker.
               </p>
             </div>
-          ) : isGoogleCalendar ? (
-            /* ── Google Calendar OAuth credentials card ─────────────── */
+          ) : isGoogle ? (
+            /* ── Google OAuth credentials card (Calendar + Meet) ────── */
             <div>
               {credStatus?.hasCredentials ? (
                 <div>
