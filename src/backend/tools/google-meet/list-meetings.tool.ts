@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "pino";
 import type { GoogleMeetServiceResult } from "../../services/google-meet.service.js";
+import { domainErrorMessage } from "../../../shared/result.js";
 
 export const ListMeetingsInputSchema = z.object({
   since_hours: z
@@ -42,15 +43,17 @@ export function registerListMeetingsTool(
       const sinceDate = new Date(Date.now() - input.since_hours * 60 * 60 * 1000);
       const filter = `end_time>${sinceDate.toISOString()}`;
 
-      const result = await deps.googleMeetService.listConferenceRecords({
+      const params: { filter?: string; pageSize?: number; pageToken?: string } = {
         filter,
         pageSize: input.page_size,
-        pageToken: input.page_token,
-      });
+      };
+      if (input.page_token) params.pageToken = input.page_token;
+
+      const result = await deps.googleMeetService.listConferenceRecords(params);
 
       if (result._tag === "Err") {
         return {
-          content: [{ type: "text" as const, text: `Error: ${result.error.message}` }],
+          content: [{ type: "text" as const, text: `Error: ${domainErrorMessage(result.error)}` }],
           isError: true,
         };
       }

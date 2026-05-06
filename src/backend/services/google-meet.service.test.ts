@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 import { createGoogleMeetService } from "./google-meet.service.js";
 import type { GoogleMeetDependencies } from "./google-meet.service.js";
 import type { GoogleTokenBundle } from "../../shared/schemas/google-common.schema.js";
+import { domainErrorMessage } from "../../shared/result.js";
 
 function createLoggerStub(): Logger {
   return {
@@ -72,12 +73,12 @@ describe("createGoogleMeetService", () => {
       expect(result._tag).toBe("Ok");
       if (result._tag === "Ok") {
         expect(result.value.records).toHaveLength(1);
-        expect(result.value.records[0].name).toBe("conferenceRecords/abc123");
+        expect(result.value.records[0]!.name).toBe("conferenceRecords/abc123");
         expect(result.value.nextPageToken).toBe("page2");
       }
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      const url = fetchMock.mock.calls[0]?.[0] as string;
+      const url = fetchMock.mock.calls[0]![0] as string;
       expect(url).toContain("meet.googleapis.com/v2/conferenceRecords");
       expect(url).toContain("pageSize=10");
     });
@@ -110,7 +111,7 @@ describe("createGoogleMeetService", () => {
       const service = createGoogleMeetService(createDeps());
       await service.listConferenceRecords({ filter: "end_time>2026-01-01T00:00:00Z" });
 
-      const url = fetchMock.mock.calls[0]?.[0] as string;
+      const url = fetchMock.mock.calls[0]![0] as string;
       expect(url).toContain("filter=");
     });
 
@@ -157,8 +158,8 @@ describe("createGoogleMeetService", () => {
       expect(result._tag).toBe("Ok");
       if (result._tag === "Ok") {
         expect(result.value).toHaveLength(2);
-        expect(result.value[0].signedinUser?.displayName).toBe("Alice");
-        expect(result.value[1].anonymousUser?.displayName).toBe("Guest");
+        expect(result.value[0]!.signedinUser?.displayName).toBe("Alice");
+        expect(result.value[1]!.anonymousUser?.displayName).toBe("Guest");
       }
     });
   });
@@ -187,7 +188,7 @@ describe("createGoogleMeetService", () => {
       expect(result._tag).toBe("Ok");
       if (result._tag === "Ok") {
         expect(result.value).toHaveLength(1);
-        expect(result.value[0].state).toBe("ENDED");
+        expect(result.value[0]!.state).toBe("ENDED");
       }
     });
   });
@@ -239,8 +240,8 @@ describe("createGoogleMeetService", () => {
       expect(result._tag).toBe("Ok");
       if (result._tag === "Ok") {
         expect(result.value).toHaveLength(2);
-        expect(result.value[0].text).toBe("Hello everyone");
-        expect(result.value[1].text).toBe("Hi Alice");
+        expect(result.value[0]!.text).toBe("Hello everyone");
+        expect(result.value[1]!.text).toBe("Hi Alice");
       }
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
@@ -258,7 +259,7 @@ describe("createGoogleMeetService", () => {
       expect(result._tag).toBe("Err");
       if (result._tag === "Err") {
         expect(result.error._tag).toBe("IntegrationError");
-        expect(result.error.message).toContain("Permission denied");
+        expect(domainErrorMessage(result.error)).toContain("Permission denied");
       }
     });
 
@@ -286,7 +287,7 @@ describe("createGoogleMeetService", () => {
 
       expect(result._tag).toBe("Err");
       if (result._tag === "Err") {
-        expect(result.error.message).toContain("rate limit");
+        expect(domainErrorMessage(result.error)).toContain("rate limit");
       }
     });
 
@@ -300,7 +301,7 @@ describe("createGoogleMeetService", () => {
 
       expect(result._tag).toBe("Err");
       if (result._tag === "Err") {
-        expect(result.error.message).toContain("upstream error");
+        expect(domainErrorMessage(result.error)).toContain("upstream error");
       }
     });
   });
@@ -352,8 +353,8 @@ describe("createGoogleMeetService", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
 
       // Verify the API call used the new token
-      const apiCallHeaders = fetchMock.mock.calls[1]?.[1]?.headers as Record<string, string>;
-      expect(apiCallHeaders?.Authorization).toBe("Bearer new-access-token");
+      const apiCallHeaders = fetchMock.mock.calls[1]![1]!.headers as Record<string, string>;
+      expect(apiCallHeaders.Authorization).toBe("Bearer new-access-token");
     });
 
     it("refreshTokenIfNeeded returns existing token when not near expiry", async () => {

@@ -6,6 +6,7 @@ import type {
   Participant,
   TranscriptEntry,
 } from "../../services/google-meet.service.js";
+import { domainErrorMessage } from "../../../shared/result.js";
 
 export const GetTranscriptInputSchema = z.object({
   conference_record_name: z
@@ -64,7 +65,7 @@ export function registerGetTranscriptTool(
       const transcriptsResult = await deps.googleMeetService.listTranscripts(conference_record_name);
       if (transcriptsResult._tag === "Err") {
         return {
-          content: [{ type: "text" as const, text: `Error listing transcripts: ${transcriptsResult.error.message}` }],
+          content: [{ type: "text" as const, text: `Error listing transcripts: ${domainErrorMessage(transcriptsResult.error)}` }],
           isError: true,
         };
       }
@@ -85,7 +86,7 @@ export function registerGetTranscriptTool(
         const entriesResult = await deps.googleMeetService.getTranscriptEntries(transcript.name);
         if (entriesResult._tag === "Err") {
           return {
-            content: [{ type: "text" as const, text: `Error fetching entries for ${transcript.name}: ${entriesResult.error.message}` }],
+            content: [{ type: "text" as const, text: `Error fetching entries for ${transcript.name}: ${domainErrorMessage(entriesResult.error)}` }],
             isError: true,
           };
         }

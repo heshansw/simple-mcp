@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -127,7 +127,7 @@ describe("google_meet_check_prerequisites", () => {
     const result = await client.callTool({ name: "google_meet_check_prerequisites", arguments: {} });
 
     expect(result.isError).toBeUndefined();
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("OAuth Token: ✓ Valid");
     expect(text).toContain("Meet API Scope: ✓ Granted");
     expect(text).toContain("Can List Meetings: ✓ Yes");
@@ -152,7 +152,7 @@ describe("google_meet_check_prerequisites", () => {
 
     const result = await client.callTool({ name: "google_meet_check_prerequisites", arguments: {} });
 
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("OAuth Token: ✗ Missing or invalid");
   });
 });
@@ -171,7 +171,7 @@ describe("google_meet_list_meetings", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("Recent Meetings");
     expect(text).toContain("conferenceRecords/abc123");
     expect(service.listConferenceRecords).toHaveBeenCalledTimes(1);
@@ -194,7 +194,7 @@ describe("google_meet_list_meetings", () => {
       arguments: { since_hours: 48 },
     });
 
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("No meetings found");
   });
 
@@ -216,7 +216,7 @@ describe("google_meet_list_meetings", () => {
     });
 
     expect(result.isError).toBe(true);
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("Error");
   });
 });
@@ -237,7 +237,7 @@ describe("google_meet_get_transcript", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("Meeting Transcript");
     expect(text).toContain("**Alice:**");
     expect(text).toContain("Hello everyone");
@@ -261,7 +261,7 @@ describe("google_meet_get_transcript", () => {
       },
     });
 
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     const parsed = JSON.parse(text);
     expect(parsed.entryCount).toBe(2);
     expect(parsed.entries).toHaveLength(2);
@@ -286,7 +286,7 @@ describe("google_meet_get_transcript", () => {
       },
     });
 
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("No transcripts found");
   });
 });
@@ -314,7 +314,7 @@ describe("google_meet_search_transcripts", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("Transcript Search Results");
     expect(text).toContain("Alice");
     expect(text).toContain("sprint");
@@ -334,7 +334,7 @@ describe("google_meet_search_transcripts", () => {
       arguments: { query: "nonexistent" },
     });
 
-    const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text;
     expect(text).toContain("No transcript matches found");
   });
 });

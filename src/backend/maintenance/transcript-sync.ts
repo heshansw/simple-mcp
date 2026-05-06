@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import type { GoogleMeetServiceResult, Participant } from "../services/google-meet.service.js";
+import type { GoogleMeetServiceResult } from "../services/google-meet.service.js";
 import type { MeetTranscriptsRepository, FtsEntry } from "../db/repositories/meet-transcripts.repository.js";
 import type { EncryptionService } from "../services/encryption.service.js";
 import type { ServerSettingsRepository } from "../db/repositories/server-settings.repository.js";

@@ -7,6 +7,7 @@ import {
   authorizationError,
 } from "../../shared/result.js";
 import type { DomainError } from "../../shared/result.js";
+import { domainErrorMessage } from "../../shared/result.js";
 import type { GoogleTokenBundle } from "../../shared/schemas/google-common.schema.js";
 
 // ── Google Meet API response types ──────────────────────────────────────
@@ -326,10 +327,13 @@ export function createGoogleMeetService(
         );
         if (result._tag === "Err") return result;
 
-        return ok({
+        const response: { records: ConferenceRecord[]; nextPageToken?: string } = {
           records: result.value.conferenceRecords ?? [],
-          nextPageToken: result.value.nextPageToken,
-        });
+        };
+        if (result.value.nextPageToken) {
+          response.nextPageToken = result.value.nextPageToken;
+        }
+        return ok(response);
       } catch (error) {
         logger.error({ error }, "Failed to list conference records");
         return err(integrationError("google-meet", "Failed to list conference records: unexpected error"));
@@ -420,7 +424,7 @@ export function createGoogleMeetService(
       try {
         const tokenResult = await resolveTokens();
         if (tokenResult._tag === "Err") {
-          diagnosticMessages.push(`Token validation failed: ${tokenResult.error.message}`);
+          diagnosticMessages.push(`Token validation failed: ${domainErrorMessage(tokenResult.error)}`);
           hasValidToken = false;
           return ok({ hasValidToken, hasMeetScope, canListMeetings, diagnosticMessages });
         }
@@ -435,7 +439,7 @@ export function createGoogleMeetService(
           if (testResult.error._tag === "AuthorizationError") {
             diagnosticMessages.push("Meet API access denied — the OAuth token may lack the meetings.space.readonly scope. Re-authenticate to grant Meet access.");
           } else {
-            diagnosticMessages.push(`Meet API probe failed: ${testResult.error.message}`);
+            diagnosticMessages.push(`Meet API probe failed: ${domainErrorMessage(testResult.error)}`);
           }
           return ok({ hasValidToken, hasMeetScope, canListMeetings, diagnosticMessages });
         }

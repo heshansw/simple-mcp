@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Logger } from "pino";
 import type { GoogleMeetServiceResult } from "../../services/google-meet.service.js";
+import { domainErrorMessage } from "../../../shared/result.js";
 
 export const CheckPrerequisitesInputSchema = z.object({});
 
@@ -22,7 +23,7 @@ export function registerCheckPrerequisitesTool(
       const result = await deps.googleMeetService.checkPrerequisites();
       if (result._tag === "Err") {
         return {
-          content: [{ type: "text" as const, text: `Error: ${result.error.message}` }],
+          content: [{ type: "text" as const, text: `Error: ${domainErrorMessage(result.error)}` }],
           isError: true,
         };
       }
