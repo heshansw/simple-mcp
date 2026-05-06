@@ -11,6 +11,7 @@ export type GeminiCliResult = {
   readonly stderr: string;
   readonly exitCode: number;
   readonly durationMs: number;
+  readonly model: string;
 };
 
 export type GeminiCliAvailability = {
@@ -38,8 +39,9 @@ function spawnAndCapture(
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let settled = false;
 
-    const child = spawn(command, args as string[], {
+    const child = spawn(command, [...args], {
       stdio: ["pipe", "pipe", "pipe"],
       signal: controller.signal,
     });
@@ -56,11 +58,15 @@ function spawnAndCapture(
     });
 
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       resolve({ stdout, stderr, exitCode: code ?? 1 });
     });
 
     child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       if (controller.signal.aborted) {
         reject(new Error(`Gemini CLI timed out after ${timeoutMs}ms`));
@@ -114,7 +120,7 @@ export function createGeminiCliService(deps: GeminiCliServiceDeps): GeminiCliSer
       model?: string
     ): Promise<Result<GeminiCliResult, DomainError>> {
       const effectiveModel = model ?? config.model;
-      const args = ["-m", effectiveModel];
+      const args = ["-p", "", "-m", effectiveModel, "-o", "text"];
 
       logger.info(
         { model: effectiveModel, promptLength: prompt.length },
@@ -161,6 +167,7 @@ export function createGeminiCliService(deps: GeminiCliServiceDeps): GeminiCliSer
           stderr: result.stderr,
           exitCode: result.exitCode,
           durationMs,
+          model: effectiveModel,
         });
       } catch (error) {
         const durationMs = Date.now() - startMs;

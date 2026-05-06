@@ -201,7 +201,7 @@ export function createGeminiCliReviewService(
         return cliResult;
       }
 
-      const { stdout, durationMs } = cliResult.value;
+      const { stdout, durationMs, model: effectiveModel } = cliResult.value;
 
       // 4. Parse structured output
       try {
@@ -214,13 +214,14 @@ export function createGeminiCliReviewService(
             verdict: reviewOutput.verdict,
             commentCount: reviewOutput.comments.length,
             durationMs,
+            model: effectiveModel,
           },
           "Gemini CLI review parsed successfully"
         );
 
         return ok({
           ...reviewOutput,
-          model: "gemini-2.5-pro",
+          model: effectiveModel,
           durationMs,
         });
       } catch (parseError) {
@@ -239,7 +240,7 @@ export function createGeminiCliReviewService(
           verdict: "COMMENT" as const,
           body: stdout.trim(),
           comments: [],
-          model: "gemini-2.5-pro",
+          model: effectiveModel,
           durationMs,
         });
       }
