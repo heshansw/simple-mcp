@@ -86,59 +86,6 @@ toggleBtn.addEventListener("click", () => {
   }
 });
 
-// ── System Audio (BlackHole + Mic) ───────────────────────────────────────
-
-async function createSystemAudioStream(): Promise<MediaStream> {
-  // Must request mic permission first — otherwise enumerateDevices() returns empty labels
-  const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  tempStream.getTracks().forEach((t) => t.stop());
-
-  // Now enumerate devices — labels will be populated after permission grant
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const blackhole = devices.find(
-    (d) => d.kind === "audioinput" && d.label.toLowerCase().includes("blackhole")
-  );
-
-  if (!blackhole) {
-    throw new Error(
-      "BlackHole not found. Install it with: brew install blackhole-2ch\n" +
-      "Then create a Multi-Output Device in Audio MIDI Setup (see README)."
-    );
-  }
-
-  // Get BlackHole stream (system audio — other participants' voices)
-  const systemStream = await navigator.mediaDevices.getUserMedia({
-    audio: { deviceId: { exact: blackhole.deviceId } },
-  });
-
-  // Get default mic stream (your voice)
-  const micStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    },
-  });
-
-  // Merge both streams using Web Audio API
-  const audioCtx = new AudioContext();
-  const destination = audioCtx.createMediaStreamDestination();
-
-  const systemSource = audioCtx.createMediaStreamSource(systemStream);
-  const micSource = audioCtx.createMediaStreamSource(micStream);
-
-  systemSource.connect(destination);
-  micSource.connect(destination);
-
-  // Store references for cleanup
-  const mergedStream = destination.stream;
-  // Attach original streams so we can stop all tracks on recording stop
-  (mergedStream as any).__sourceStreams = [systemStream, micStream];
-  (mergedStream as any).__audioContext = audioCtx;
-
-  return mergedStream;
-}
-
 // ── Recording controls ───────────────────────────────────────────────────
 
 async function startRecording() {
@@ -153,30 +100,19 @@ async function startRecording() {
     currentMeetingUrl = tab?.url || "";
     currentStartTime = new Date().toISOString();
 
-    if (captureMode === "microphone" || captureMode === "system") {
-      // Record directly in the popup using getUserMedia
+    if (captureMode === "microphone") {
+      // Record directly in the popup using getUserMedia (mic only)
       try {
-        if (captureMode === "system") {
-          // System Audio + Mic mode — merge BlackHole (system audio) + mic
-          micStream = await createSystemAudioStream();
-        } else {
-          // Microphone only mode
-          micStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-            },
-          });
-        }
-      } catch (err) {
-        const msg = String(err);
-        if (msg.includes("BlackHole")) {
-          showError(msg);
-        } else {
-          showError(`Microphone access denied. Opening setup page...`);
-          openPermissionsPage();
-        }
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
+        });
+      } catch {
+        showError(`Microphone access denied. Opening setup page...`);
+        openPermissionsPage();
         setIdleUI();
         return;
       }
@@ -215,9 +151,9 @@ async function startRecording() {
 
       setRecordingUI();
     } else {
-      // Tab capture mode — delegate to background + offscreen
+      // Tab capture and System Audio modes — delegate to background + offscreen
       let streamId: string | null = null;
-      if (tab?.id) {
+      if (captureMode === "tab" && tab?.id) {
         try {
           streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
         } catch (err) {
@@ -233,7 +169,7 @@ async function startRecording() {
           meetingTitle: currentMeetingTitle,
           meetingUrl: currentMeetingUrl,
           tabId: tab?.id,
-          captureMode: "tab",
+          captureMode,
           streamId,
         },
         (response) => {
@@ -356,7 +292,10 @@ function setRecordingUI() {
   titleInput.disabled = true;
   captureModeSelect.disabled = true;
   statusBar.className = "status-bar status-recording";
-  statusText.textContent = "Recording... (keep popup open)";
+  const mode = captureModeSelect.value;
+  statusText.textContent = mode === "microphone"
+    ? "Recording... (keep popup open)"
+    : "Recording... (you can close this popup)";
   timerEl.style.display = "block";
   startTimer();
 }
