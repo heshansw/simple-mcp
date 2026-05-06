@@ -85,6 +85,10 @@ import { registerAgentRecordStepTool } from "./tools/system/agent-record-step.to
 import { registerAgentUpdateTaskTool } from "./tools/system/agent-update-task.tool.js";
 import { registerAgentCompleteRunTool } from "./tools/system/agent-complete-run.tool.js";
 
+import { createGeminiCliService } from "./services/gemini-cli.service.js";
+import { createGeminiCliReviewService } from "./services/gemini-cli-review.service.js";
+import { GeminiCliConfigSchema } from "@shared/schemas/gemini-cli.schema.js";
+
 import { createMaintenanceScheduler } from "./maintenance/scheduler.js";
 import { createTranscriptSyncTask } from "./maintenance/transcript-sync.js";
 import { createStdioTransport } from "./transports/stdio.transport.js";
@@ -309,6 +313,15 @@ export async function createServer(
       })
     : null;
 
+  // Gemini CLI service — uses locally installed `gemini` CLI (no API key needed)
+  const geminiCliConfig = GeminiCliConfigSchema.parse({});
+  const geminiCliService = createGeminiCliService({ logger, config: geminiCliConfig });
+  const geminiCliReviewService = createGeminiCliReviewService({
+    logger,
+    geminiCli: geminiCliService,
+    githubService,
+  });
+
   // Local filesystem service
   const localFilesystemService = createLocalFilesystemService({
     logger,
@@ -436,7 +449,14 @@ export async function createServer(
   registerGetMyPrsTool(mcpServer, githubToolDeps);
   registerGetRepoReviewConfigTool(mcpServer, { repoReviewConfigsRepo, logger });
   registerSetRepoReviewConfigTool(mcpServer, { repoReviewConfigsRepo, logger });
-  registerStartPrReviewSessionTool(mcpServer, { repoReviewConfigsRepo, reviewSessionsRepo, logger });
+  registerStartPrReviewSessionTool(mcpServer, {
+    repoReviewConfigsRepo,
+    reviewSessionsRepo,
+    reviewSessionDraftsRepo,
+    geminiCliService,
+    geminiCliReviewService,
+    logger,
+  });
   registerStoreAgentReviewDraftTool(mcpServer, { reviewSessionsRepo, reviewSessionDraftsRepo, logger });
   registerGetReviewSessionDraftsTool(mcpServer, { reviewSessionsRepo, reviewSessionDraftsRepo, logger });
   registerPublishConsolidatedReviewTool(mcpServer, { githubService, reviewsRepo, reviewSessionsRepo, logger });
