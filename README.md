@@ -287,8 +287,44 @@ Capture meeting audio directly from browser tabs and transcribe locally — work
 # Install transcription tools
 brew install ffmpeg whisper-cpp
 
-# Download a Whisper model (run once — ~1.5GB for large-v3)
-whisper-cpp --download-model large-v3
+# Create models directory and download a Whisper model
+mkdir -p ~/.simple-mcp/models
+
+# Choose ONE model (base recommended for testing, large-v3 for production):
+# base (~142MB, fast, good enough for most meetings)
+curl -L -o ~/.simple-mcp/models/ggml-base.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+
+# OR medium (~1.5GB, balanced speed/accuracy)
+# curl -L -o ~/.simple-mcp/models/ggml-medium.bin \
+#   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin
+
+# OR large-v3 (~3.1GB, best accuracy, slower)
+# curl -L -o ~/.simple-mcp/models/ggml-large-v3.bin \
+#   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
+
+# Set the model name (must match the file you downloaded, without ggml- prefix and .bin suffix)
+export WHISPER_MODEL=base
+
+# Persist the env var
+echo 'export WHISPER_MODEL=base' >> ~/.zshrc
+source ~/.zshrc
+```
+
+| Model | Size | Speed | Accuracy | Best For |
+|-------|------|-------|----------|----------|
+| `tiny` | 75MB | Fastest | Low | Quick testing only |
+| `base` | 142MB | Fast | Good | Daily use, shorter meetings |
+| `medium` | 1.5GB | Medium | Better | Longer or noisy meetings |
+| `large-v3` | 3.1GB | Slow | Best | Maximum accuracy, important meetings |
+
+**Verify setup:**
+
+```bash
+echo $WHISPER_MODEL                          # should print "base"
+ls ~/.simple-mcp/models/ggml-base.bin        # should show the file
+which whisper-cpp                            # should show the path
+which ffmpeg                                 # should show the path
 ```
 
 **Chrome Extension Setup:**
