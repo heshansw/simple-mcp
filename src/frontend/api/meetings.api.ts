@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@frontend/api/client";
 
 export type AudioTranscriptSummary = {
@@ -27,11 +27,32 @@ export type AudioTranscriptStats = {
   totalDurationSeconds: number;
 };
 
+export type MeetingAnalysisMeta = {
+  id: string;
+  transcriptId: string;
+  analysisType: string;
+  title: string;
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  createdAt: string;
+};
+
+export type MeetingAnalysisDetail = MeetingAnalysisMeta & {
+  content: string;
+};
+
+export type MeetingAnalysesResponse = {
+  status: "found" | "not_found";
+  analyses: MeetingAnalysisDetail[];
+};
+
 export const meetingKeys = {
   all: ["meetings"] as const,
   list: () => [...meetingKeys.all, "list"] as const,
   detail: (id: string) => [...meetingKeys.all, "detail", id] as const,
   stats: () => [...meetingKeys.all, "stats"] as const,
+  analyses: (transcriptId: string) => [...meetingKeys.all, "analyses", transcriptId] as const,
 };
 
 export function useMeetingTranscripts(limit = 50) {
@@ -55,5 +76,31 @@ export function useMeetingTranscriptStats() {
     queryKey: meetingKeys.stats(),
     queryFn: () => apiClient.get<AudioTranscriptStats>("/audio-transcripts/stats"),
     refetchInterval: 60_000,
+  });
+}
+
+export function useMeetingAnalyses(transcriptId: string) {
+  return useQuery<MeetingAnalysesResponse>({
+    queryKey: meetingKeys.analyses(transcriptId),
+    queryFn: () =>
+      apiClient.get<MeetingAnalysesResponse>(
+        `/meeting-analyses/by-transcript/${transcriptId}`
+      ),
+    enabled: !!transcriptId,
+    refetchInterval: 15_000, // Poll while summary may be processing
+  });
+}
+
+export function useResummarize(transcriptId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiClient.post<{ status: string; transcriptId: string }>(
+        `/meeting-analyses/${transcriptId}/summarize`,
+        {}
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: meetingKeys.analyses(transcriptId) });
+    },
   });
 }
