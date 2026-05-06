@@ -153,11 +153,7 @@ export function createGeminiCliService(deps: GeminiCliServiceDeps): GeminiCliSer
       model?: string
     ): Promise<Result<GeminiCliResult, DomainError>> {
       const effectiveModel = model ?? config.model;
-      // Only pass -m if an explicit model override is provided; otherwise let
-      // the CLI use its default model (avoids issues with model name mismatches).
-      const args = model
-        ? ["-p", "", "-m", effectiveModel, "-o", "text"]
-        : ["-p", "", "-o", "text"];
+      const args = ["-p", "", "-m", effectiveModel, "-o", "text"];
 
       logger.info(
         { model: effectiveModel, promptLength: prompt.length },
