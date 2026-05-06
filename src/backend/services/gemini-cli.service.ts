@@ -1,8 +1,18 @@
 import { spawn } from "node:child_process";
+import { dirname } from "node:path";
 import type { Logger } from "pino";
 import type { Result, DomainError } from "@shared/result";
 import { ok, err, integrationError } from "@shared/result.js";
 import type { GeminiCliConfig } from "@shared/schemas/gemini-cli.schema";
+
+// Ensure nvm-installed globals (like `gemini`) are discoverable even when the
+// MCP server inherits a minimal PATH (e.g. from a daemon or Claude Code).
+function buildSpawnEnv(): NodeJS.ProcessEnv {
+  const nodeBinDir = dirname(process.execPath);
+  const currentPath = process.env["PATH"] ?? "";
+  if (currentPath.includes(nodeBinDir)) return process.env;
+  return { ...process.env, PATH: `${currentPath}:${nodeBinDir}` };
+}
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -44,6 +54,7 @@ function spawnAndCapture(
     const child = spawn(command, [...args], {
       stdio: ["pipe", "pipe", "pipe"],
       signal: controller.signal,
+      env: buildSpawnEnv(),
     });
 
     let stdout = "";
