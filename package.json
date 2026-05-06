@@ -18,7 +18,12 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "setup:audio": "docker compose -f docker/audio-sandbox/docker-compose.yml up -d --build",
+    "docker:audio:build": "docker compose -f docker/audio-sandbox/docker-compose.yml build",
+    "docker:audio:up": "docker compose -f docker/audio-sandbox/docker-compose.yml up -d",
+    "docker:audio:down": "docker compose -f docker/audio-sandbox/docker-compose.yml down",
+    "docker:audio:logs": "docker compose -f docker/audio-sandbox/docker-compose.yml logs -f"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.79.0",

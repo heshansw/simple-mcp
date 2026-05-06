@@ -61,6 +61,16 @@ export const EnvSchema = z
       .string()
       .optional()
       .describe("Google OAuth 2.0 client secret for Calendar integration"),
+
+    AUDIO_SANDBOX: z
+      .enum(["local", "docker"])
+      .default("docker")
+      .describe("Audio processing sandbox mode: 'docker' (default) uses containerized ffmpeg/whisper, 'local' uses host binaries"),
+
+    AUDIO_DOCKER_CONTAINER: z
+      .string()
+      .default("simple-mcp-audio")
+      .describe("Docker container name for audio sandbox (only used when AUDIO_SANDBOX=docker)"),
   })
   .strip();
 

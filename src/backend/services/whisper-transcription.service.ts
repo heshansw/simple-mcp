@@ -1,5 +1,4 @@
 import type { Logger } from "pino";
-import { spawn } from "node:child_process";
 import { access, readFile, unlink, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import {
@@ -10,6 +9,7 @@ import {
   validationError,
 } from "../../shared/result.js";
 import type { DomainError } from "../../shared/result.js";
+import type { CommandExecutor } from "./command-executor.service.js";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -29,11 +29,13 @@ export type TranscriptionResult = {
 };
 
 export type WhisperPrerequisites = {
+  sandboxMode: "local" | "docker";
   hasWhisper: boolean;
   hasFfmpeg: boolean;
   whisperVersion: string | null;
   ffmpegVersion: string | null;
   modelPath: string | null;
+  containerRunning: boolean | null; // null when local mode
   diagnosticMessages: string[];
 };
 
@@ -41,7 +43,9 @@ export type WhisperPrerequisites = {
 
 export type WhisperTranscriptionDependencies = {
   logger: Logger;
-  whisperBinPath?: string; // default: "whisper-cpp"
+  commandExecutor: CommandExecutor;
+  sandboxMode: "local" | "docker";
+  whisperBinPath?: string; // default: "whisper-cli"
   modelName?: string; // default: "large-v3"
   modelsDir?: string; // default: ~/.simple-mcp/models/
 };
@@ -55,46 +59,7 @@ export interface WhisperTranscriptionServiceResult {
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function runCommand(
-  command: string,
-  args: string[],
-  timeoutMs: number = 600_000 // 10 min default
-): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve) => {
-    // Ensure Homebrew paths are available (MCP stdio process may not inherit user's shell PATH)
-    const envPath = [
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      process.env.PATH ?? "",
-    ].join(":");
-    const proc = spawn(command, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, PATH: envPath },
-    });
-    let stdout = "";
-    let stderr = "";
-
-    proc.stdout.on("data", (data: Buffer) => { stdout += data.toString(); });
-    proc.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
-
-    const timer = setTimeout(() => {
-      proc.kill("SIGTERM");
-      resolve({ stdout, stderr: stderr + "\nProcess timed out", exitCode: 124 });
-    }, timeoutMs);
-
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr, exitCode: code ?? 1 });
-    });
-
-    proc.on("error", (error) => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr: error.message, exitCode: 127 });
-    });
-  });
-}
-
-async function fileExists(path: string): Promise<boolean> {
+async function hostFileExists(path: string): Promise<boolean> {
   try {
     await access(path);
     return true;
@@ -160,7 +125,7 @@ function timestampToSeconds(ts: string): number {
 export function createWhisperTranscriptionService(
   deps: WhisperTranscriptionDependencies
 ): WhisperTranscriptionServiceResult {
-  const { logger } = deps;
+  const { logger, commandExecutor, sandboxMode } = deps;
   const whisperBin = deps.whisperBinPath ?? "whisper-cli";
   const modelName = deps.modelName ?? "large-v3";
   const homeDir = process.env.HOME || process.env.USERPROFILE || "/tmp";
@@ -175,19 +140,20 @@ export function createWhisperTranscriptionService(
     async transcribe(audioFilePath: string): Promise<Result<TranscriptionResult, DomainError>> {
       const startMs = Date.now();
 
-      // Validate input file exists
-      if (!(await fileExists(audioFilePath))) {
+      // Validate input file exists (on host — volume mount makes it visible in container)
+      if (!(await commandExecutor.fileExists(commandExecutor.mapPath(audioFilePath)))) {
         return err(validationError(`Audio file not found: ${audioFilePath}`));
       }
 
       const modelPath = getModelPath();
+      const mappedModelPath = commandExecutor.mapPath(modelPath);
 
-      // Check model exists
-      if (!(await fileExists(modelPath))) {
+      // Check model exists (inside container for docker mode)
+      if (!(await commandExecutor.fileExists(mappedModelPath))) {
         return err(
           integrationError(
             "whisper",
-            `Whisper model not found at ${modelPath}. Download it with: whisper-cpp --download-model ${modelName}`
+            `Whisper model not found at ${modelPath}. Download it with: curl -L -o ${modelPath} https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${modelName}.bin`
           )
         );
       }
@@ -198,20 +164,20 @@ export function createWhisperTranscriptionService(
       const outputFilePrefix = join(outputDir, "transcript");
 
       try {
-        // Run whisper-cli with correct flags
+        // Run whisper-cli with mapped paths (container paths for docker, host paths for local)
         const args = [
-          "-m", modelPath,
-          "-f", audioFilePath,
-          "-of", outputFilePrefix, // output file path (without extension)
-          "-ovtt",          // Output VTT format
-          "-otxt",          // Output plain text
-          "-l", "auto",     // Auto-detect language
-          "-np",            // No progress prints (cleaner output)
+          "-m", commandExecutor.mapPath(modelPath),
+          "-f", commandExecutor.mapPath(audioFilePath),
+          "-of", commandExecutor.mapPath(outputFilePrefix),
+          "-ovtt",
+          "-otxt",
+          "-l", "auto",
+          "-np",
         ];
 
-        logger.info({ whisperBin, args }, "Starting Whisper transcription");
+        logger.info({ whisperBin, args, sandboxMode }, "Starting Whisper transcription");
 
-        const result = await runCommand(whisperBin, args, 600_000); // 10 min timeout
+        const result = await commandExecutor.run(whisperBin, args, 600_000);
 
         if (result.exitCode !== 0) {
           logger.error(
@@ -233,12 +199,12 @@ export function createWhisperTranscriptionService(
         let segments: TranscriptionSegment[] = [];
         let fullText = "";
 
-        if (await fileExists(vttPath)) {
+        if (await hostFileExists(vttPath)) {
           const vttContent = await readFile(vttPath, "utf-8");
           segments = parseVtt(vttContent);
         }
 
-        if (await fileExists(txtPath)) {
+        if (await hostFileExists(txtPath)) {
           fullText = (await readFile(txtPath, "utf-8")).trim();
         } else {
           fullText = segments.map((s) => s.text).join(" ");
@@ -263,8 +229,8 @@ export function createWhisperTranscriptionService(
 
         // Clean up output files
         try {
-          if (await fileExists(vttPath)) await unlink(vttPath);
-          if (await fileExists(txtPath)) await unlink(txtPath);
+          if (await hostFileExists(vttPath)) await unlink(vttPath);
+          if (await hostFileExists(txtPath)) await unlink(txtPath);
         } catch {
           // Non-critical cleanup
         }
@@ -291,44 +257,69 @@ export function createWhisperTranscriptionService(
       let hasFfmpeg = false;
       let whisperVersion: string | null = null;
       let ffmpegVersion: string | null = null;
+      let containerRunning: boolean | null = null;
 
-      // Check whisper-cpp
-      const whisperResult = await runCommand(whisperBin, ["--help"], 5000);
+      diagnosticMessages.push(`Sandbox mode: ${sandboxMode}`);
+
+      if (sandboxMode === "docker") {
+        // Check container is running
+        const inspectResult = await commandExecutor.run("echo", ["ok"], 5_000);
+        containerRunning = inspectResult.exitCode === 0;
+        if (containerRunning) {
+          diagnosticMessages.push("Docker container: running");
+        } else {
+          diagnosticMessages.push("Docker container: NOT running. Start with: pnpm docker:audio:up");
+        }
+      }
+
+      // Check whisper-cpp (runs inside container for docker mode)
+      const whisperResult = await commandExecutor.run(whisperBin, ["--help"], 5_000);
       if (whisperResult.exitCode !== 127) {
         hasWhisper = true;
         const versionMatch = (whisperResult.stdout + whisperResult.stderr).match(/whisper[\s.]*(\d+\.\d+)/i);
         whisperVersion = versionMatch?.[1] ?? "installed";
         diagnosticMessages.push(`whisper-cpp: found (${whisperVersion})`);
       } else {
-        diagnosticMessages.push(`whisper-cpp: NOT found. Install with: brew install whisper-cpp`);
+        const installHint = sandboxMode === "docker"
+          ? "Rebuild container: pnpm docker:audio:build"
+          : "Install with: brew install whisper-cpp";
+        diagnosticMessages.push(`whisper-cpp: NOT found. ${installHint}`);
       }
 
-      // Check ffmpeg
-      const ffmpegResult = await runCommand("ffmpeg", ["-version"], 5000);
+      // Check ffmpeg (runs inside container for docker mode)
+      const ffmpegResult = await commandExecutor.run("ffmpeg", ["-version"], 5_000);
       if (ffmpegResult.exitCode === 0) {
         hasFfmpeg = true;
         const versionMatch = ffmpegResult.stdout.match(/ffmpeg version (\S+)/);
         ffmpegVersion = versionMatch?.[1] ?? "installed";
         diagnosticMessages.push(`ffmpeg: found (${ffmpegVersion})`);
       } else {
-        diagnosticMessages.push(`ffmpeg: NOT found. Install with: brew install ffmpeg`);
+        const installHint = sandboxMode === "docker"
+          ? "Rebuild container: pnpm docker:audio:build"
+          : "Install with: brew install ffmpeg";
+        diagnosticMessages.push(`ffmpeg: NOT found. ${installHint}`);
       }
 
-      // Check model
+      // Check model (inside container for docker mode, on host for local)
       const modelPath = getModelPath();
-      const hasModel = await fileExists(modelPath);
+      const mappedModelPath = commandExecutor.mapPath(modelPath);
+      const hasModel = await commandExecutor.fileExists(mappedModelPath);
       if (hasModel) {
         diagnosticMessages.push(`Whisper model: found at ${modelPath}`);
       } else {
-        diagnosticMessages.push(`Whisper model: NOT found at ${modelPath}. Download with: whisper-cpp --download-model ${modelName}`);
+        diagnosticMessages.push(
+          `Whisper model: NOT found at ${modelPath}. Download with: curl -L -o ${modelPath} https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${modelName}.bin`
+        );
       }
 
       return ok({
+        sandboxMode,
         hasWhisper,
         hasFfmpeg,
         whisperVersion,
         ffmpegVersion,
         modelPath: hasModel ? modelPath : null,
+        containerRunning,
         diagnosticMessages,
       });
     },
