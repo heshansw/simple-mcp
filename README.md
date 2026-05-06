@@ -352,13 +352,46 @@ which ffmpeg                                 # should show the path
 1. Join a meeting in your browser (Google Meet, Zoom web, etc.)
 2. Click the extension icon
 3. Choose a capture mode:
-   - **Microphone (recommended)** — captures meeting audio through your speakers/headphones + your voice via the system microphone. Works with all meeting apps.
-   - **Tab Audio** — captures only the tab's audio output. Works for tabs playing media but may produce silent audio for WebRTC-based meetings like Google Meet.
+   - **Microphone** — captures your voice via the system microphone. Best without headset (speakers play meeting audio back into mic, capturing both sides).
+   - **System Audio + Mic (headset users)** — captures system audio (other participants via BlackHole) AND your mic (your voice). **Required when using a headset** — see setup below.
+   - **Tab Audio** — captures only the tab's audio output. May produce silent audio for WebRTC-based meetings like Google Meet.
 4. Enter an optional meeting title (auto-detected from the tab)
 5. Click **Start Recording** — keep the popup open while recording (status shows timer)
 6. When done, click **Stop Recording** — the audio is uploaded to the MCP server
 7. Whisper transcribes locally (~1 min per 10 min of audio on Apple Silicon)
 8. Transcript is encrypted and stored in SQLite with full-text search
+
+**Headset Setup — System Audio + Mic mode (BlackHole):**
+
+If you use a headset during meetings, other participants' audio goes straight into your earpiece and the microphone can't hear it. BlackHole solves this by capturing system audio output alongside your mic.
+
+1. Install BlackHole:
+   ```bash
+   brew install blackhole-2ch
+   ```
+
+2. Create a Multi-Output Device in macOS:
+   - Open the **Audio MIDI Setup** app (search in Spotlight)
+   - Click the **"+"** button at the bottom-left → **Create Multi-Output Device**
+   - Check both **BlackHole 2ch** and your **headset/speakers**
+   - Optionally rename it to "Meeting Output" (right-click → rename)
+
+3. Set it as your system output:
+   - Go to **System Settings → Sound → Output**
+   - Select the **Multi-Output Device** you just created
+   - Your audio now routes to both your headset AND BlackHole simultaneously
+
+4. In the Chrome extension, select **"System Audio + Mic (headset users)"** as the capture mode
+
+> **How it works:** Meeting audio plays through your headset (so you hear it) AND through BlackHole (so the extension captures it). The extension merges the BlackHole stream (other people) with your microphone stream (your voice) into a single recording.
+
+> **After the meeting:** Switch your system output back to your headset/speakers if you don't want BlackHole active all the time. Or leave it — BlackHole is silent and uses no resources when nothing is recording.
+
+| Capture Mode | Your Voice | Others' Voice | Requires |
+|---|---|---|---|
+| Microphone | Yes | Only if using speakers (no headset) | Mic permission |
+| System Audio + Mic | Yes | Yes (via BlackHole) | BlackHole + Multi-Output Device |
+| Tab Audio | No | Depends on tab | Tab capture permission |
 
 **Verify end-to-end:**
 ```

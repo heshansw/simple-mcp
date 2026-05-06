@@ -86,6 +86,55 @@ toggleBtn.addEventListener("click", () => {
   }
 });
 
+// ── System Audio (BlackHole + Mic) ───────────────────────────────────────
+
+async function createSystemAudioStream(): Promise<MediaStream> {
+  // Find BlackHole device
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const blackhole = devices.find(
+    (d) => d.kind === "audioinput" && d.label.toLowerCase().includes("blackhole")
+  );
+
+  if (!blackhole) {
+    throw new Error(
+      "BlackHole not found. Install it with: brew install blackhole-2ch\n" +
+      "Then create a Multi-Output Device in Audio MIDI Setup (see README)."
+    );
+  }
+
+  // Get BlackHole stream (system audio — other participants' voices)
+  const systemStream = await navigator.mediaDevices.getUserMedia({
+    audio: { deviceId: { exact: blackhole.deviceId } },
+  });
+
+  // Get default mic stream (your voice)
+  const micStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
+  });
+
+  // Merge both streams using Web Audio API
+  const audioCtx = new AudioContext();
+  const destination = audioCtx.createMediaStreamDestination();
+
+  const systemSource = audioCtx.createMediaStreamSource(systemStream);
+  const micSource = audioCtx.createMediaStreamSource(micStream);
+
+  systemSource.connect(destination);
+  micSource.connect(destination);
+
+  // Store references for cleanup
+  const mergedStream = destination.stream;
+  // Attach original streams so we can stop all tracks on recording stop
+  (mergedStream as any).__sourceStreams = [systemStream, micStream];
+  (mergedStream as any).__audioContext = audioCtx;
+
+  return mergedStream;
+}
+
 // ── Recording controls ───────────────────────────────────────────────────
 
 async function startRecording() {
@@ -100,19 +149,30 @@ async function startRecording() {
     currentMeetingUrl = tab?.url || "";
     currentStartTime = new Date().toISOString();
 
-    if (captureMode === "microphone") {
+    if (captureMode === "microphone" || captureMode === "system") {
       // Record directly in the popup using getUserMedia
       try {
-        micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
-        });
+        if (captureMode === "system") {
+          // System Audio + Mic mode — merge BlackHole (system audio) + mic
+          micStream = await createSystemAudioStream();
+        } else {
+          // Microphone only mode
+          micStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            },
+          });
+        }
       } catch (err) {
-        showError(`Microphone access denied. Opening setup page...`);
-        openPermissionsPage();
+        const msg = String(err);
+        if (msg.includes("BlackHole")) {
+          showError(msg);
+        } else {
+          showError(`Microphone access denied. Opening setup page...`);
+          openPermissionsPage();
+        }
         setIdleUI();
         return;
       }
@@ -194,9 +254,18 @@ async function stopRecording() {
   setUploadingUI();
 
   if (micRecorder && micRecorder.state !== "inactive") {
-    // Stop microphone recording (popup-based)
+    // Stop microphone / system audio recording (popup-based)
     micRecorder.stop();
-    micStream?.getTracks().forEach((t) => t.stop());
+    // Clean up all source streams (including BlackHole + mic for system mode)
+    if (micStream) {
+      const sourceStreams = (micStream as any).__sourceStreams as MediaStream[] | undefined;
+      const audioCtx = (micStream as any).__audioContext as AudioContext | undefined;
+      if (sourceStreams) {
+        sourceStreams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
+      }
+      micStream.getTracks().forEach((t) => t.stop());
+      if (audioCtx) audioCtx.close().catch(() => {});
+    }
 
     // Wait for final data
     await new Promise<void>((resolve) => {
