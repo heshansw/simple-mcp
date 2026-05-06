@@ -98,7 +98,14 @@ function createMockDeps(
   return {
     repoReviewConfigsRepo,
     reviewSessionsRepo,
-    logger: { info: vi.fn(), error: vi.fn() },
+    reviewSessionDraftsRepo: {
+      upsertDraft: vi.fn(),
+      findBySessionId: vi.fn().mockResolvedValue([]),
+      findBySessionAndTool: vi.fn().mockResolvedValue(undefined),
+    },
+    geminiCliService: null,
+    geminiCliReviewService: null,
+    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ...overrides,
   };
 }
