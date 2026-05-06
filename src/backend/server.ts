@@ -20,10 +20,12 @@ import { createRepoWorkspacesRepository } from "./db/repositories/repo-workspace
 import { createDbQueryActivityRepository } from "./db/repositories/db-query-activity.repository.js";
 import { createMeetTranscriptsRepository } from "./db/repositories/meet-transcripts.repository.js";
 import { createAudioTranscriptsRepository } from "./db/repositories/audio-transcripts.repository.js";
+import { createMeetingAnalysesRepository } from "./db/repositories/meeting-analyses.repository.js";
 
 import { createEncryptionService } from "./services/encryption.service.js";
 import { createWhisperTranscriptionService } from "./services/whisper-transcription.service.js";
 import { createAudioCaptureService } from "./services/audio-capture.service.js";
+import { createMeetingSummarizationService } from "./services/meeting-summarization.service.js";
 import { createConnectionManagerService } from "./services/connection-manager.service.js";
 import { createJiraService } from "./services/jira.service.js";
 import { createGitHubService } from "./services/github.service.js";
@@ -136,6 +138,7 @@ import { registerCheckAudioPrerequisitesTool } from "./tools/audio-capture/check
 import { registerListAudioTranscriptsTool } from "./tools/audio-capture/list-audio-transcripts.tool.js";
 import { registerGetAudioTranscriptTool } from "./tools/audio-capture/get-audio-transcript.tool.js";
 import { registerSearchAudioTranscriptsTool } from "./tools/audio-capture/search-audio-transcripts.tool.js";
+import { registerGetMeetingSummaryTool } from "./tools/audio-capture/get-meeting-summary.tool.js";
 import { registerFsListDirectoryTool } from "./tools/local-filesystem/fs-list-directory.tool.js";
 import { registerFsReadFileTool } from "./tools/local-filesystem/fs-read-file.tool.js";
 import { registerFsSearchFilesTool } from "./tools/local-filesystem/fs-search-files.tool.js";
@@ -204,6 +207,7 @@ export async function createServer(
   const reviewSessionDraftsRepo = createReviewSessionDraftsRepository(db);
   const meetTranscriptsRepo = createMeetTranscriptsRepository(db);
   const audioTranscriptsRepo = createAudioTranscriptsRepository(db);
+  const meetingAnalysesRepo = createMeetingAnalysesRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -227,6 +231,14 @@ export async function createServer(
     dataDir: audioDataDir,
     whisperService,
     audioTranscriptsRepo,
+    encryptionService,
+  });
+
+  // Meeting summarization service (auto-triggers Claude CLI after transcription)
+  const meetingSummarizationService = createMeetingSummarizationService({
+    logger,
+    audioTranscriptsRepo,
+    meetingAnalysesRepo,
     encryptionService,
   });
 
@@ -522,6 +534,7 @@ export async function createServer(
   registerListAudioTranscriptsTool(mcpServer, { audioTranscriptsRepo, logger });
   registerGetAudioTranscriptTool(mcpServer, { audioTranscriptsRepo, encryptionService, logger });
   registerSearchAudioTranscriptsTool(mcpServer, { audioTranscriptsRepo, logger });
+  registerGetMeetingSummaryTool(mcpServer, { meetingAnalysesRepo, encryptionService, logger });
   logger.info("Audio capture MCP tools registered");
 
   // Local filesystem tools — always registered (operations are gated by folder registration)
@@ -1741,6 +1754,28 @@ export async function createServer(
         return c.json({ error: domainErrorMessage(result.error) }, { status: 500 });
       }
 
+      // Fire-and-forget: auto-summarize in background via Claude CLI
+      const transcriptId = result.value.id;
+      meetingSummarizationService
+        .summarizeTranscript(transcriptId)
+        .then(async (summaryResult) => {
+          if (summaryResult._tag === "Ok") {
+            logger.info(
+              { transcriptId, analysisId: summaryResult.value.id },
+              "Auto-summarization completed"
+            );
+          } else {
+            const { domainErrorMessage: errMsg } = await import("@shared/result.js");
+            logger.error(
+              { transcriptId, error: errMsg(summaryResult.error) },
+              "Auto-summarization failed"
+            );
+          }
+        })
+        .catch((error) => {
+          logger.error({ error, transcriptId }, "Auto-summarization crashed");
+        });
+
       return c.json(result.value, { status: 201 });
     } catch (error) {
       logger.error({ error }, "Audio upload failed");
@@ -1777,6 +1812,70 @@ export async function createServer(
     } catch {
       return c.json({ error: "Failed to decrypt transcript" }, { status: 500 });
     }
+  });
+
+  // ── Meeting Analyses endpoints ──────────────────────────────────────
+
+  httpApp.get("/api/meeting-analyses", async (c) => {
+    const limit = parseInt(c.req.query("limit") || "50", 10);
+    const analyses = await meetingAnalysesRepo.findRecent(limit);
+    // Strip encrypted content from list response
+    const safe = analyses.map(({ encryptedContent, iv, ...rest }) => rest);
+    return c.json(safe);
+  });
+
+  httpApp.get("/api/meeting-analyses/by-transcript/:transcriptId", async (c) => {
+    const transcriptId = c.req.param("transcriptId");
+    const analyses = await meetingAnalysesRepo.findByTranscriptId(transcriptId);
+
+    if (analyses.length === 0) {
+      return c.json({ status: "not_found", analyses: [] });
+    }
+
+    // Decrypt content for each analysis
+    const decrypted = analyses.map((analysis) => {
+      try {
+        const content = encryptionService.decrypt(analysis.encryptedContent, analysis.iv);
+        const { encryptedContent, iv, ...meta } = analysis;
+        return { ...meta, content };
+      } catch {
+        const { encryptedContent, iv, ...meta } = analysis;
+        return { ...meta, content: "Failed to decrypt" };
+      }
+    });
+
+    return c.json({ status: "found", analyses: decrypted });
+  });
+
+  httpApp.post("/api/meeting-analyses/:transcriptId/summarize", async (c) => {
+    const transcriptId = c.req.param("transcriptId");
+    const transcript = await audioTranscriptsRepo.findById(transcriptId);
+    if (!transcript) {
+      return c.json({ error: "Transcript not found" }, { status: 404 });
+    }
+
+    // Trigger summarization in background
+    meetingSummarizationService
+      .summarizeTranscript(transcriptId)
+      .then(async (summaryResult) => {
+        if (summaryResult._tag === "Ok") {
+          logger.info(
+            { transcriptId, analysisId: summaryResult.value.id },
+            "Manual re-summarization completed"
+          );
+        } else {
+          const { domainErrorMessage: errMsg } = await import("@shared/result.js");
+          logger.error(
+            { transcriptId, error: errMsg(summaryResult.error) },
+            "Manual re-summarization failed"
+          );
+        }
+      })
+      .catch((error) => {
+        logger.error({ error, transcriptId }, "Manual re-summarization crashed");
+      });
+
+    return c.json({ status: "processing", transcriptId }, { status: 202 });
   });
 
   // ── Confluence Settings ─────────────────────────────────────────────
