@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.8.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.7.0...simple-mcp-v0.8.0) (2026-05-06)
+
+
+### Features
+
+* **audio:** add local audio capture via Chrome extension + Whisper transcription ([#31](https://github.com/heshansw/simple-mcp/issues/31)) ([3e6e3a9](https://github.com/heshansw/simple-mcp/commit/3e6e3a90114e18220d50c315ffa7968e0fa06e36))
+* **github:** integrate Gemini CLI for multi-agent PR review ([#29](https://github.com/heshansw/simple-mcp/issues/29)) ([51846bf](https://github.com/heshansw/simple-mcp/commit/51846bf4dec229545efbe4fee758b6c5d63a04e7))
+* **google:** add Google Meet transcription integration ([#27](https://github.com/heshansw/simple-mcp/issues/27)) ([87bea60](https://github.com/heshansw/simple-mcp/commit/87bea60d87234e66a1c09da09907ac3f392cfec9))
+
+
+### Bug Fixes
+
+* **github:** fix Gemini CLI invocation and review attribution ([#30](https://github.com/heshansw/simple-mcp/issues/30)) ([f072a70](https://github.com/heshansw/simple-mcp/commit/f072a70178a9fc28de9e0aed5a3b708e3fdcdba3))
+
 ## [0.7.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.6.0...simple-mcp-v0.7.0) (2026-04-29)
 
 
