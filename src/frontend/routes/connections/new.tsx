@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   useCreateConnection,
   useStoreCredentials,
-  useGoogleCalendarOAuthStart,
+  useGoogleOAuthStart,
 } from "@frontend/api/connections.api";
 import { ErrorDisplay } from "@frontend/components/error-display";
 import { useState } from "react";
@@ -12,10 +12,10 @@ export function NewConnectionPage() {
   const navigate = useNavigate();
   const createConnection = useCreateConnection();
   const storeCredentials = useStoreCredentials();
-  const googleOAuth = useGoogleCalendarOAuthStart();
+  const googleOAuth = useGoogleOAuthStart();
   const [formData, setFormData] = useState<{
     name: string;
-    integrationType: "jira" | "github" | "google-calendar";
+    integrationType: "jira" | "github" | "google";
     baseUrl: string;
     authMethod: "oauth2" | "api_token" | "personal_access_token";
     accessToken: string;
@@ -27,7 +27,7 @@ export function NewConnectionPage() {
     accessToken: "",
   });
 
-  const isGoogleCalendar = formData.integrationType === "google-calendar";
+  const isGoogle = formData.integrationType === "google";
 
   const handleGoogleOAuth = async () => {
     try {
@@ -130,14 +130,14 @@ export function NewConnectionPage() {
               id="integrationType"
               value={formData.integrationType}
               onChange={(e) => {
-                const value = e.target.value as "jira" | "github" | "google-calendar";
+                const value = e.target.value as "jira" | "github" | "google";
                 setFormData({
                   ...formData,
                   integrationType: value,
-                  // Auto-set OAuth2 for Google Calendar
-                  authMethod: value === "google-calendar" ? "oauth2" : formData.authMethod,
-                  baseUrl: value === "google-calendar"
-                    ? "https://www.googleapis.com/calendar/v3"
+                  // Auto-set OAuth2 for Google
+                  authMethod: value === "google" ? "oauth2" : formData.authMethod,
+                  baseUrl: value === "google"
+                    ? "https://www.googleapis.com"
                     : formData.baseUrl,
                 });
               }}
@@ -145,11 +145,11 @@ export function NewConnectionPage() {
             >
               <option value="jira">Jira</option>
               <option value="github">GitHub</option>
-              <option value="google-calendar">Google Calendar</option>
+              <option value="google">Google (Calendar + Meet)</option>
             </select>
           </div>
 
-          {isGoogleCalendar ? (
+          {isGoogle ? (
             <>
               <div
                 style={{
@@ -164,7 +164,7 @@ export function NewConnectionPage() {
                   OAuth 2.0 Authentication
                 </p>
                 <p style={{ margin: "0", fontSize: "0.8rem", color: "#3b82f6" }}>
-                  Google Calendar uses OAuth 2.0. Click the button below to authenticate with your
+                  Google uses OAuth 2.0 for Calendar and Meet access. Click the button below to authenticate with your
                   Google account. You will be redirected to Google&apos;s consent screen.
                 </p>
               </div>

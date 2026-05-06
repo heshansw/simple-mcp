@@ -1,10 +1,21 @@
 ---
 name: Pending Feature Requirements
-description: Features specified but not yet implemented in simple-mcp — local filesystem access and local database connections
+description: Features specified but not yet implemented in simple-mcp — local filesystem access, local database connections, and unified review config + code review
 type: project
 ---
 
-Three features have been spec'd and documented in `docs/ai/instructions/`. All are pending implementation.
+Features spec'd and documented. Features 3-5 and 8 are implemented. Feature 9 (Google Meet) is implemented.
+
+**Feature 9 — Google Meet Transcription Integration** (implemented 2026-05-05)
+New unified `"google"` connection type (renamed from `"google-calendar"`). Shares OAuth connection with Calendar, adds Meet scopes (`meetings.space.readonly`). 5 new MCP tools: `google_meet_check_prerequisites`, `google_meet_list_meetings`, `google_meet_get_transcript`, `google_meet_search_transcripts`, `google_meet_sync_transcripts`. Auto-polling transcript sync (30min interval) stores encrypted transcripts in `meet_transcripts` table with FTS5 full-text search. New `meeting-summarizer` agent for transcript analysis.
+
+**Why:** Developer request to surface Google Meet transcripts for Claude agents to summarize meetings, extract action items, and search across meeting history.
+
+**How it was applied:** `google-calendar` integration type renamed to `google` across all files. Shared `GoogleTokenBundle` extracted to `@shared/schemas/google-common.schema.ts`. New service at `src/backend/services/google-meet.service.ts`, tools in `src/backend/tools/google-meet/`, maintenance task at `src/backend/maintenance/transcript-sync.ts`, repository at `src/backend/db/repositories/meet-transcripts.repository.ts`.
+
+---
+
+Three earlier features were spec'd and documented in `docs/ai/instructions/`.
 
 **Feature 3 — Local Repository / Folder Access** (`3-local-repo-access-requirements.md`)
 New integration type `"local-filesystem"`. Admins register local folder paths; agents get read-only MCP tools (`fs_read_file`, `fs_list_directory`, `fs_search_files`, `fs_get_file_tree`). Includes multi-repo **Workspace** grouping (`repo_workspaces` table) with cross-repo tools (`fs_workspace_search`, `fs_workspace_tree`). Path traversal sandboxing is a critical security requirement.
@@ -30,3 +41,17 @@ Read-only. 3 tools: `confluence_search_pages` (CQL), `confluence_get_page` (retu
 **Why:** User wants agents to read Confluence documentation to answer questions. Q1 confirmed reuse of Jira connection; Q2 read-only; Q3 Markdown output; Q4 admin-configurable space allowlist; Q5 agent reads docs.
 
 **How to apply:** No schema changes. No new table. The `integrationType` enum is NOT extended — Confluence is not its own connection type. Space allowlist enforced silently via CQL injection on search and post-fetch check on get-page.
+
+---
+
+**Feature 8 — Unified Review Config + Local Code Review** (`8-unified-review-config-and-code-review-requirements.md`, spec'd 2026-04-30)
+
+Two coupled features that must be implemented together as a single migration.
+
+**Feature A — Unified Review Config:** Breaks the `repo_review_configs` unique constraint from `(owner, repo, aiTool)` to `(owner, repo, agentId, aiTool)`. Allows multiple agents per AI tool per repo (e.g. Claude running both `backend-pr-reviewer` and `security-reviewer`). New default set is 5 rows (not 3). New tools: `add_repo_review_agent`, `remove_repo_review_agent`. Breaking change: `agentId` becomes required in `set_repo_review_config`. `store_agent_review_draft` upsert key changes from `(sessionId, aiTool)` to `(sessionId, agentId, aiTool)`.
+
+**Feature B — Local Code Review:** New flow for reviewing local git diffs (staged/unstaged/branch). New tables: `code_review_sessions`, `code_review_drafts` (separate tables, not a discriminator on existing session tables — decision rationale in doc section 3). New tools: `start_code_review_session`, `publish_code_review_report`, `get_code_review_session_drafts`. Extends `store_agent_review_draft` with optional `codeReviewSessionId` (XOR with `sessionId`). Uses same `repo_review_configs` table and same `review-synthesiser` agent. Admin panel gains `/code-reviews` and `/code-reviews/:sessionId` routes.
+
+**Why:** Single agent per AI tool was too restrictive for multi-specialist review patterns. Local code review enables pre-commit review without a GitHub PR.
+
+**How to apply:** Migration must drop old unique index and create new one on `repo_review_configs`. Existing data is valid under new constraint. Git diff runs via `spawnSync` (not shell exec) with 30s timeout and 500 KB size limit. `reportMarkdown` stored in `code_review_sessions`, returned verbatim to terminal for rendering.

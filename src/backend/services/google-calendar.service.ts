@@ -8,6 +8,10 @@ import {
   authorizationError,
 } from "../../shared/result.js";
 import type { DomainError } from "../../shared/result.js";
+import type { GoogleTokenBundle } from "../../shared/schemas/google-common.schema.js";
+
+// Re-export for existing consumers
+export type { GoogleTokenBundle } from "../../shared/schemas/google-common.schema.js";
 
 // ── Google Calendar API response/request types ──────────────────────────
 
@@ -35,12 +39,6 @@ export type Room = {
   display_name: string;
   capacity: number | null;
   available: boolean;
-};
-
-export type GoogleTokenBundle = {
-  access_token: string;
-  refresh_token: string;
-  expiry: string; // ISO 8601
 };
 
 // ── Constants ───────────────────────────────────────────────────────────

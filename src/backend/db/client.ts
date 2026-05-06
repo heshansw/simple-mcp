@@ -236,7 +236,37 @@ async function createTables(
       completed_at TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS meet_transcripts (
+      id TEXT PRIMARY KEY,
+      connection_id TEXT NOT NULL REFERENCES connections(id),
+      conference_record_name TEXT NOT NULL UNIQUE,
+      meeting_title TEXT,
+      meeting_start_time TEXT NOT NULL,
+      meeting_end_time TEXT NOT NULL,
+      space_name TEXT,
+      participant_names TEXT NOT NULL DEFAULT '[]',
+      entry_count INTEGER NOT NULL DEFAULT 0,
+      encrypted_content TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      synced_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
+
+  // Create FTS5 virtual table for transcript search (separate statement — not supported in executeMultiple)
+  try {
+    await client.execute(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS meet_transcripts_fts USING fts5(
+        transcript_id UNINDEXED,
+        participant_name,
+        text_content,
+        content='',
+        tokenize='porter unicode61'
+      )
+    `);
+  } catch {
+    // FTS5 may not be available in all SQLite builds — degrade gracefully
+  }
 
   // Additive migrations — ALTER TABLE is idempotent-safe with try/catch per column
   const migrations = [
@@ -244,6 +274,8 @@ async function createTables(
     "ALTER TABLE connections ADD COLUMN allow_writes INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE connections ADD COLUMN db_permissions TEXT NOT NULL DEFAULT '{}'",
     "ALTER TABLE review_session_drafts ADD COLUMN model TEXT",
+    // Rename google-calendar → google for unified Google connection
+    "UPDATE connections SET integration_type = 'google' WHERE integration_type = 'google-calendar'",
   ];
 
   for (const sql of migrations) {
