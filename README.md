@@ -283,33 +283,17 @@ Capture meeting audio directly from browser tabs and transcribe locally — work
 
 **Prerequisites:**
 
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+
+**Setup (one command):**
+
 ```bash
-# Install transcription tools
-brew install ffmpeg whisper-cpp
-
-# Create models directory and download a Whisper model
-mkdir -p ~/.simple-mcp/models
-
-# Choose ONE model (base recommended for testing, large-v3 for production):
-# base (~142MB, fast, good enough for most meetings)
-curl -L -o ~/.simple-mcp/models/ggml-base.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
-
-# OR medium (~1.5GB, balanced speed/accuracy)
-# curl -L -o ~/.simple-mcp/models/ggml-medium.bin \
-#   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin
-
-# OR large-v3 (~3.1GB, best accuracy, slower)
-# curl -L -o ~/.simple-mcp/models/ggml-large-v3.bin \
-#   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
-
-# Set the model name (must match the file you downloaded, without ggml- prefix and .bin suffix)
-export WHISPER_MODEL=base
-
-# Persist the env var
-echo 'export WHISPER_MODEL=base' >> ~/.zshrc
-source ~/.zshrc
+pnpm setup:audio
 ```
+
+This builds a sandboxed Docker container with ffmpeg, whisper-cpp, and the Whisper `base` model — all compiled and downloaded inside Docker. First run takes ~5-10 minutes. Nothing is installed on your host system.
+
+> To use a different model (e.g., `large-v3` for best accuracy), set `WHISPER_MODEL=large-v3` in `.env` before running `pnpm setup:audio`.
 
 | Model | Size | Speed | Accuracy | Best For |
 |-------|------|-------|----------|----------|
@@ -318,16 +302,24 @@ source ~/.zshrc
 | `medium` | 1.5GB | Medium | Better | Longer or noisy meetings |
 | `large-v3` | 3.1GB | Slow | Best | Maximum accuracy, important meetings |
 
-**Verify prerequisites:**
+**Container management:**
 
 ```bash
-echo $WHISPER_MODEL                          # should print "base"
-ls ~/.simple-mcp/models/ggml-base.bin        # should show the file
-which whisper-cli                            # should show the path (not whisper-cpp)
-which ffmpeg                                 # should show the path
+pnpm setup:audio          # Build + start (first time or after config change)
+pnpm docker:audio:up      # Start (if already built)
+pnpm docker:audio:down    # Stop
+pnpm docker:audio:logs    # View logs
 ```
 
-> **Note:** The Homebrew `whisper-cpp` package installs the binary as `whisper-cli` (not `whisper-cpp`).
+**Verify:**
+
+```bash
+docker exec simple-mcp-audio ls /data/models/              # should show ggml-base.bin
+docker exec simple-mcp-audio whisper-cli --help            # should print whisper help
+docker exec simple-mcp-audio ffmpeg -version               # should print ffmpeg version
+```
+
+> The container runs with `network_mode: none` (no internet access after build), `read_only: true` filesystem, and a non-root user. Audio files are shared via volume mount; everything else is isolated.
 
 **Chrome Extension Setup:**
 
@@ -395,13 +387,13 @@ If you use a headset during meetings, other participants' audio goes straight in
 
 **Verify end-to-end:**
 ```
-Use the audio_check_prerequisites MCP tool to verify ffmpeg and whisper-cli are installed.
+Use the audio_check_prerequisites MCP tool to verify sandbox mode, container status, ffmpeg and whisper-cli.
 Use audio_list_transcripts to see your captured meeting transcripts.
 Use audio_get_transcript to read the full transcript text.
 Use audio_search_transcripts to search across all transcripts by keyword.
 ```
 
-> No GCP project, no API keys, no cloud services. Audio never leaves your machine. Transcripts are AES-256 encrypted in the local SQLite database.
+> No GCP project, no API keys, no cloud services. Audio never leaves your machine. Transcripts are AES-256 encrypted in the local SQLite database. When using Docker sandbox mode, audio processing is fully isolated — the container has no network access.
 
 ---
 
@@ -676,8 +668,10 @@ Hono Server (:3101)
 | `CLAUDE_MCP_ENCRYPTION_KEY` | No | insecure default | Encryption key for stored credentials (min 32 chars) |
 | `GOOGLE_OAUTH_CLIENT_ID` | No | — | Google OAuth 2.0 client ID (enables Calendar + Meet) |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | No | — | Google OAuth 2.0 client secret |
+| `AUDIO_SANDBOX` | No | `docker` | Audio processing sandbox: `docker` (default, containerized) or `local` (host binaries) |
+| `AUDIO_DOCKER_CONTAINER` | No | `simple-mcp-audio` | Docker container name for audio sandbox |
 | `WHISPER_MODEL` | No | `large-v3` | Whisper model name for audio transcription |
-| `WHISPER_BIN_PATH` | No | auto-detect | Path to whisper-cpp binary |
+| `WHISPER_BIN_PATH` | No | auto-detect | Path to whisper-cpp binary (local mode only) |
 | `WHISPER_MODELS_DIR` | No | `~/.simple-mcp/models/` | Directory for Whisper model files |
 
 ---

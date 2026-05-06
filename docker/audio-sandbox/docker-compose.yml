@@ -1,0 +1,25 @@
+services:
+  audio-sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WHISPER_MODEL: ${WHISPER_MODEL:-base}
+    container_name: simple-mcp-audio
+    volumes:
+      - ${SIMPLE_MCP_AUDIO_DIR:-~/.simple-mcp/audio}:/data/audio
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 6g
+        reservations:
+          memory: 1g
+    # No network access needed — pure audio processing
+    network_mode: none
+    # Read-only root filesystem for extra security
+    read_only: true
+    tmpfs:
+      - /tmp:size=2g
+    security_opt:
+      - no-new-privileges:true

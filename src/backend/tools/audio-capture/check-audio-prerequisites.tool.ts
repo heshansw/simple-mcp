@@ -29,11 +29,17 @@ export function registerCheckAudioPrerequisitesTool(
       }
 
       const s = result.value;
+      const ffmpegHint = s.sandboxMode === "docker" ? "pnpm docker:audio:build" : "brew install ffmpeg";
+      const whisperHint = s.sandboxMode === "docker" ? "pnpm docker:audio:build" : "brew install whisper-cpp";
       const lines = [
         `## Audio Prerequisites Check`,
         ``,
-        `- ffmpeg: ${s.hasFfmpeg ? `✓ installed (${s.ffmpegVersion})` : "✗ NOT found — brew install ffmpeg"}`,
-        `- whisper.cpp: ${s.hasWhisper ? `✓ installed (${s.whisperVersion})` : "✗ NOT found — brew install whisper-cpp"}`,
+        `- Sandbox mode: **${s.sandboxMode}**`,
+        ...(s.containerRunning !== null
+          ? [`- Docker container: ${s.containerRunning ? "✓ running" : "✗ NOT running — pnpm docker:audio:up"}`]
+          : []),
+        `- ffmpeg: ${s.hasFfmpeg ? `✓ installed (${s.ffmpegVersion})` : `✗ NOT found — ${ffmpegHint}`}`,
+        `- whisper.cpp: ${s.hasWhisper ? `✓ installed (${s.whisperVersion})` : `✗ NOT found — ${whisperHint}`}`,
         `- Whisper model: ${s.modelPath ? `✓ found at ${s.modelPath}` : "✗ NOT found"}`,
         ``,
         `### Diagnostics`,

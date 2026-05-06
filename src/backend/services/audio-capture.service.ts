@@ -10,6 +10,7 @@ import {
   validationError,
 } from "../../shared/result.js";
 import type { DomainError } from "../../shared/result.js";
+import type { CommandExecutor } from "./command-executor.service.js";
 import type { WhisperTranscriptionServiceResult } from "./whisper-transcription.service.js";
 import type { AudioTranscriptsRepository, FtsEntry } from "../db/repositories/audio-transcripts.repository.js";
 import type { EncryptionService } from "./encryption.service.js";
@@ -31,6 +32,7 @@ export type ProcessedTranscript = {
 export type AudioCaptureServiceDependencies = {
   logger: Logger;
   dataDir: string; // e.g. ~/.simple-mcp/audio/
+  commandExecutor: CommandExecutor;
   whisperService: WhisperTranscriptionServiceResult;
   audioTranscriptsRepo: AudioTranscriptsRepository;
   encryptionService: EncryptionService;
@@ -52,48 +54,28 @@ export interface AudioCaptureServiceResult {
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 async function convertToWav(
+  executor: CommandExecutor,
   inputPath: string,
   outputPath: string
 ): Promise<Result<void, DomainError>> {
-  const { spawn } = await import("node:child_process");
+  const result = await executor.run("ffmpeg", [
+    "-y",
+    "-i", executor.mapPath(inputPath),
+    "-ar", "16000",
+    "-ac", "1",
+    "-acodec", "pcm_s16le",
+    executor.mapPath(outputPath),
+  ], 120_000);
 
-  return new Promise((resolve) => {
-    const envPath = [
-      "/opt/homebrew/bin",
-      "/usr/local/bin",
-      process.env.PATH ?? "",
-    ].join(":");
-    const proc = spawn("ffmpeg", [
-      "-y",           // overwrite
-      "-i", inputPath,
-      "-ar", "16000", // 16kHz sample rate (Whisper expects this)
-      "-ac", "1",     // mono
-      "-acodec", "pcm_s16le",
-      outputPath,
-    ], { env: { ...process.env, PATH: envPath } });
+  if (result.exitCode === 0) {
+    return ok(undefined);
+  }
 
-    let stderr = "";
-    proc.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
+  if (result.exitCode === 127) {
+    return err(integrationError("ffmpeg", `ffmpeg not found: ${result.stderr}. Install with: brew install ffmpeg`));
+  }
 
-    const timer = setTimeout(() => {
-      proc.kill("SIGTERM");
-      resolve(err(integrationError("ffmpeg", "Audio conversion timed out")));
-    }, 120_000); // 2 min timeout
-
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      if (code === 0) {
-        resolve(ok(undefined));
-      } else {
-        resolve(err(integrationError("ffmpeg", `Conversion failed (exit ${code}): ${stderr.slice(0, 200)}`)));
-      }
-    });
-
-    proc.on("error", (error) => {
-      clearTimeout(timer);
-      resolve(err(integrationError("ffmpeg", `ffmpeg not found: ${error.message}. Install with: brew install ffmpeg`)));
-    });
-  });
+  return err(integrationError("ffmpeg", `Conversion failed (exit ${result.exitCode}): ${result.stderr.slice(0, 200)}`));
 }
 
 // ── Implementation ───────────────────────────────────────────────────────
@@ -101,7 +83,7 @@ async function convertToWav(
 export function createAudioCaptureService(
   deps: AudioCaptureServiceDependencies
 ): AudioCaptureServiceResult {
-  const { logger, dataDir, whisperService, audioTranscriptsRepo, encryptionService } = deps;
+  const { logger, dataDir, commandExecutor, whisperService, audioTranscriptsRepo, encryptionService } = deps;
 
   return {
     async processUpload(params): Promise<Result<ProcessedTranscript, DomainError>> {
@@ -137,7 +119,7 @@ export function createAudioCaptureService(
 
         // Convert to WAV if needed
         if (isWebm) {
-          const convertResult = await convertToWav(inputPath, wavPath);
+          const convertResult = await convertToWav(commandExecutor, inputPath, wavPath);
           if (convertResult._tag === "Err") return convertResult;
           logger.info({ wavPath }, "Converted to WAV");
         }

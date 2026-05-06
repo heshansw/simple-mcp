@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { join } from "node:path";
 
 import type { EnvConfig } from "./config/env.schema.js";
 import {
@@ -23,6 +24,9 @@ import { createAudioTranscriptsRepository } from "./db/repositories/audio-transc
 import { createMeetingAnalysesRepository } from "./db/repositories/meeting-analyses.repository.js";
 
 import { createEncryptionService } from "./services/encryption.service.js";
+import { createLocalCommandExecutor, createDockerCommandExecutor } from "./services/command-executor.service.js";
+import type { VolumeMapping } from "./services/command-executor.service.js";
+import { createDockerLifecycleService } from "./services/docker-lifecycle.service.js";
 import { createWhisperTranscriptionService } from "./services/whisper-transcription.service.js";
 import { createAudioCaptureService } from "./services/audio-capture.service.js";
 import { createMeetingSummarizationService } from "./services/meeting-summarization.service.js";
@@ -214,10 +218,43 @@ export async function createServer(
   const encryptionKey = config.CLAUDE_MCP_ENCRYPTION_KEY || "default-insecure-key";
   const encryptionService = createEncryptionService(encryptionKey);
 
-  // Whisper transcription service
+  // Audio processing sandbox (local or Docker)
   const homeDir = process.env.HOME || process.env.USERPROFILE || "/tmp";
+  const audioDataDir = `${homeDir}/.simple-mcp/audio`;
+  const modelsDir = process.env.WHISPER_MODELS_DIR ?? `${homeDir}/.simple-mcp/models`;
+  const sandboxMode = config.AUDIO_SANDBOX;
+
+  const commandExecutor = sandboxMode === "docker"
+    ? (() => {
+        const volumeMappings: readonly VolumeMapping[] = [
+          { hostPath: audioDataDir, containerPath: "/data/audio" },
+          // Models are baked into the Docker image at /data/models/ — map the
+          // host modelsDir so mapPath() translates correctly even though there's
+          // no volume mount (the container has the file built-in).
+          { hostPath: modelsDir, containerPath: "/data/models" },
+        ];
+        return createDockerCommandExecutor(config.AUDIO_DOCKER_CONTAINER, volumeMappings);
+      })()
+    : createLocalCommandExecutor();
+
+  // If docker mode, ensure container is running at startup
+  if (sandboxMode === "docker") {
+    const dockerLifecycle = createDockerLifecycleService({ logger });
+    const composePath = join(import.meta.dirname ?? ".", "..", "..", "docker", "audio-sandbox", "docker-compose.yml");
+    const containerResult = await dockerLifecycle.ensureContainerRunning(composePath, config.AUDIO_DOCKER_CONTAINER);
+    if (containerResult._tag === "Err") {
+      logger.warn(
+        { error: containerResult.error },
+        "Docker audio sandbox not available. Audio transcription may fail."
+      );
+    }
+  }
+
+  // Whisper transcription service
   const whisperDeps: import("./services/whisper-transcription.service.js").WhisperTranscriptionDependencies = {
     logger,
+    commandExecutor,
+    sandboxMode,
     ...(process.env.WHISPER_MODEL ? { modelName: process.env.WHISPER_MODEL } : {}),
     ...(process.env.WHISPER_BIN_PATH ? { whisperBinPath: process.env.WHISPER_BIN_PATH } : {}),
     ...(process.env.WHISPER_MODELS_DIR ? { modelsDir: process.env.WHISPER_MODELS_DIR } : {}),
@@ -225,10 +262,10 @@ export async function createServer(
   const whisperService = createWhisperTranscriptionService(whisperDeps);
 
   // Audio capture service (processes uploads from Chrome extension)
-  const audioDataDir = `${homeDir}/.simple-mcp/audio`;
   const audioCaptureService = createAudioCaptureService({
     logger,
     dataDir: audioDataDir,
+    commandExecutor,
     whisperService,
     audioTranscriptsRepo,
     encryptionService,

@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+// Load .env before anything else — ensures env vars are available regardless of
+// how the process is started (run-mcp.sh, pnpm dev, npm exec, etc.)
+import "dotenv/config";
+
 import { parseArgs } from "node:util";
 
 // Catch ALL unhandled errors so nothing is silently swallowed
