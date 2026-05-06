@@ -89,7 +89,11 @@ toggleBtn.addEventListener("click", () => {
 // ── System Audio (BlackHole + Mic) ───────────────────────────────────────
 
 async function createSystemAudioStream(): Promise<MediaStream> {
-  // Find BlackHole device
+  // Must request mic permission first — otherwise enumerateDevices() returns empty labels
+  const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  tempStream.getTracks().forEach((t) => t.stop());
+
+  // Now enumerate devices — labels will be populated after permission grant
   const devices = await navigator.mediaDevices.enumerateDevices();
   const blackhole = devices.find(
     (d) => d.kind === "audioinput" && d.label.toLowerCase().includes("blackhole")
