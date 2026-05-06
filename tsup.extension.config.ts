@@ -5,6 +5,7 @@ export default defineConfig({
     "src/extension/background.ts",
     "src/extension/popup.ts",
     "src/extension/content.ts",
+    "src/extension/offscreen.ts",
   ],
   format: ["esm"],
   target: "chrome120",

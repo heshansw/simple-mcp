@@ -8,19 +8,8 @@ type RecordingState = {
   tabId: number | null;
 };
 
-type RecordingMessage =
-  | { type: "START_RECORDING"; meetingTitle?: string }
-  | { type: "STOP_RECORDING" }
-  | { type: "GET_STATUS" }
-  | { type: "RECORDING_STARTED"; startTime: string }
-  | { type: "RECORDING_STOPPED"; uploaded: boolean; error?: string }
-  | { type: "STATUS"; state: RecordingState }
-  | { type: "MEETING_DETECTED"; title: string; url: string };
-
 // ── State ────────────────────────────────────────────────────────────────
 
-let mediaRecorder: MediaRecorder | null = null;
-let recordedChunks: Blob[] = [];
 let currentState: RecordingState = {
   isRecording: false,
   startTime: null,
@@ -34,18 +23,18 @@ const MCP_SERVER_URL = "http://localhost:3101";
 // ── Message handler ──────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener(
-  (message: RecordingMessage, _sender, sendResponse) => {
+  (message: any, _sender: any, sendResponse: any) => {
     if (message.type === "START_RECORDING") {
       startRecording(message.meetingTitle)
-        .then((result) => sendResponse(result))
-        .catch((err) => sendResponse({ type: "ERROR", error: String(err) }));
-      return true; // async response
+        .then((result: any) => sendResponse(result))
+        .catch((err: any) => sendResponse({ type: "ERROR", error: String(err) }));
+      return true;
     }
 
     if (message.type === "STOP_RECORDING") {
       stopRecording()
-        .then((result) => sendResponse(result))
-        .catch((err) => sendResponse({ type: "ERROR", error: String(err) }));
+        .then((result: any) => sendResponse(result))
+        .catch((err: any) => sendResponse({ type: "ERROR", error: String(err) }));
       return true;
     }
 
@@ -55,7 +44,6 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === "MEETING_DETECTED") {
-      // Content script detected a meeting page
       currentState.meetingUrl = message.url;
       if (!currentState.meetingTitle) {
         currentState.meetingTitle = message.title;
@@ -66,6 +54,22 @@ chrome.runtime.onMessage.addListener(
     return false;
   }
 );
+
+// ── Offscreen document management ────────────────────────────────────────
+
+async function ensureOffscreenDocument(): Promise<void> {
+  const existingContexts = await chrome.runtime.getContexts({
+    contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT],
+  });
+
+  if (existingContexts.length > 0) return;
+
+  await chrome.offscreen.createDocument({
+    url: "offscreen.html",
+    reasons: [chrome.offscreen.Reason.USER_MEDIA],
+    justification: "Recording tab audio for meeting transcription",
+  });
+}
 
 // ── Recording logic ──────────────────────────────────────────────────────
 
@@ -83,37 +87,25 @@ async function startRecording(
       return { type: "ERROR", error: "No active tab found" };
     }
 
-    // Capture tab audio
-    const stream = await chrome.tabCapture.capture({
-      audio: true,
-      video: false,
-    });
+    // Get a media stream ID for the tab (MV3 way)
+    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
 
-    if (!stream) {
-      return { type: "ERROR", error: "Failed to capture tab audio. Make sure you clicked the extension icon while on the meeting tab." };
+    if (!streamId) {
+      return { type: "ERROR", error: "Failed to get media stream ID. Make sure you clicked the extension icon while on the meeting tab." };
     }
 
-    // Set up MediaRecorder
-    recordedChunks = [];
-    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-      ? "audio/webm;codecs=opus"
-      : "audio/webm";
+    // Create offscreen document for MediaRecorder
+    await ensureOffscreenDocument();
 
-    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    // Tell offscreen document to start recording
+    const result = await chrome.runtime.sendMessage({
+      type: "OFFSCREEN_START_RECORDING",
+      streamId,
+    });
 
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        recordedChunks.push(event.data);
-      }
-    };
-
-    mediaRecorder.onstop = () => {
-      // Clean up the stream tracks
-      stream.getTracks().forEach((track) => track.stop());
-    };
-
-    // Start recording with 1-second timeslice for chunking
-    mediaRecorder.start(1000);
+    if (!result?.success) {
+      return { type: "ERROR", error: result?.error || "Offscreen recording failed to start" };
+    }
 
     const startTime = new Date().toISOString();
     currentState = {
@@ -128,7 +120,6 @@ async function startRecording(
     await chrome.action.setBadgeText({ text: "REC" });
     await chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
 
-    // Persist state
     await chrome.storage.local.set({ recordingState: currentState });
 
     return { type: "RECORDING_STARTED", startTime };
@@ -143,85 +134,84 @@ async function stopRecording(): Promise<{
   transcriptId?: string;
   error?: string;
 }> {
-  if (!currentState.isRecording || !mediaRecorder) {
+  if (!currentState.isRecording) {
     return { type: "ERROR", error: "Not currently recording" };
   }
 
-  return new Promise((resolve) => {
-    mediaRecorder!.onstop = async () => {
-      // Clean up stream
-      mediaRecorder!.stream.getTracks().forEach((track) => track.stop());
+  try {
+    const endTime = new Date().toISOString();
+    const savedState = { ...currentState };
 
-      const endTime = new Date().toISOString();
-      const audioBlob = new Blob(recordedChunks, {
-        type: mediaRecorder!.mimeType,
-      });
+    // Tell offscreen document to stop and get the audio data
+    const result = await chrome.runtime.sendMessage({
+      type: "OFFSCREEN_STOP_RECORDING",
+    });
 
-      // Reset state
-      const savedState = { ...currentState };
-      currentState = {
-        isRecording: false,
-        startTime: null,
-        meetingTitle: null,
-        meetingUrl: null,
-        tabId: null,
-      };
-      mediaRecorder = null;
-      recordedChunks = [];
-
-      // Clear badge
-      await chrome.action.setBadgeText({ text: "" });
-      await chrome.storage.local.remove("recordingState");
-
-      // Upload to MCP server
-      try {
-        const formData = new FormData();
-        formData.append("audio", audioBlob, "recording.webm");
-        formData.append("meetingTitle", savedState.meetingTitle || "Untitled Meeting");
-        formData.append("meetingUrl", savedState.meetingUrl || "");
-        formData.append("startTime", savedState.startTime || endTime);
-        formData.append("endTime", endTime);
-
-        const response = await fetch(`${MCP_SERVER_URL}/api/audio/upload`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => "");
-          resolve({
-            type: "RECORDING_STOPPED",
-            uploaded: false,
-            error: `Upload failed: HTTP ${response.status} — ${errorText.slice(0, 200)}`,
-          });
-          return;
-        }
-
-        const result = (await response.json()) as { id?: string };
-        resolve({
-          type: "RECORDING_STOPPED",
-          uploaded: true,
-          transcriptId: result.id,
-        });
-      } catch (error) {
-        resolve({
-          type: "RECORDING_STOPPED",
-          uploaded: false,
-          error: `Upload failed: ${String(error)}. Is the MCP server running on ${MCP_SERVER_URL}?`,
-        });
-      }
+    // Reset state
+    currentState = {
+      isRecording: false,
+      startTime: null,
+      meetingTitle: null,
+      meetingUrl: null,
+      tabId: null,
     };
 
-    mediaRecorder!.stop();
-  });
+    await chrome.action.setBadgeText({ text: "" });
+    await chrome.storage.local.remove("recordingState");
+
+    if (!result?.success) {
+      return { type: "RECORDING_STOPPED", uploaded: false, error: result?.error || "Failed to get recording data" };
+    }
+
+    // Convert array back to Blob
+    const audioData = new Uint8Array(result.buffer);
+    const audioBlob = new Blob([audioData], { type: result.mimeType || "audio/webm" });
+
+    // Upload to MCP server
+    try {
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.webm");
+      formData.append("meetingTitle", savedState.meetingTitle || "Untitled Meeting");
+      formData.append("meetingUrl", savedState.meetingUrl || "");
+      formData.append("startTime", savedState.startTime || endTime);
+      formData.append("endTime", endTime);
+
+      const response = await fetch(`${MCP_SERVER_URL}/api/audio/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        return {
+          type: "RECORDING_STOPPED",
+          uploaded: false,
+          error: `Upload failed: HTTP ${response.status} — ${errorText.slice(0, 200)}`,
+        };
+      }
+
+      const uploadResult = (await response.json()) as { id?: string };
+      return {
+        type: "RECORDING_STOPPED",
+        uploaded: true,
+        transcriptId: uploadResult.id,
+      };
+    } catch (error) {
+      return {
+        type: "RECORDING_STOPPED",
+        uploaded: false,
+        error: `Upload failed: ${String(error)}. Is the MCP server running on ${MCP_SERVER_URL}?`,
+      };
+    }
+  } catch (error) {
+    return { type: "ERROR", error: `Stop recording failed: ${String(error)}` };
+  }
 }
 
 // ── Restore state on service worker wake ──────────────────────────────
 
 chrome.storage.local.get("recordingState", (result) => {
   if (result.recordingState?.isRecording) {
-    // Service worker restarted while recording — mark as not recording
-    // (the MediaRecorder stream is lost on SW restart)
     chrome.action.setBadgeText({ text: "" });
     chrome.storage.local.remove("recordingState");
   }
