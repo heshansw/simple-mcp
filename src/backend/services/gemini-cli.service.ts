@@ -1,8 +1,40 @@
 import { spawn } from "node:child_process";
+import { dirname, join } from "node:path";
+import { readdirSync } from "node:fs";
+import { homedir } from "node:os";
 import type { Logger } from "pino";
 import type { Result, DomainError } from "@shared/result";
 import { ok, err, integrationError } from "@shared/result.js";
 import type { GeminiCliConfig } from "@shared/schemas/gemini-cli.schema";
+
+// Ensure nvm-installed globals (like `gemini`) are discoverable even when the
+// MCP server runs under a different Node version than the one where the CLI
+// was installed (e.g. server on Node 22, gemini installed under Node 20).
+function buildSpawnEnv(): NodeJS.ProcessEnv {
+  const currentPath = process.env["PATH"] ?? "";
+  const extra: string[] = [];
+
+  // Add the current Node binary's directory
+  const nodeBinDir = dirname(process.execPath);
+  if (!currentPath.includes(nodeBinDir)) extra.push(nodeBinDir);
+
+  // Add all nvm node version bin directories (covers cross-version installs)
+  try {
+    const nvmDir = process.env["NVM_DIR"] ?? join(homedir(), ".nvm");
+    const versionsDir = join(nvmDir, "versions", "node");
+    for (const entry of readdirSync(versionsDir)) {
+      const binDir = join(versionsDir, entry, "bin");
+      if (!currentPath.includes(binDir) && !extra.includes(binDir)) {
+        extra.push(binDir);
+      }
+    }
+  } catch {
+    // nvm not installed or versions dir unreadable — skip
+  }
+
+  if (extra.length === 0) return process.env;
+  return { ...process.env, PATH: `${currentPath}:${extra.join(":")}` };
+}
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -11,6 +43,7 @@ export type GeminiCliResult = {
   readonly stderr: string;
   readonly exitCode: number;
   readonly durationMs: number;
+  readonly model: string;
 };
 
 export type GeminiCliAvailability = {
@@ -38,10 +71,12 @@ function spawnAndCapture(
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let settled = false;
 
-    const child = spawn(command, args as string[], {
+    const child = spawn(command, [...args], {
       stdio: ["pipe", "pipe", "pipe"],
       signal: controller.signal,
+      env: buildSpawnEnv(),
     });
 
     let stdout = "";
@@ -56,11 +91,15 @@ function spawnAndCapture(
     });
 
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       resolve({ stdout, stderr, exitCode: code ?? 1 });
     });
 
     child.on("error", (error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       if (controller.signal.aborted) {
         reject(new Error(`Gemini CLI timed out after ${timeoutMs}ms`));
@@ -114,7 +153,7 @@ export function createGeminiCliService(deps: GeminiCliServiceDeps): GeminiCliSer
       model?: string
     ): Promise<Result<GeminiCliResult, DomainError>> {
       const effectiveModel = model ?? config.model;
-      const args = ["-m", effectiveModel];
+      const args = ["-p", "", "-m", effectiveModel, "-o", "text"];
 
       logger.info(
         { model: effectiveModel, promptLength: prompt.length },
@@ -161,6 +200,7 @@ export function createGeminiCliService(deps: GeminiCliServiceDeps): GeminiCliSer
           stderr: result.stderr,
           exitCode: result.exitCode,
           durationMs,
+          model: effectiveModel,
         });
       } catch (error) {
         const durationMs = Date.now() - startMs;

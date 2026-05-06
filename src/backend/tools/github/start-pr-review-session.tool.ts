@@ -132,6 +132,26 @@ export function registerStartPrReviewSessionTool(
           );
           const enabledConfigs = configs.filter((c) => c.enabled === 1);
 
+          // Re-trigger Gemini CLI for server-cli slots that don't have a draft yet
+          for (const c of enabledConfigs) {
+            if (getExecutionMode(c.aiTool) === "server-cli") {
+              const existingDraft = await deps.reviewSessionDraftsRepo.findBySessionAndTool(
+                existingSession.id,
+                c.aiTool
+              );
+              if (!existingDraft) {
+                fireAndForgetGeminiReview(
+                  deps,
+                  existingSession.id,
+                  existingSession.owner,
+                  existingSession.repo,
+                  existingSession.prNumber,
+                  c.agentId
+                );
+              }
+            }
+          }
+
           const result = {
             sessionId: existingSession.id,
             owner: existingSession.owner,

@@ -4,7 +4,7 @@ import { ReviewVerdictSchema, DraftCommentSchema } from "./review-session.schema
 export const GeminiCliConfigSchema = z.object({
   binaryPath: z.string().min(1).default("gemini"),
   timeoutMs: z.number().int().positive().default(120_000),
-  model: z.string().min(1).default("gemini-2.5-pro"),
+  model: z.string().min(1).default("gemini-2.5-flash"),
 });
 export type GeminiCliConfig = z.infer<typeof GeminiCliConfigSchema>;
 
