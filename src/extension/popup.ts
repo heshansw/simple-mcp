@@ -101,7 +101,7 @@ async function startRecording() {
     currentStartTime = new Date().toISOString();
 
     if (captureMode === "microphone") {
-      // Record directly in the popup using getUserMedia
+      // Record directly in the popup using getUserMedia (mic only)
       try {
         micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
@@ -110,7 +110,7 @@ async function startRecording() {
             autoGainControl: false,
           },
         });
-      } catch (err) {
+      } catch {
         showError(`Microphone access denied. Opening setup page...`);
         openPermissionsPage();
         setIdleUI();
@@ -151,9 +151,9 @@ async function startRecording() {
 
       setRecordingUI();
     } else {
-      // Tab capture mode — delegate to background + offscreen
+      // Tab capture and System Audio modes — delegate to background + offscreen
       let streamId: string | null = null;
-      if (tab?.id) {
+      if (captureMode === "tab" && tab?.id) {
         try {
           streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
         } catch (err) {
@@ -169,7 +169,7 @@ async function startRecording() {
           meetingTitle: currentMeetingTitle,
           meetingUrl: currentMeetingUrl,
           tabId: tab?.id,
-          captureMode: "tab",
+          captureMode,
           streamId,
         },
         (response) => {
@@ -194,9 +194,18 @@ async function stopRecording() {
   setUploadingUI();
 
   if (micRecorder && micRecorder.state !== "inactive") {
-    // Stop microphone recording (popup-based)
+    // Stop microphone / system audio recording (popup-based)
     micRecorder.stop();
-    micStream?.getTracks().forEach((t) => t.stop());
+    // Clean up all source streams (including BlackHole + mic for system mode)
+    if (micStream) {
+      const sourceStreams = (micStream as any).__sourceStreams as MediaStream[] | undefined;
+      const audioCtx = (micStream as any).__audioContext as AudioContext | undefined;
+      if (sourceStreams) {
+        sourceStreams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
+      }
+      micStream.getTracks().forEach((t) => t.stop());
+      if (audioCtx) audioCtx.close().catch(() => {});
+    }
 
     // Wait for final data
     await new Promise<void>((resolve) => {
@@ -283,7 +292,10 @@ function setRecordingUI() {
   titleInput.disabled = true;
   captureModeSelect.disabled = true;
   statusBar.className = "status-bar status-recording";
-  statusText.textContent = "Recording... (keep popup open)";
+  const mode = captureModeSelect.value;
+  statusText.textContent = mode === "microphone"
+    ? "Recording... (keep popup open)"
+    : "Recording... (you can close this popup)";
   timerEl.style.display = "block";
   startTimer();
 }
