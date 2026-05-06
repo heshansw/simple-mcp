@@ -61,7 +61,16 @@ function runCommand(
   timeoutMs: number = 600_000 // 10 min default
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve) => {
-    const proc = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+    // Ensure Homebrew paths are available (MCP stdio process may not inherit user's shell PATH)
+    const envPath = [
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      process.env.PATH ?? "",
+    ].join(":");
+    const proc = spawn(command, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, PATH: envPath },
+    });
     let stdout = "";
     let stderr = "";
 
@@ -152,7 +161,7 @@ export function createWhisperTranscriptionService(
   deps: WhisperTranscriptionDependencies
 ): WhisperTranscriptionServiceResult {
   const { logger } = deps;
-  const whisperBin = deps.whisperBinPath ?? "whisper-cpp";
+  const whisperBin = deps.whisperBinPath ?? "whisper-cli";
   const modelName = deps.modelName ?? "large-v3";
   const homeDir = process.env.HOME || process.env.USERPROFILE || "/tmp";
   const modelsDir = deps.modelsDir ?? join(homeDir, ".simple-mcp", "models");

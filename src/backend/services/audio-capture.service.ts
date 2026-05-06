@@ -58,6 +58,11 @@ async function convertToWav(
   const { spawn } = await import("node:child_process");
 
   return new Promise((resolve) => {
+    const envPath = [
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      process.env.PATH ?? "",
+    ].join(":");
     const proc = spawn("ffmpeg", [
       "-y",           // overwrite
       "-i", inputPath,
@@ -65,7 +70,7 @@ async function convertToWav(
       "-ac", "1",     // mono
       "-acodec", "pcm_s16le",
       outputPath,
-    ]);
+    ], { env: { ...process.env, PATH: envPath } });
 
     let stderr = "";
     proc.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
