@@ -1,17 +1,39 @@
 import { spawn } from "node:child_process";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { readdirSync } from "node:fs";
+import { homedir } from "node:os";
 import type { Logger } from "pino";
 import type { Result, DomainError } from "@shared/result";
 import { ok, err, integrationError } from "@shared/result.js";
 import type { GeminiCliConfig } from "@shared/schemas/gemini-cli.schema";
 
 // Ensure nvm-installed globals (like `gemini`) are discoverable even when the
-// MCP server inherits a minimal PATH (e.g. from a daemon or Claude Code).
+// MCP server runs under a different Node version than the one where the CLI
+// was installed (e.g. server on Node 22, gemini installed under Node 20).
 function buildSpawnEnv(): NodeJS.ProcessEnv {
-  const nodeBinDir = dirname(process.execPath);
   const currentPath = process.env["PATH"] ?? "";
-  if (currentPath.includes(nodeBinDir)) return process.env;
-  return { ...process.env, PATH: `${currentPath}:${nodeBinDir}` };
+  const extra: string[] = [];
+
+  // Add the current Node binary's directory
+  const nodeBinDir = dirname(process.execPath);
+  if (!currentPath.includes(nodeBinDir)) extra.push(nodeBinDir);
+
+  // Add all nvm node version bin directories (covers cross-version installs)
+  try {
+    const nvmDir = process.env["NVM_DIR"] ?? join(homedir(), ".nvm");
+    const versionsDir = join(nvmDir, "versions", "node");
+    for (const entry of readdirSync(versionsDir)) {
+      const binDir = join(versionsDir, entry, "bin");
+      if (!currentPath.includes(binDir) && !extra.includes(binDir)) {
+        extra.push(binDir);
+      }
+    }
+  } catch {
+    // nvm not installed or versions dir unreadable — skip
+  }
+
+  if (extra.length === 0) return process.env;
+  return { ...process.env, PATH: `${currentPath}:${extra.join(":")}` };
 }
 
 // ── Types ────────────────────────────────────────────────────────────────
