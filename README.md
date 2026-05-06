@@ -31,6 +31,17 @@ Built with TypeScript, the MCP SDK, Hono, React 19, TanStack Router/Query, SQLit
 | `agent_list` | List all agents with dependency readiness status |
 | `health_check` | Check server health and connection statuses |
 | `list_connections` | List all configured integrations |
+| **Google Meet** | |
+| `google_meet_check_prerequisites` | Verify Google OAuth token and Meet API scope |
+| `google_meet_list_meetings` | List recent Google Meet conference records |
+| `google_meet_get_transcript` | Fetch full transcript with speaker names and timestamps |
+| `google_meet_search_transcripts` | Full-text search over cached Meet transcripts |
+| `google_meet_sync_transcripts` | Manually trigger transcript sync from Google |
+| **Local Audio Capture** | |
+| `audio_check_prerequisites` | Verify ffmpeg and whisper.cpp are installed |
+| `audio_list_transcripts` | List recent locally-captured meeting transcripts |
+| `audio_get_transcript` | Get full transcript by ID (decrypted from local DB) |
+| `audio_search_transcripts` | Full-text search across all local audio transcripts |
 
 ### Admin Panel
 
@@ -39,7 +50,8 @@ A React 19 web UI for managing the MCP server:
 - **Connections** — Add, edit, test, and remove Jira/GitHub integrations
 - **My PRs** — Dashboard showing PRs assigned to you, review requests, and PRs you created
 - **Reviews** — History and stats for AI-powered PR reviews
-- **Agents** — Configure pre-built agents (Jira Triage, PR Review, Code Search, Sprint Planning)
+- **Meetings** — Browse locally-captured meeting transcripts, view timestamped text, and run analyses
+- **Agents** — Configure pre-built agents (Jira Triage, PR Review, Code Search, Sprint Planning, Meeting Summarizer)
 - **Settings** — Server configuration
 
 ### Screenshots
@@ -83,6 +95,8 @@ Users of simple-mcp tool can track and detect agentic ochestration on task manag
 | Confluence Reader | `confluence-reader` | Jira | Read and search Confluence pages and spaces |
 | Database Explorer | `database-explorer` | MySQL / PostgreSQL | Explore database schemas, run queries, suggest optimisations |
 | Review Synthesiser | `review-synthesiser` | GitHub | Merge and deduplicate multi-agent PR review drafts into a single consolidated review |
+| Meeting Summarizer | `meeting-summarizer` | Google | Summarize Google Meet transcripts, extract action items and decisions |
+| Local Meeting Transcriber | `local-meeting-transcriber` | — (local) | Analyze locally-captured audio transcripts, extract action items |
 
 ### Multi-Agent Parallel PR Review
 
@@ -192,6 +206,13 @@ CLAUDE_MCP_TRANSPORT=stdio
 # Recommended — set a strong key for credential encryption (min 32 chars)
 # If omitted, a default insecure key is used
 CLAUDE_MCP_ENCRYPTION_KEY=your-32-char-minimum-secret-key-here
+
+# Optional — Google OAuth for Calendar + Meet integration
+GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+
+# Optional — Whisper model for local audio transcription
+WHISPER_MODEL=large-v3
 ```
 
 ### 3. Run in development mode
@@ -229,6 +250,73 @@ Open the admin panel at **http://localhost:3100**.
 4. Click **Save Credentials**
 
 > Jira credentials are stored as encrypted JSON (`{email, apiToken}`) in the local SQLite database. Basic auth is used: `Authorization: Basic base64(email:apiToken)`.
+
+#### Google (Calendar + Meet)
+
+Google integration uses OAuth 2.0 and requires a GCP project. This enables both Google Calendar tools and Google Meet transcript access.
+
+**GCP Setup:**
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a new project (or use existing)
+2. Enable **Google Calendar API** and **Google Meet REST API** in APIs & Services > Library
+3. Go to **APIs & Services > OAuth consent screen**:
+   - Select **External** user type
+   - Fill in app name, support email, developer email
+   - Add scopes: `calendar.readonly`, `calendar.events`, `admin.directory.resource.calendar.readonly`, `meetings.space.readonly`
+   - Add your Google email as a test user
+4. Go to **APIs & Services > Credentials**:
+   - Create **OAuth client ID** (Web application type)
+   - Add authorized redirect URI: `http://localhost:3101/api/connections/google/oauth/callback`
+   - Copy the **Client ID** and **Client Secret**
+5. Set environment variables:
+   ```bash
+   export GOOGLE_OAUTH_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+   export GOOGLE_OAUTH_CLIENT_SECRET="your-client-secret"
+   ```
+6. Start the server and go to **Connections > New Connection > Google (Calendar + Meet) > Authenticate with Google**
+
+> Google Meet transcriptions require **Google Workspace Business Standard** or higher. The Meet transcript sync polls every 30 minutes and stores encrypted transcripts with FTS5 full-text search.
+
+#### Local Audio Capture (Chrome Extension + Whisper)
+
+Capture meeting audio directly from browser tabs and transcribe locally — works for **any** meeting (Google Meet, Zoom, Teams) without cloud dependencies.
+
+**Prerequisites:**
+
+```bash
+# Install transcription tools
+brew install ffmpeg whisper-cpp
+
+# Download a Whisper model (run once — ~1.5GB for large-v3)
+whisper-cpp --download-model large-v3
+```
+
+**Chrome Extension Setup:**
+
+1. Build the extension:
+   ```bash
+   pnpm build:extension
+   ```
+2. Open Chrome and go to `chrome://extensions`
+3. Enable **Developer mode** (toggle in top-right)
+4. Click **Load unpacked** and select the `dist/extension/` directory
+5. The "Simple MCP Meeting Recorder" extension icon appears in your toolbar
+
+**Usage:**
+
+1. Join a meeting in your browser (Google Meet, Zoom web, etc.)
+2. Click the extension icon > enter an optional meeting title > **Start Recording**
+3. The extension captures tab audio (you still hear everything normally)
+4. When done, click **Stop Recording** — the audio is uploaded to the MCP server
+5. Whisper transcribes locally (~1 min per 10 min of audio on Apple Silicon)
+6. Transcript is encrypted and stored in SQLite with full-text search
+
+**Verify setup:**
+```
+Use the audio_check_prerequisites MCP tool to verify ffmpeg and whisper.cpp are installed.
+```
+
+> No GCP project, no API keys, no cloud services. Audio never leaves your machine. Transcripts are AES-256 encrypted in the local SQLite database.
 
 ---
 
@@ -388,6 +476,8 @@ claude_mcp/
 │   │   ├── tools/                # MCP tool definitions
 │   │   │   ├── jira/             # jira_search_issues, jira_create_issue, jira_transition_issue
 │   │   │   ├── github/           # github_list_prs, github_review_pr, github_get_pr_diff, etc.
+│   │   │   ├── google-meet/      # google_meet_list_meetings, google_meet_get_transcript, etc.
+│   │   │   ├── audio-capture/    # audio_list_transcripts, audio_get_transcript, audio_search_transcripts
 │   │   │   └── system/           # health_check, list_connections, agent_execute, agent_status, agent_list
 │   │   ├── services/             # Business logic (jira.service, github.service, encryption.service)
 │   │   ├── agents/               # Agent definitions, registry + execution engine
@@ -399,17 +489,23 @@ claude_mcp/
 │   │   ├── transports/           # stdio, SSE adapters
 │   │   ├── middleware/           # Logging, rate limiting, error handling
 │   │   ├── config/               # Env validation (Zod)
-│   │   └── maintenance/          # Scheduled tasks (token refresh, health monitor)
+│   │   └── maintenance/          # Scheduled tasks (token refresh, health monitor, transcript sync)
 │   ├── frontend/                 # React 19 admin panel
 │   │   ├── routes/               # TanStack Router file-based routes
 │   │   │   ├── connections/      # Connection management pages
 │   │   │   ├── my-prs/           # GitHub PR dashboard
 │   │   │   ├── reviews/          # AI review history
+│   │   │   ├── meetings/          # Meeting transcription list + detail
 │   │   │   ├── agents/           # Agent configuration
 │   │   │   ├── agent-executions/ # Execution list + detail pages
 │   │   │   └── settings/         # Server settings
 │   │   ├── api/                  # TanStack Query hooks + typed API client
 │   │   └── components/           # Shared UI components
+│   ├── extension/                 # Chrome extension for meeting audio capture
+│   │   ├── manifest.json         # Chrome Manifest V3
+│   │   ├── background.ts         # Service worker — tabCapture + MediaRecorder
+│   │   ├── popup.html/ts         # Start/Stop UI with timer
+│   │   └── content.ts            # Meeting URL detection (Meet, Zoom)
 │   └── shared/                   # Types, schemas, utilities (used by both)
 │       ├── result.ts             # Result<T, E> type + domain error types
 │       └── schemas/              # Zod schemas (connection, integration)
@@ -436,6 +532,7 @@ claude_mcp/
 | `pnpm build` | Build both backend and frontend |
 | `pnpm build:backend` | Build backend with tsup |
 | `pnpm build:frontend` | Build frontend with Vite |
+| `pnpm build:extension` | Build Chrome extension to `dist/extension/` |
 | `pnpm test` | Run tests with Vitest |
 | `pnpm test:watch` | Run tests in watch mode |
 | `pnpm typecheck` | TypeScript type checking |
@@ -492,6 +589,11 @@ Hono Server (:3101)
 | `CLAUDE_MCP_LOG_LEVEL` | No | `info` | Log level: trace, debug, info, warn, error, fatal |
 | `CLAUDE_MCP_TRANSPORT` | No | `stdio` | MCP transport: stdio, sse, http |
 | `CLAUDE_MCP_ENCRYPTION_KEY` | No | insecure default | Encryption key for stored credentials (min 32 chars) |
+| `GOOGLE_OAUTH_CLIENT_ID` | No | — | Google OAuth 2.0 client ID (enables Calendar + Meet) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | No | — | Google OAuth 2.0 client secret |
+| `WHISPER_MODEL` | No | `large-v3` | Whisper model name for audio transcription |
+| `WHISPER_BIN_PATH` | No | auto-detect | Path to whisper-cpp binary |
+| `WHISPER_MODELS_DIR` | No | `~/.simple-mcp/models/` | Directory for Whisper model files |
 
 ---
 
@@ -566,6 +668,8 @@ The agent execution engine lets agents run autonomously — you provide a goal, 
 | `local-repo-analysis` | Local Repo Analysis Agent | Local filesystem folder | Analysing local repository structure and patterns |
 | `confluence-reader` | Confluence Reader Agent | Jira connection | Reading and searching Confluence documentation |
 | `database-explorer` | Database Explorer Agent | MySQL or PostgreSQL connection | Exploring schemas, running queries, suggesting optimisations |
+| `meeting-summarizer` | Meeting Summarizer Agent | Google connection | Summarizing Meet transcripts, extracting action items |
+| `local-meeting-transcriber` | Local Meeting Transcriber Agent | — (local only) | Analyzing locally-captured audio transcripts |
 
 > **Prerequisite:** Each agent requires its integration to be connected and healthy. Set up connections in the admin panel at `http://localhost:3100/connections` before executing an agent.
 

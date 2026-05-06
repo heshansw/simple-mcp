@@ -242,6 +242,37 @@ export const meetTranscriptsTable = sqliteTable("meet_transcripts", {
   createdAt: text("created_at").notNull(),
 });
 
+export const audioTranscriptsTable = sqliteTable("audio_transcripts", {
+  id: text("id").primaryKey(),
+  meetingTitle: text("meeting_title"),
+  meetingUrl: text("meeting_url"),
+  source: text("source").notNull().default("chrome-extension"),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  durationSeconds: integer("duration_seconds").notNull().default(0),
+  language: text("language").notNull().default("en"),
+  whisperModel: text("whisper_model").notNull(),
+  segmentCount: integer("segment_count").notNull().default(0),
+  encryptedContent: text("encrypted_content").notNull(),
+  iv: text("iv").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const meetingAnalysesTable = sqliteTable("meeting_analyses", {
+  id: text("id").primaryKey(),
+  transcriptId: text("transcript_id")
+    .notNull()
+    .references(() => audioTranscriptsTable.id),
+  analysisType: text("analysis_type").notNull(),
+  title: text("title").notNull(),
+  encryptedContent: text("encrypted_content").notNull(),
+  iv: text("iv").notNull(),
+  model: text("model"),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
 export const reviewSessionDraftsTable = sqliteTable("review_session_drafts", {
   id: text("id").primaryKey(),
   sessionId: text("session_id")

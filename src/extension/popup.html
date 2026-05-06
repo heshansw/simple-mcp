@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MCP Meeting Recorder</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">Meeting Recorder</h1>
+
+    <div id="status-bar" class="status-bar status-idle">
+      <span id="status-dot" class="status-dot"></span>
+      <span id="status-text">Ready</span>
+    </div>
+
+    <div id="timer" class="timer" style="display: none;">00:00:00</div>
+
+    <div class="form-group">
+      <label for="meeting-title">Meeting Title</label>
+      <input
+        type="text"
+        id="meeting-title"
+        placeholder="Auto-detected from tab..."
+      />
+    </div>
+
+    <button id="toggle-btn" class="btn btn-start">
+      Start Recording
+    </button>
+
+    <div id="result" class="result" style="display: none;"></div>
+
+    <div class="footer">
+      <span>Audio sent to localhost:3101</span>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

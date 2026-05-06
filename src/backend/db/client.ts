@@ -251,9 +251,36 @@ async function createTables(
       synced_at TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS audio_transcripts (
+      id TEXT PRIMARY KEY,
+      meeting_title TEXT,
+      meeting_url TEXT,
+      source TEXT NOT NULL DEFAULT 'chrome-extension',
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      duration_seconds INTEGER NOT NULL DEFAULT 0,
+      language TEXT NOT NULL DEFAULT 'en',
+      whisper_model TEXT NOT NULL,
+      segment_count INTEGER NOT NULL DEFAULT 0,
+      encrypted_content TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS meeting_analyses (
+      id TEXT PRIMARY KEY,
+      transcript_id TEXT NOT NULL REFERENCES audio_transcripts(id),
+      analysis_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      encrypted_content TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      model TEXT,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
   `);
 
-  // Create FTS5 virtual table for transcript search (separate statement — not supported in executeMultiple)
+  // Create FTS5 virtual tables (separate statements — not supported in executeMultiple)
   try {
     await client.execute(`
       CREATE VIRTUAL TABLE IF NOT EXISTS meet_transcripts_fts USING fts5(
@@ -266,6 +293,19 @@ async function createTables(
     `);
   } catch {
     // FTS5 may not be available in all SQLite builds — degrade gracefully
+  }
+
+  try {
+    await client.execute(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS audio_transcripts_fts USING fts5(
+        transcript_id UNINDEXED,
+        text_content,
+        content='',
+        tokenize='porter unicode61'
+      )
+    `);
+  } catch {
+    // FTS5 not available — degrade gracefully
   }
 
   // Additive migrations — ALTER TABLE is idempotent-safe with try/catch per column

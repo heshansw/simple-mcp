@@ -21,6 +21,8 @@ import { DatabasesPage } from "@frontend/routes/databases/index";
 import { AgentExecutionsListPage } from "@frontend/routes/agent-executions/index";
 import { AgentExecutionDetailPage } from "@frontend/routes/agent-executions/$runId";
 import { TaskProgressPage } from "@frontend/routes/task-progress/index";
+import { MeetingsPage } from "@frontend/routes/meetings/index";
+import { MeetingDetailPage } from "@frontend/routes/meetings/$transcriptId";
 import { useState } from "react";
 
 // Create root route
@@ -129,6 +131,19 @@ const reviewsRoute = new Route({
   component: ReviewsPage,
 });
 
+// Meetings routes
+const meetingsIndexRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/meetings",
+  component: MeetingsPage,
+});
+
+const meetingDetailRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/meetings/$transcriptId",
+  component: MeetingDetailPage,
+});
+
 // Build route tree
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
@@ -145,6 +160,8 @@ const routeTree = rootRoute.addChildren([
   localReposRoute,
   confluenceRoute,
   databasesRoute,
+  meetingsIndexRoute,
+  meetingDetailRoute,
   settingsRoute,
 ]);
 

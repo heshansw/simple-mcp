@@ -15,6 +15,13 @@ New unified `"google"` connection type (renamed from `"google-calendar"`). Share
 
 ---
 
+**Feature 10 — Local Audio Capture + Whisper Transcription** (spec'd 2026-05-06, pending implementation)
+Chrome extension captures meeting tab audio via `chrome.tabCapture`, sends to MCP server which transcribes with `whisper.cpp`. Stores encrypted transcripts in `audio_transcripts` table with FTS5 search. Analysis results (summaries, action items, Jira/GitHub cross-refs) stored in `meeting_analyses` table. Frontend dashboard at `/meetings` with list + detail views. 7 MCP tools. Full plan in `.claude/plans/deep-beaming-rabin.md`.
+
+**Why:** Google Meet API requires GCP + paid Workspace + host-enabled transcription. This works for ALL meetings with no cloud dependencies.
+
+---
+
 Three earlier features were spec'd and documented in `docs/ai/instructions/`.
 
 **Feature 3 — Local Repository / Folder Access** (`3-local-repo-access-requirements.md`)

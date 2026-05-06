@@ -26,3 +26,6 @@ export { reviewSynthesiserAgent } from "./review-synthesiser.agent.js";
 
 // ── Google Meet agents ───────────────────────────────────────────────
 export { meetingSummarizerAgent } from "./meeting-summarizer.agent.js";
+
+// ── Local audio capture agents ──────────────────────────────────────
+export { localMeetingTranscriberAgent } from "./local-meeting-transcriber.agent.js";

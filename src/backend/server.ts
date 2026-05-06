@@ -19,8 +19,11 @@ import { createFolderAccessRepository } from "./db/repositories/folder-access.re
 import { createRepoWorkspacesRepository } from "./db/repositories/repo-workspaces.repository.js";
 import { createDbQueryActivityRepository } from "./db/repositories/db-query-activity.repository.js";
 import { createMeetTranscriptsRepository } from "./db/repositories/meet-transcripts.repository.js";
+import { createAudioTranscriptsRepository } from "./db/repositories/audio-transcripts.repository.js";
 
 import { createEncryptionService } from "./services/encryption.service.js";
+import { createWhisperTranscriptionService } from "./services/whisper-transcription.service.js";
+import { createAudioCaptureService } from "./services/audio-capture.service.js";
 import { createConnectionManagerService } from "./services/connection-manager.service.js";
 import { createJiraService } from "./services/jira.service.js";
 import { createGitHubService } from "./services/github.service.js";
@@ -58,6 +61,7 @@ import {
   fullstackOrchestratorAgent,
   reviewSynthesiserAgent,
   meetingSummarizerAgent,
+  localMeetingTranscriberAgent,
 } from "./agents/index.js";
 
 import {
@@ -128,6 +132,10 @@ import { registerListMeetingsTool } from "./tools/google-meet/list-meetings.tool
 import { registerGetTranscriptTool } from "./tools/google-meet/get-transcript.tool.js";
 import { registerSearchTranscriptsTool } from "./tools/google-meet/search-transcripts.tool.js";
 import { registerSyncTranscriptsTool } from "./tools/google-meet/sync-transcripts.tool.js";
+import { registerCheckAudioPrerequisitesTool } from "./tools/audio-capture/check-audio-prerequisites.tool.js";
+import { registerListAudioTranscriptsTool } from "./tools/audio-capture/list-audio-transcripts.tool.js";
+import { registerGetAudioTranscriptTool } from "./tools/audio-capture/get-audio-transcript.tool.js";
+import { registerSearchAudioTranscriptsTool } from "./tools/audio-capture/search-audio-transcripts.tool.js";
 import { registerFsListDirectoryTool } from "./tools/local-filesystem/fs-list-directory.tool.js";
 import { registerFsReadFileTool } from "./tools/local-filesystem/fs-read-file.tool.js";
 import { registerFsSearchFilesTool } from "./tools/local-filesystem/fs-search-files.tool.js";
@@ -195,11 +203,32 @@ export async function createServer(
   const reviewSessionsRepo = createReviewSessionsRepository(db);
   const reviewSessionDraftsRepo = createReviewSessionDraftsRepository(db);
   const meetTranscriptsRepo = createMeetTranscriptsRepository(db);
+  const audioTranscriptsRepo = createAudioTranscriptsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
   const encryptionKey = config.CLAUDE_MCP_ENCRYPTION_KEY || "default-insecure-key";
   const encryptionService = createEncryptionService(encryptionKey);
+
+  // Whisper transcription service
+  const homeDir = process.env.HOME || process.env.USERPROFILE || "/tmp";
+  const whisperDeps: import("./services/whisper-transcription.service.js").WhisperTranscriptionDependencies = {
+    logger,
+    ...(process.env.WHISPER_MODEL ? { modelName: process.env.WHISPER_MODEL } : {}),
+    ...(process.env.WHISPER_BIN_PATH ? { whisperBinPath: process.env.WHISPER_BIN_PATH } : {}),
+    ...(process.env.WHISPER_MODELS_DIR ? { modelsDir: process.env.WHISPER_MODELS_DIR } : {}),
+  };
+  const whisperService = createWhisperTranscriptionService(whisperDeps);
+
+  // Audio capture service (processes uploads from Chrome extension)
+  const audioDataDir = `${homeDir}/.simple-mcp/audio`;
+  const audioCaptureService = createAudioCaptureService({
+    logger,
+    dataDir: audioDataDir,
+    whisperService,
+    audioTranscriptsRepo,
+    encryptionService,
+  });
 
   // Create application services
   const connectionManager = createConnectionManagerService({
@@ -488,6 +517,13 @@ export async function createServer(
     logger.info("Google Meet tools skipped — GOOGLE_OAUTH_CLIENT_ID/SECRET not configured");
   }
 
+  // Audio capture / Whisper tools — always registered (prereqs checked at runtime)
+  registerCheckAudioPrerequisitesTool(mcpServer, { whisperService, logger });
+  registerListAudioTranscriptsTool(mcpServer, { audioTranscriptsRepo, logger });
+  registerGetAudioTranscriptTool(mcpServer, { audioTranscriptsRepo, encryptionService, logger });
+  registerSearchAudioTranscriptsTool(mcpServer, { audioTranscriptsRepo, logger });
+  logger.info("Audio capture MCP tools registered");
+
   // Local filesystem tools — always registered (operations are gated by folder registration)
   const fsToolDeps = { fsService: localFilesystemService, logger };
   registerFsListDirectoryTool(mcpServer, fsToolDeps);
@@ -600,6 +636,9 @@ export async function createServer(
 
   // Google Meet agents
   agentRegistry.register(meetingSummarizerAgent);
+
+  // Local audio capture agents
+  agentRegistry.register(localMeetingTranscriberAgent);
 
   logger.info(
     { agentCount: agentRegistry.getAll().length },
@@ -1669,6 +1708,74 @@ export async function createServer(
     } catch (error) {
       logger.error({ error }, "Google OAuth callback error");
       return c.json({ error: "OAuth callback processing failed" }, { status: 500 });
+    }
+  });
+
+  // ── Audio Capture / Whisper endpoints ──────────────────────────────
+
+  httpApp.post("/api/audio/upload", async (c) => {
+    try {
+      const formData = await c.req.formData();
+      const audioFile = formData.get("audio") as File | null;
+      const meetingTitle = (formData.get("meetingTitle") as string) || "Untitled Meeting";
+      const meetingUrl = (formData.get("meetingUrl") as string) || "";
+      const startTime = (formData.get("startTime") as string) || new Date().toISOString();
+      const endTime = (formData.get("endTime") as string) || new Date().toISOString();
+
+      if (!audioFile) {
+        return c.json({ error: "No audio file provided" }, { status: 400 });
+      }
+
+      const buffer = Buffer.from(await audioFile.arrayBuffer());
+      const result = await audioCaptureService.processUpload({
+        audioBuffer: buffer,
+        mimeType: audioFile.type,
+        meetingTitle,
+        meetingUrl,
+        startTime,
+        endTime,
+      });
+
+      if (result._tag === "Err") {
+        const { domainErrorMessage } = await import("@shared/result.js");
+        return c.json({ error: domainErrorMessage(result.error) }, { status: 500 });
+      }
+
+      return c.json(result.value, { status: 201 });
+    } catch (error) {
+      logger.error({ error }, "Audio upload failed");
+      return c.json({ error: "Audio upload processing failed" }, { status: 500 });
+    }
+  });
+
+  httpApp.get("/api/audio-transcripts", async (c) => {
+    const limit = parseInt(c.req.query("limit") || "50", 10);
+    const transcripts = await audioTranscriptsRepo.findRecent(limit);
+    // Strip encrypted content from list response
+    const safe = transcripts.map(({ encryptedContent, iv, ...rest }) => rest);
+    return c.json(safe);
+  });
+
+  httpApp.get("/api/audio-transcripts/stats", async (c) => {
+    const total = await audioTranscriptsRepo.count();
+    const totalDuration = await audioTranscriptsRepo.totalDurationSeconds();
+    return c.json({ totalTranscripts: total, totalDurationSeconds: totalDuration });
+  });
+
+  httpApp.get("/api/audio-transcripts/:id", async (c) => {
+    const id = c.req.param("id");
+    const transcript = await audioTranscriptsRepo.findById(id);
+    if (!transcript) {
+      return c.json({ error: "Transcript not found" }, { status: 404 });
+    }
+    // Decrypt content
+    try {
+      const raw = encryptionService.decrypt(transcript.encryptedContent, transcript.iv);
+      const content = JSON.parse(raw);
+      const { encryptedContent, iv, ...meta } = transcript;
+      return c.json({ ...meta, content });
+    } catch {
+      return c.json({ error: "Failed to decrypt transcript" }, { status: 500 });
     }
   });
 

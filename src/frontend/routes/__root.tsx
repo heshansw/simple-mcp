@@ -51,6 +51,9 @@ export function Root() {
           <NavLink to="/reviews">Review Insights</NavLink>
           <NavLink to="/local-repos">Local Repos</NavLink>
 
+          <NavSection label="Meetings" />
+          <NavLink to="/meetings">Transcriptions</NavLink>
+
           <NavSection label="Integrations" />
           <NavLink to="/connections">Connections</NavLink>
           <NavLink to="/confluence">Confluence</NavLink>
