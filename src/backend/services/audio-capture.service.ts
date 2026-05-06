@@ -201,13 +201,15 @@ export function createAudioCaptureService(
           processingTimeMs: transcript.processingTimeMs,
         });
       } finally {
-        // Clean up temp files (always delete audio after transcription)
-        try {
-          await unlink(inputPath).catch(() => {});
-          if (isWebm) await unlink(wavPath).catch(() => {});
-        } catch {
-          // Non-critical cleanup
-        }
+        // Keep temp files for debugging during development
+        // TODO: uncomment cleanup once transcription is verified working
+        // try {
+        //   await unlink(inputPath).catch(() => {});
+        //   if (isWebm) await unlink(wavPath).catch(() => {});
+        // } catch {
+        //   // Non-critical cleanup
+        // }
+        logger.info({ inputPath, wavPath }, "Temp audio files kept for debugging");
       }
     },
   };

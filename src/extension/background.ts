@@ -25,7 +25,7 @@ const MCP_SERVER_URL = "http://localhost:3101";
 chrome.runtime.onMessage.addListener(
   (message: any, _sender: any, sendResponse: any) => {
     if (message.type === "START_RECORDING") {
-      startRecording(message.meetingTitle)
+      startRecording(message.captureMode, message.streamId, message.meetingTitle, message.meetingUrl, message.tabId)
         .then((result: any) => sendResponse(result))
         .catch((err: any) => sendResponse({ type: "ERROR", error: String(err) }));
       return true;
@@ -40,6 +40,18 @@ chrome.runtime.onMessage.addListener(
 
     if (message.type === "GET_STATUS") {
       sendResponse({ type: "STATUS", state: currentState });
+      return false;
+    }
+
+    if (message.type === "SET_RECORDING_STATE") {
+      currentState = message.state;
+      if (message.state.isRecording) {
+        chrome.action.setBadgeText({ text: "REC" });
+        chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
+      } else {
+        chrome.action.setBadgeText({ text: "" });
+      }
+      sendResponse({ type: "OK" });
       return false;
     }
 
@@ -74,32 +86,24 @@ async function ensureOffscreenDocument(): Promise<void> {
 // ── Recording logic ──────────────────────────────────────────────────────
 
 async function startRecording(
-  meetingTitle?: string
+  captureMode: string,
+  streamId?: string,
+  meetingTitle?: string,
+  meetingUrl?: string,
+  tabId?: number
 ): Promise<{ type: string; startTime?: string; error?: string }> {
   if (currentState.isRecording) {
     return { type: "ERROR", error: "Already recording" };
   }
 
   try {
-    // Get the active tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) {
-      return { type: "ERROR", error: "No active tab found" };
-    }
-
-    // Get a media stream ID for the tab (MV3 way)
-    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
-
-    if (!streamId) {
-      return { type: "ERROR", error: "Failed to get media stream ID. Make sure you clicked the extension icon while on the meeting tab." };
-    }
-
     // Create offscreen document for MediaRecorder
     await ensureOffscreenDocument();
 
     // Tell offscreen document to start recording
     const result = await chrome.runtime.sendMessage({
       type: "OFFSCREEN_START_RECORDING",
+      captureMode,
       streamId,
     });
 
@@ -111,15 +115,13 @@ async function startRecording(
     currentState = {
       isRecording: true,
       startTime,
-      meetingTitle: meetingTitle || tab.title || "Untitled Meeting",
-      meetingUrl: tab.url || null,
-      tabId: tab.id,
+      meetingTitle: meetingTitle || "Untitled Meeting",
+      meetingUrl: meetingUrl || null,
+      tabId: tabId || null,
     };
 
-    // Update badge
     await chrome.action.setBadgeText({ text: "REC" });
     await chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
-
     await chrome.storage.local.set({ recordingState: currentState });
 
     return { type: "RECORDING_STARTED", startTime };

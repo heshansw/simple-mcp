@@ -318,14 +318,16 @@ source ~/.zshrc
 | `medium` | 1.5GB | Medium | Better | Longer or noisy meetings |
 | `large-v3` | 3.1GB | Slow | Best | Maximum accuracy, important meetings |
 
-**Verify setup:**
+**Verify prerequisites:**
 
 ```bash
 echo $WHISPER_MODEL                          # should print "base"
 ls ~/.simple-mcp/models/ggml-base.bin        # should show the file
-which whisper-cpp                            # should show the path
+which whisper-cli                            # should show the path (not whisper-cpp)
 which ffmpeg                                 # should show the path
 ```
+
+> **Note:** The Homebrew `whisper-cpp` package installs the binary as `whisper-cli` (not `whisper-cpp`).
 
 **Chrome Extension Setup:**
 
@@ -337,19 +339,33 @@ which ffmpeg                                 # should show the path
 3. Enable **Developer mode** (toggle in top-right)
 4. Click **Load unpacked** and select the `dist/extension/` directory
 5. The "Simple MCP Meeting Recorder" extension icon appears in your toolbar
+6. **Grant microphone access** (required — first time only):
+   - Click the extension icon — a **Microphone Permission Setup** page opens automatically
+   - Click **"Allow Microphone Access"** on that page
+   - Chrome will show a permission dialog — click **Allow**
+   - Once granted, close the setup tab — you're ready to record
+
+> If you accidentally denied microphone access, go to `chrome://settings/content/microphone`, find the extension's entry, and change it to **Allow**. Or click the lock icon in the address bar on the permissions page.
 
 **Usage:**
 
 1. Join a meeting in your browser (Google Meet, Zoom web, etc.)
-2. Click the extension icon > enter an optional meeting title > **Start Recording**
-3. The extension captures tab audio (you still hear everything normally)
-4. When done, click **Stop Recording** — the audio is uploaded to the MCP server
-5. Whisper transcribes locally (~1 min per 10 min of audio on Apple Silicon)
-6. Transcript is encrypted and stored in SQLite with full-text search
+2. Click the extension icon
+3. Choose a capture mode:
+   - **Microphone (recommended)** — captures meeting audio through your speakers/headphones + your voice via the system microphone. Works with all meeting apps.
+   - **Tab Audio** — captures only the tab's audio output. Works for tabs playing media but may produce silent audio for WebRTC-based meetings like Google Meet.
+4. Enter an optional meeting title (auto-detected from the tab)
+5. Click **Start Recording** — keep the popup open while recording (status shows timer)
+6. When done, click **Stop Recording** — the audio is uploaded to the MCP server
+7. Whisper transcribes locally (~1 min per 10 min of audio on Apple Silicon)
+8. Transcript is encrypted and stored in SQLite with full-text search
 
-**Verify setup:**
+**Verify end-to-end:**
 ```
-Use the audio_check_prerequisites MCP tool to verify ffmpeg and whisper.cpp are installed.
+Use the audio_check_prerequisites MCP tool to verify ffmpeg and whisper-cli are installed.
+Use audio_list_transcripts to see your captured meeting transcripts.
+Use audio_get_transcript to read the full transcript text.
+Use audio_search_transcripts to search across all transcripts by keyword.
 ```
 
 > No GCP project, no API keys, no cloud services. Audio never leaves your machine. Transcripts are AES-256 encrypted in the local SQLite database.

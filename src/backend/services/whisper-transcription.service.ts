@@ -192,19 +192,21 @@ export function createWhisperTranscriptionService(
         );
       }
 
-      // Create temp output directory
+      // Output file prefix (whisper-cli uses -of for output file path without extension)
       const outputDir = join(dirname(audioFilePath), "whisper-out");
       await mkdir(outputDir, { recursive: true });
+      const outputFilePrefix = join(outputDir, "transcript");
 
       try {
-        // Run whisper-cpp
+        // Run whisper-cli with correct flags
         const args = [
           "-m", modelPath,
           "-f", audioFilePath,
+          "-of", outputFilePrefix, // output file path (without extension)
           "-ovtt",          // Output VTT format
           "-otxt",          // Output plain text
-          "--output-dir", outputDir,
           "-l", "auto",     // Auto-detect language
+          "-np",            // No progress prints (cleaner output)
         ];
 
         logger.info({ whisperBin, args }, "Starting Whisper transcription");
@@ -224,10 +226,9 @@ export function createWhisperTranscriptionService(
           );
         }
 
-        // Parse output files
-        const baseName = audioFilePath.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "audio";
-        const vttPath = join(outputDir, `${baseName}.vtt`);
-        const txtPath = join(outputDir, `${baseName}.txt`);
+        // Parse output files (whisper-cli writes to <outputFilePrefix>.vtt and <outputFilePrefix>.txt)
+        const vttPath = `${outputFilePrefix}.vtt`;
+        const txtPath = `${outputFilePrefix}.txt`;
 
         let segments: TranscriptionSegment[] = [];
         let fullText = "";
