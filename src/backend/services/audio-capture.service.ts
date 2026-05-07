@@ -100,6 +100,31 @@ export function createAudioCaptureService(
         return err(validationError("Audio buffer is empty"));
       }
 
+      // Validate webm header — Chrome's MediaRecorder produces webm/opus files
+      // that must start with the EBML header (0x1A45DFA3). Short recordings or
+      // interrupted captures can produce truncated files missing this header.
+      const isWebmType = mimeType.includes("webm") || mimeType.includes("opus");
+      if (isWebmType) {
+        const hasEbmlHeader =
+          audioBuffer.length >= 4 &&
+          audioBuffer[0] === 0x1a &&
+          audioBuffer[1] === 0x45 &&
+          audioBuffer[2] === 0xdf &&
+          audioBuffer[3] === 0xa3;
+
+        if (!hasEbmlHeader) {
+          logger.warn(
+            { sizeBytes: audioBuffer.length, firstBytes: audioBuffer.subarray(0, 8).toString("hex") },
+            "Uploaded webm file has invalid/missing EBML header — recording may be too short or corrupt",
+          );
+          return err(
+            validationError(
+              "Recording is corrupt or too short. Please record for at least 3 seconds before stopping.",
+            ),
+          );
+        }
+      }
+
       // Ensure data directory exists
       await mkdir(dataDir, { recursive: true });
 

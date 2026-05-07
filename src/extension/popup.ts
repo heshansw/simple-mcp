@@ -151,18 +151,7 @@ async function startRecording() {
 
       setRecordingUI();
     } else {
-      // Tab capture and System Audio modes — delegate to background + offscreen
-      let streamId: string | null = null;
-      if (captureMode === "tab" && tab?.id) {
-        try {
-          streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
-        } catch (err) {
-          showError(`Tab capture failed: ${String(err)}`);
-          setIdleUI();
-          return;
-        }
-      }
-
+      // Tab Audio and Tab+Mic modes — delegate to background + offscreen
       chrome.runtime.sendMessage(
         {
           type: "START_RECORDING",
@@ -170,7 +159,6 @@ async function startRecording() {
           meetingUrl: currentMeetingUrl,
           tabId: tab?.id,
           captureMode,
-          streamId,
         },
         (response) => {
           if (response?.type === "RECORDING_STARTED") {
@@ -194,25 +182,20 @@ async function stopRecording() {
   setUploadingUI();
 
   if (micRecorder && micRecorder.state !== "inactive") {
-    // Stop microphone / system audio recording (popup-based)
+    // Stop recorder and wait for final data BEFORE cleaning up streams.
+    // Stopping tracks early can cause the final flush to produce incomplete webm.
     micRecorder.stop();
-    // Clean up all source streams (including BlackHole + mic for system mode)
-    if (micStream) {
-      const sourceStreams = (micStream as any).__sourceStreams as MediaStream[] | undefined;
-      const audioCtx = (micStream as any).__audioContext as AudioContext | undefined;
-      if (sourceStreams) {
-        sourceStreams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
-      }
-      micStream.getTracks().forEach((t) => t.stop());
-      if (audioCtx) audioCtx.close().catch(() => {});
-    }
 
-    // Wait for final data
     await new Promise<void>((resolve) => {
       micRecorder!.onstop = () => resolve();
     });
 
     const audioBlob = new Blob(micChunks, { type: micRecorder.mimeType });
+
+    // Clean up mic stream after blob is assembled
+    if (micStream) {
+      micStream.getTracks().forEach((t) => t.stop());
+    }
     const endTime = new Date().toISOString();
 
     micRecorder = null;
