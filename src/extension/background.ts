@@ -24,8 +24,14 @@ const MCP_SERVER_URL = "http://localhost:3101";
 
 chrome.runtime.onMessage.addListener(
   (message: any, _sender: any, sendResponse: any) => {
+    // Ignore messages intended for the offscreen document — returning false
+    // for these would close the message channel before offscreen can respond.
+    if (message.type?.startsWith("OFFSCREEN_")) {
+      return false;
+    }
+
     if (message.type === "START_RECORDING") {
-      startRecording(message.captureMode, message.streamId, message.meetingTitle, message.meetingUrl, message.tabId)
+      startRecording(message.captureMode, message.meetingTitle, message.meetingUrl, message.tabId)
         .then((result: any) => sendResponse(result))
         .catch((err: any) => sendResponse({ type: "ERROR", error: String(err) }));
       return true;
@@ -87,7 +93,6 @@ async function ensureOffscreenDocument(): Promise<void> {
 
 async function startRecording(
   captureMode: string,
-  streamId?: string,
   meetingTitle?: string,
   meetingUrl?: string,
   tabId?: number
@@ -99,6 +104,14 @@ async function startRecording(
   try {
     // Create offscreen document for MediaRecorder
     await ensureOffscreenDocument();
+
+    // For tab-based modes, obtain the streamId here in the service worker
+    let streamId: string | undefined;
+    if ((captureMode === "tab" || captureMode === "tab+mic") && tabId) {
+      streamId = await chrome.tabCapture.getMediaStreamId({
+        targetTabId: tabId,
+      });
+    }
 
     // Tell offscreen document to start recording
     const result = await chrome.runtime.sendMessage({

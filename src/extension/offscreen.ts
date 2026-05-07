@@ -1,4 +1,4 @@
-// Offscreen document — handles MediaRecorder for microphone, tab capture, and system audio (BlackHole)
+// Offscreen document — handles MediaRecorder for microphone, tab capture, and tab+mic combined mode
 
 let mediaRecorder: MediaRecorder | null = null;
 let recordedChunks: Blob[] = [];
@@ -33,59 +33,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
-async function createSystemAudioStream(): Promise<MediaStream> {
-  // Request mic permission first so enumerateDevices() returns labels
-  const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  tempStream.getTracks().forEach((t) => t.stop());
-
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const blackhole = devices.find(
-    (d) => d.kind === "audioinput" && d.label.toLowerCase().includes("blackhole"),
-  );
-
-  if (!blackhole) {
-    throw new Error(
-      "BlackHole not found. Install it with: brew install blackhole-2ch\n" +
-        "Then create a Multi-Output Device in Audio MIDI Setup (see README).",
-    );
-  }
-
-  // BlackHole stream (system audio — other participants' voices)
-  const systemStream = await navigator.mediaDevices.getUserMedia({
-    audio: { deviceId: { exact: blackhole.deviceId } },
-  });
-
-  // Default mic stream (your voice)
-  const micStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
-    },
-  });
-
-  // Merge both streams using Web Audio API
-  audioContext = new AudioContext();
-  const destination = audioContext.createMediaStreamDestination();
-
-  const systemSource = audioContext.createMediaStreamSource(systemStream);
-  const micSource = audioContext.createMediaStreamSource(micStream);
-
-  systemSource.connect(destination);
-  micSource.connect(destination);
-
-  // Keep references for cleanup
-  sourceStreams = [systemStream, micStream];
-
-  return destination.stream;
-}
-
 async function startRecording(captureMode: string, streamId?: string): Promise<void> {
   let stream: MediaStream;
 
-  if (captureMode === "tab" && streamId) {
-    // Tab capture mode — use the streamId from tabCapture.getMediaStreamId
-    stream = await navigator.mediaDevices.getUserMedia({
+  if ((captureMode === "tab" || captureMode === "tab+mic") && streamId) {
+    // Capture tab audio via the streamId from tabCapture.getMediaStreamId
+    const tabStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         mandatory: {
           chromeMediaSource: "tab",
@@ -93,11 +46,36 @@ async function startRecording(captureMode: string, streamId?: string): Promise<v
         },
       } as any,
     });
-  } else if (captureMode === "system") {
-    // System audio mode — merge BlackHole (system audio) + default mic
-    stream = await createSystemAudioStream();
+
+    // Set up AudioContext to pipe tab audio back to speakers
+    audioContext = new AudioContext();
+    const tabSource = audioContext.createMediaStreamSource(tabStream);
+    tabSource.connect(audioContext.destination);
+
+    if (captureMode === "tab+mic") {
+      // Also capture mic and merge both streams
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      // Merge tab + mic into a single stream for recording
+      const destination = audioContext.createMediaStreamDestination();
+      tabSource.connect(destination);
+      const micSource = audioContext.createMediaStreamSource(micStream);
+      micSource.connect(destination);
+
+      sourceStreams = [tabStream, micStream];
+      stream = destination.stream;
+    } else {
+      // Tab-only mode — record the tab stream directly
+      stream = tabStream;
+    }
   } else {
-    // Microphone mode — captures system microphone input
+    // Microphone-only mode
     stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
@@ -121,7 +99,13 @@ async function startRecording(captureMode: string, streamId?: string): Promise<v
     }
   };
 
-  mediaRecorder.start(1000);
+  // MediaStreamDestination (tab+mic merged) can produce corrupt headers with timeslice,
+  // so only use timeslice for direct stream modes (tab-only, mic-only)
+  if (captureMode === "tab+mic") {
+    mediaRecorder.start();
+  } else {
+    mediaRecorder.start(1000);
+  }
 }
 
 async function stopRecording(): Promise<Blob> {
@@ -135,7 +119,7 @@ async function stopRecording(): Promise<Blob> {
       // Stop the main recording stream tracks
       mediaRecorder!.stream.getTracks().forEach((track) => track.stop());
 
-      // Clean up BlackHole/mic source streams and AudioContext
+      // Clean up source streams (tab + mic for combined mode)
       for (const s of sourceStreams) {
         s.getTracks().forEach((t) => t.stop());
       }
