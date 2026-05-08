@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const connectionsTable = sqliteTable("connections", {
   id: text("id").primaryKey(),
@@ -286,5 +286,115 @@ export const reviewSessionDraftsTable = sqliteTable("review_session_drafts", {
   verdict: text("verdict").notNull(), // APPROVE | REQUEST_CHANGES | COMMENT
   body: text("body").notNull(),
   commentsJson: text("comments_json").notNull().default("[]"),
+  createdAt: text("created_at").notNull(),
+});
+
+// ── Code Health Tables ────────────────────────────────────────────────────
+
+export const codeHealthSnapshotsTable = sqliteTable("code_health_snapshots", {
+  id: text("id").primaryKey(),
+  directoryPath: text("directory_path").notNull(),
+  workspaceId: text("workspace_id"),
+  label: text("label"),
+  overallScore: real("overall_score").notNull(),
+  grade: text("grade").notNull(),
+  fileCount: integer("file_count").notNull().default(0),
+  totalLoc: integer("total_loc").notNull().default(0),
+  totalFunctions: integer("total_functions").notNull().default(0),
+  avgCyclomatic: real("avg_cyclomatic").notNull().default(0),
+  avgCognitive: real("avg_cognitive").notNull().default(0),
+  duplicationPct: real("duplication_pct").notNull().default(0),
+  typeCoveragePct: real("type_coverage_pct"),
+  configJson: text("config_json").notNull().default("{}"),
+  gitRef: text("git_ref"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const codeHealthFileMetricsTable = sqliteTable("code_health_file_metrics", {
+  id: text("id").primaryKey(),
+  snapshotId: text("snapshot_id").notNull().references(() => codeHealthSnapshotsTable.id),
+  filePath: text("file_path").notNull(),
+  relativePath: text("relative_path").notNull(),
+  language: text("language").notNull(),
+  score: real("score").notNull(),
+  grade: text("grade").notNull(),
+  loc: integer("loc").notNull().default(0),
+  slocLogical: integer("sloc_logical").notNull().default(0),
+  functionCount: integer("function_count").notNull().default(0),
+  avgCyclomatic: real("avg_cyclomatic").notNull().default(0),
+  maxCyclomatic: real("max_cyclomatic").notNull().default(0),
+  avgCognitive: real("avg_cognitive").notNull().default(0),
+  maxCognitive: real("max_cognitive").notNull().default(0),
+  maintainabilityIndex: real("maintainability_index").notNull().default(0),
+  duplicationLines: integer("duplication_lines").notNull().default(0),
+  typeCoveragePct: real("type_coverage_pct"),
+  anyCount: integer("any_count").notNull().default(0),
+  nestingDepthMax: integer("nesting_depth_max").notNull().default(0),
+  issuesJson: text("issues_json").notNull().default("[]"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const codeHealthFunctionMetricsTable = sqliteTable("code_health_function_metrics", {
+  id: text("id").primaryKey(),
+  fileMetricId: text("file_metric_id").notNull().references(() => codeHealthFileMetricsTable.id),
+  functionName: text("function_name").notNull(),
+  startLine: integer("start_line").notNull(),
+  endLine: integer("end_line").notNull(),
+  loc: integer("loc").notNull().default(0),
+  parameterCount: integer("parameter_count").notNull().default(0),
+  cyclomatic: integer("cyclomatic").notNull().default(0),
+  cognitive: integer("cognitive").notNull().default(0),
+  halsteadEffort: real("halstead_effort").notNull().default(0),
+  halsteadDifficulty: real("halstead_difficulty").notNull().default(0),
+  halsteadVolume: real("halstead_volume").notNull().default(0),
+  nestingDepth: integer("nesting_depth").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const codeHealthEventsTable = sqliteTable("code_health_events", {
+  id: text("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  filePath: text("file_path"),
+  beforeScore: real("before_score"),
+  afterScore: real("after_score"),
+  issuesFound: integer("issues_found").notNull().default(0),
+  issuesResolved: integer("issues_resolved").notNull().default(0),
+  iterations: integer("iterations").notNull().default(0),
+  trigger: text("trigger").notNull().default("manual"),
+  contextJson: text("context_json").notNull().default("{}"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const codeHealthSessionsTable = sqliteTable("code_health_sessions", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id"),
+  directoryPath: text("directory_path").notNull(),
+  status: text("status").notNull().default("active"),
+  startedAt: text("started_at").notNull(),
+  completedAt: text("completed_at"),
+  filesChanged: text("files_changed").notNull().default("[]"),
+  initialScoresJson: text("initial_scores_json").notNull().default("{}"),
+  finalScoresJson: text("final_scores_json").notNull().default("{}"),
+  totalIterations: integer("total_iterations").notNull().default(0),
+  targetScore: real("target_score").notNull().default(10),
+  achievedTarget: integer("achieved_target").notNull().default(0),
+  maxIterations: integer("max_iterations").notNull().default(5),
+  trigger: text("trigger").notNull().default("manual"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const codeHealthBackgroundJobsTable = sqliteTable("code_health_background_jobs", {
+  id: text("id").primaryKey(),
+  filePath: text("file_path").notNull(),
+  workspaceId: text("workspace_id"),
+  status: text("status").notNull().default("queued"),
+  score: real("score"),
+  grade: text("grade"),
+  issueCount: integer("issue_count").notNull().default(0),
+  issuesJson: text("issues_json").notNull().default("[]"),
+  triggerTool: text("trigger_tool").notNull(),
+  errorMessage: text("error_message"),
+  startedAt: text("started_at"),
+  completedAt: text("completed_at"),
   createdAt: text("created_at").notNull(),
 });

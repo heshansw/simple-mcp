@@ -278,6 +278,114 @@ async function createTables(
       output_tokens INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS code_health_snapshots (
+      id TEXT PRIMARY KEY,
+      directory_path TEXT NOT NULL,
+      workspace_id TEXT,
+      label TEXT,
+      overall_score REAL NOT NULL,
+      grade TEXT NOT NULL,
+      file_count INTEGER NOT NULL DEFAULT 0,
+      total_loc INTEGER NOT NULL DEFAULT 0,
+      total_functions INTEGER NOT NULL DEFAULT 0,
+      avg_cyclomatic REAL NOT NULL DEFAULT 0,
+      avg_cognitive REAL NOT NULL DEFAULT 0,
+      duplication_pct REAL NOT NULL DEFAULT 0,
+      type_coverage_pct REAL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      git_ref TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS code_health_file_metrics (
+      id TEXT PRIMARY KEY,
+      snapshot_id TEXT NOT NULL REFERENCES code_health_snapshots(id),
+      file_path TEXT NOT NULL,
+      relative_path TEXT NOT NULL,
+      language TEXT NOT NULL,
+      score REAL NOT NULL,
+      grade TEXT NOT NULL,
+      loc INTEGER NOT NULL DEFAULT 0,
+      sloc_logical INTEGER NOT NULL DEFAULT 0,
+      function_count INTEGER NOT NULL DEFAULT 0,
+      avg_cyclomatic REAL NOT NULL DEFAULT 0,
+      max_cyclomatic REAL NOT NULL DEFAULT 0,
+      avg_cognitive REAL NOT NULL DEFAULT 0,
+      max_cognitive REAL NOT NULL DEFAULT 0,
+      maintainability_index REAL NOT NULL DEFAULT 0,
+      duplication_lines INTEGER NOT NULL DEFAULT 0,
+      type_coverage_pct REAL,
+      any_count INTEGER NOT NULL DEFAULT 0,
+      nesting_depth_max INTEGER NOT NULL DEFAULT 0,
+      issues_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS code_health_function_metrics (
+      id TEXT PRIMARY KEY,
+      file_metric_id TEXT NOT NULL REFERENCES code_health_file_metrics(id),
+      function_name TEXT NOT NULL,
+      start_line INTEGER NOT NULL,
+      end_line INTEGER NOT NULL,
+      loc INTEGER NOT NULL DEFAULT 0,
+      parameter_count INTEGER NOT NULL DEFAULT 0,
+      cyclomatic INTEGER NOT NULL DEFAULT 0,
+      cognitive INTEGER NOT NULL DEFAULT 0,
+      halstead_effort REAL NOT NULL DEFAULT 0,
+      halstead_difficulty REAL NOT NULL DEFAULT 0,
+      halstead_volume REAL NOT NULL DEFAULT 0,
+      nesting_depth INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS code_health_events (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      file_path TEXT,
+      before_score REAL,
+      after_score REAL,
+      issues_found INTEGER NOT NULL DEFAULT 0,
+      issues_resolved INTEGER NOT NULL DEFAULT 0,
+      iterations INTEGER NOT NULL DEFAULT 0,
+      trigger TEXT NOT NULL DEFAULT 'manual',
+      context_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS code_health_sessions (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT,
+      directory_path TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      files_changed TEXT NOT NULL DEFAULT '[]',
+      initial_scores_json TEXT NOT NULL DEFAULT '{}',
+      final_scores_json TEXT NOT NULL DEFAULT '{}',
+      total_iterations INTEGER NOT NULL DEFAULT 0,
+      target_score REAL NOT NULL DEFAULT 10,
+      achieved_target INTEGER NOT NULL DEFAULT 0,
+      max_iterations INTEGER NOT NULL DEFAULT 5,
+      trigger TEXT NOT NULL DEFAULT 'manual',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS code_health_background_jobs (
+      id TEXT PRIMARY KEY,
+      file_path TEXT NOT NULL,
+      workspace_id TEXT,
+      status TEXT NOT NULL DEFAULT 'queued',
+      score REAL,
+      grade TEXT,
+      issue_count INTEGER NOT NULL DEFAULT 0,
+      issues_json TEXT NOT NULL DEFAULT '[]',
+      trigger_tool TEXT NOT NULL,
+      error_message TEXT,
+      started_at TEXT,
+      completed_at TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // Create FTS5 virtual tables (separate statements — not supported in executeMultiple)
@@ -318,6 +426,8 @@ async function createTables(
     "UPDATE connections SET integration_type = 'google' WHERE integration_type = 'google-calendar'",
     // Add attendees column for speaker diarization
     "ALTER TABLE audio_transcripts ADD COLUMN attendees TEXT",
+    // Add issues_json to background jobs for per-file issue tracking
+    "ALTER TABLE code_health_background_jobs ADD COLUMN issues_json TEXT NOT NULL DEFAULT '[]'",
   ];
 
   for (const sql of migrations) {

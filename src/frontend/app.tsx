@@ -23,6 +23,9 @@ import { AgentExecutionDetailPage } from "@frontend/routes/agent-executions/$run
 import { TaskProgressPage } from "@frontend/routes/task-progress/index";
 import { MeetingsPage } from "@frontend/routes/meetings/index";
 import { MeetingDetailPage } from "@frontend/routes/meetings/$transcriptId";
+import { CodeHealthProjectsPage } from "@frontend/routes/code-health/index";
+import { CodeHealthProjectDetailPage } from "@frontend/routes/code-health/$projectId";
+import { CodeHealthSessionsPage } from "@frontend/routes/code-health/sessions";
 import { useState } from "react";
 
 // Create root route
@@ -144,6 +147,25 @@ const meetingDetailRoute = new Route({
   component: MeetingDetailPage,
 });
 
+// Code Health routes
+const codeHealthIndexRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/code-health",
+  component: CodeHealthProjectsPage,
+});
+
+const codeHealthDetailRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/code-health/$projectId",
+  component: CodeHealthProjectDetailPage,
+});
+
+const codeHealthSessionsRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: "/code-health/sessions",
+  component: CodeHealthSessionsPage,
+});
+
 // Build route tree
 const routeTree = rootRoute.addChildren([
   dashboardRoute,
@@ -162,6 +184,9 @@ const routeTree = rootRoute.addChildren([
   databasesRoute,
   meetingsIndexRoute,
   meetingDetailRoute,
+  codeHealthIndexRoute,
+  codeHealthDetailRoute,
+  codeHealthSessionsRoute,
   settingsRoute,
 ]);
 
