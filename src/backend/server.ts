@@ -29,6 +29,8 @@ import type { VolumeMapping } from "./services/command-executor.service.js";
 import { createDockerLifecycleService } from "./services/docker-lifecycle.service.js";
 import { createWhisperTranscriptionService } from "./services/whisper-transcription.service.js";
 import { createAudioCaptureService } from "./services/audio-capture.service.js";
+import { createAudioSessionService } from "./services/audio-session.service.js";
+import { createSpeakerAttributionService } from "./services/speaker-attribution.service.js";
 import { createMeetingSummarizationService } from "./services/meeting-summarization.service.js";
 import { createConnectionManagerService } from "./services/connection-manager.service.js";
 import { createJiraService } from "./services/jira.service.js";
@@ -261,6 +263,9 @@ export async function createServer(
   };
   const whisperService = createWhisperTranscriptionService(whisperDeps);
 
+  // Speaker attribution service (matches speakers to attendee names via Claude)
+  const speakerAttributionService = createSpeakerAttributionService({ logger });
+
   // Audio capture service (processes uploads from Chrome extension)
   const audioCaptureService = createAudioCaptureService({
     logger,
@@ -269,7 +274,20 @@ export async function createServer(
     whisperService,
     audioTranscriptsRepo,
     encryptionService,
+    speakerAttributionService,
   });
+
+  // Audio session service (chunked upload for long recordings)
+  const audioSessionsDir = `${audioDataDir}/sessions`;
+  const audioSessionService = createAudioSessionService({
+    logger,
+    sessionsDir: audioSessionsDir,
+    commandExecutor,
+    audioCaptureService,
+  });
+
+  // Clean up expired sessions on startup
+  audioSessionService.cleanupExpiredSessions().catch(() => {});
 
   // Meeting summarization service (auto-triggers Claude CLI after transcription)
   const meetingSummarizationService = createMeetingSummarizationService({
@@ -1817,6 +1835,132 @@ export async function createServer(
     } catch (error) {
       logger.error({ error }, "Audio upload failed");
       return c.json({ error: "Audio upload processing failed" }, { status: 500 });
+    }
+  });
+
+  // ── Chunked audio session endpoints ─────────────────────────────────────
+
+  httpApp.post("/api/audio/sessions", async (c) => {
+    try {
+      const body = await c.req.json() as {
+        meetingTitle?: string;
+        meetingUrl?: string;
+        startTime?: string;
+        attendees?: string[];
+      };
+
+      const result = await audioSessionService.createSession(body);
+      if (result._tag === "Err") {
+        const { domainErrorMessage } = await import("@shared/result.js");
+        return c.json({ error: domainErrorMessage(result.error) }, { status: 400 });
+      }
+
+      return c.json(result.value, { status: 201 });
+    } catch (error) {
+      logger.error({ error }, "Failed to create audio session");
+      return c.json({ error: "Failed to create audio session" }, { status: 500 });
+    }
+  });
+
+  httpApp.post("/api/audio/sessions/:id/chunks", async (c) => {
+    try {
+      const sessionId = c.req.param("id");
+      const formData = await c.req.formData();
+      const chunkFile = formData.get("chunk") as File | null;
+      const chunkIndex = parseInt((formData.get("chunkIndex") as string) || "0", 10);
+
+      if (!chunkFile) {
+        return c.json({ error: "No chunk file provided" }, { status: 400 });
+      }
+
+      const buffer = Buffer.from(await chunkFile.arrayBuffer());
+      const result = await audioSessionService.appendChunk(sessionId, buffer, chunkIndex);
+
+      if (result._tag === "Err") {
+        const { domainErrorMessage } = await import("@shared/result.js");
+        return c.json({ error: domainErrorMessage(result.error) }, { status: 400 });
+      }
+
+      return c.json(result.value);
+    } catch (error) {
+      logger.error({ error }, "Failed to append audio chunk");
+      return c.json({ error: "Failed to append audio chunk" }, { status: 500 });
+    }
+  });
+
+  httpApp.post("/api/audio/sessions/:id/finalize", async (c) => {
+    try {
+      const sessionId = c.req.param("id");
+      const body = await c.req.json().catch(() => ({})) as { endTime?: string };
+
+      const result = await audioSessionService.finalizeSession(sessionId, body.endTime);
+
+      if (result._tag === "Err") {
+        const { domainErrorMessage } = await import("@shared/result.js");
+        return c.json({ error: domainErrorMessage(result.error) }, { status: 500 });
+      }
+
+      // Returns immediately — transcription runs in background
+      return c.json(result.value, { status: 202 });
+    } catch (error) {
+      logger.error({ error }, "Failed to finalize audio session");
+      return c.json({ error: "Failed to finalize audio session" }, { status: 500 });
+    }
+  });
+
+  // ── Processing job status endpoints ────────────────────────────────────
+
+  httpApp.get("/api/audio/jobs", (c) => {
+    const jobs = audioSessionService.listJobs();
+    return c.json(jobs);
+  });
+
+  httpApp.get("/api/audio/jobs/:id", (c) => {
+    const jobId = c.req.param("id");
+    const job = audioSessionService.getJob(jobId);
+    if (!job) {
+      return c.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    // Trigger auto-summarization when job completes
+    if (job.status === "completed" && job.result?.id) {
+      const transcriptId = job.result.id;
+      // Use a flag to avoid re-triggering summarization on every poll
+      if (!(job as any)._summarizationTriggered) {
+        (job as any)._summarizationTriggered = true;
+        meetingSummarizationService
+          .summarizeTranscript(transcriptId)
+          .then(async (summaryResult) => {
+            if (summaryResult._tag === "Ok") {
+              logger.info({ transcriptId, analysisId: summaryResult.value.id }, "Auto-summarization completed");
+            } else {
+              const { domainErrorMessage: errMsg } = await import("@shared/result.js");
+              logger.error({ transcriptId, error: errMsg(summaryResult.error) }, "Auto-summarization failed");
+            }
+          })
+          .catch((error) => {
+            logger.error({ error, transcriptId }, "Auto-summarization crashed");
+          });
+      }
+    }
+
+    return c.json(job);
+  });
+
+  httpApp.delete("/api/audio/sessions/:id", async (c) => {
+    try {
+      const sessionId = c.req.param("id");
+      const result = await audioSessionService.abortSession(sessionId);
+
+      if (result._tag === "Err") {
+        const { domainErrorMessage } = await import("@shared/result.js");
+        return c.json({ error: domainErrorMessage(result.error) }, { status: 400 });
+      }
+
+      return c.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, "Failed to abort audio session");
+      return c.json({ error: "Failed to abort audio session" }, { status: 500 });
     }
   });
 

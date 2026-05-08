@@ -168,6 +168,96 @@ body {
   border: 1px solid #fecaca;
 }
 
+/* ── Processing section ─────────────────────────────────────────────── */
+
+.processing-section {
+  margin-top: 0.75rem;
+}
+
+.processing-header {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.5rem;
+}
+
+.job-card {
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.375rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 0.375rem;
+}
+
+.job-card.job-completed {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+}
+
+.job-card.job-failed {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.job-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.job-progress-bar {
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+}
+
+.job-progress-fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.job-completed .job-progress-fill {
+  background: #10b981;
+}
+
+.job-failed .job-progress-fill {
+  background: #ef4444;
+}
+
+.job-status {
+  font-size: 0.65rem;
+  color: #6b7280;
+}
+
+.job-completed .job-status {
+  color: #059669;
+}
+
+.job-failed .job-status {
+  color: #dc2626;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.job-progress-fill.animating {
+  background: linear-gradient(90deg, #3b82f6 25%, #60a5fa 50%, #3b82f6 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
 .footer {
   margin-top: 0.75rem;
   text-align: center;

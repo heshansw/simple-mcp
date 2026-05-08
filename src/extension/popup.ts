@@ -7,9 +7,12 @@ const timerEl = document.getElementById("timer") as HTMLDivElement;
 const titleInput = document.getElementById("meeting-title") as HTMLInputElement;
 const captureModeSelect = document.getElementById("capture-mode") as HTMLSelectElement;
 const resultEl = document.getElementById("result") as HTMLDivElement;
+const processingSection = document.getElementById("processing-section") as HTMLDivElement;
+const processingJobsEl = document.getElementById("processing-jobs") as HTMLDivElement;
 
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let recordingStartTime: number | null = null;
+let jobPollInterval: ReturnType<typeof setInterval> | null = null;
 
 // Microphone recording happens directly in the popup
 let micRecorder: MediaRecorder | null = null;
@@ -20,6 +23,7 @@ let currentMeetingUrl = "";
 let currentStartTime = "";
 
 const MCP_SERVER_URL = "http://localhost:3101";
+const JOB_POLL_INTERVAL_MS = 3000;
 
 // ── Microphone permission ─────────────────────────────────────────────────
 
@@ -27,10 +31,8 @@ async function checkMicPermission() {
   try {
     const permStatus = await navigator.permissions.query({ name: "microphone" as PermissionName });
     if (permStatus.state === "granted") return;
-    // Not granted — open the permissions page in a new tab
     openPermissionsPage();
   } catch {
-    // permissions.query not supported — try getUserMedia directly
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((t) => t.stop());
@@ -48,7 +50,6 @@ function openPermissionsPage() {
 // ── Init ─────────────────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Request microphone permission immediately on popup open
   checkMicPermission();
 
   chrome.runtime.sendMessage({ type: "GET_STATUS" }, (response) => {
@@ -69,13 +70,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // Check if we have an active mic recording stored in session
   chrome.storage.session.get("micRecordingActive", (data) => {
     if (data.micRecordingActive) {
-      // Popup was reopened while recording — show recording UI
-      // but mic stream is lost, so show a warning
       recordingStartTime = new Date(data.micRecordingActive.startTime).getTime();
       titleInput.value = data.micRecordingActive.meetingTitle || "";
       setRecordingUI();
     }
   });
+
+  // Start polling for active processing jobs
+  startJobPolling();
 });
 
 toggleBtn.addEventListener("click", () => {
@@ -101,7 +103,6 @@ async function startRecording() {
     currentStartTime = new Date().toISOString();
 
     if (captureMode === "microphone") {
-      // Record directly in the popup using getUserMedia (mic only)
       try {
         micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
@@ -130,7 +131,6 @@ async function startRecording() {
 
       recordingStartTime = Date.now();
 
-      // Update badge via background
       chrome.runtime.sendMessage({
         type: "SET_RECORDING_STATE",
         state: {
@@ -141,7 +141,6 @@ async function startRecording() {
         },
       });
 
-      // Store in session so reopened popup knows we're recording
       chrome.storage.session.set({
         micRecordingActive: {
           startTime: currentStartTime,
@@ -151,7 +150,6 @@ async function startRecording() {
 
       setRecordingUI();
     } else {
-      // Tab Audio and Tab+Mic modes — delegate to background + offscreen
       chrome.runtime.sendMessage(
         {
           type: "START_RECORDING",
@@ -182,8 +180,6 @@ async function stopRecording() {
   setUploadingUI();
 
   if (micRecorder && micRecorder.state !== "inactive") {
-    // Stop recorder and wait for final data BEFORE cleaning up streams.
-    // Stopping tracks early can cause the final flush to produce incomplete webm.
     micRecorder.stop();
 
     await new Promise<void>((resolve) => {
@@ -192,7 +188,6 @@ async function stopRecording() {
 
     const audioBlob = new Blob(micChunks, { type: micRecorder.mimeType });
 
-    // Clean up mic stream after blob is assembled
     if (micStream) {
       micStream.getTracks().forEach((t) => t.stop());
     }
@@ -202,14 +197,12 @@ async function stopRecording() {
     micChunks = [];
     micStream = null;
 
-    // Clear recording state
     chrome.runtime.sendMessage({
       type: "SET_RECORDING_STATE",
       state: { isRecording: false, startTime: null, meetingTitle: null, meetingUrl: null },
     });
     chrome.storage.session.remove("micRecordingActive");
 
-    // Upload
     await uploadAudio(audioBlob, currentMeetingTitle, currentMeetingUrl, currentStartTime, endTime);
     stopTimer();
     setIdleUI();
@@ -217,10 +210,12 @@ async function stopRecording() {
     // Tab capture mode — delegate to background
     chrome.runtime.sendMessage({ type: "STOP_RECORDING" }, (response) => {
       stopTimer();
-      if (response?.uploaded) {
-        showSuccess(`Transcript saved! ID: ${response.transcriptId || "processing..."}`);
-      } else {
-        showError(response?.error || "Upload failed");
+      if (response?.jobId) {
+        showSuccess("Recording saved. Transcription processing in background...");
+        // Polling will pick up the job automatically
+        pollJobs();
+      } else if (response?.error) {
+        showError(response.error);
       }
       setIdleUI();
     });
@@ -254,6 +249,137 @@ async function uploadAudio(blob: Blob, title: string, url: string, startTime: st
   }
 }
 
+// ── Processing jobs polling ─────────────────────────────────────────────
+
+function startJobPolling() {
+  pollJobs();
+  if (jobPollInterval) clearInterval(jobPollInterval);
+  jobPollInterval = setInterval(pollJobs, JOB_POLL_INTERVAL_MS);
+}
+
+async function pollJobs() {
+  try {
+    // Get active job IDs from storage
+    const stored = await chrome.storage.local.get("activeJobs");
+    const activeJobIds: string[] = stored.activeJobs || [];
+
+    if (activeJobIds.length === 0) {
+      // Also check if server has any active jobs (handles popup reopened after extension reload)
+      try {
+        const response = await fetch(`${MCP_SERVER_URL}/api/audio/jobs`);
+        if (response.ok) {
+          const allJobs = await response.json() as any[];
+          const activeServerJobs = allJobs.filter(
+            (j: any) => j.status !== "completed" && j.status !== "failed"
+          );
+          if (activeServerJobs.length > 0) {
+            const ids = activeServerJobs.map((j: any) => j.id);
+            await chrome.storage.local.set({ activeJobs: ids });
+            renderJobs(allJobs);
+            return;
+          }
+        }
+      } catch { /* server not reachable */ }
+
+      processingSection.style.display = "none";
+      return;
+    }
+
+    // Fetch status for each active job
+    const jobs: any[] = [];
+    const stillActive: string[] = [];
+
+    for (const jobId of activeJobIds) {
+      try {
+        const response = await fetch(`${MCP_SERVER_URL}/api/audio/jobs/${jobId}`);
+        if (response.ok) {
+          const job = await response.json();
+          jobs.push(job);
+          if (job.status !== "completed" && job.status !== "failed") {
+            stillActive.push(jobId);
+          } else {
+            // Keep completed/failed jobs visible for 30 seconds
+            setTimeout(async () => {
+              const s = await chrome.storage.local.get("activeJobs");
+              const ids: string[] = (s.activeJobs || []).filter((id: string) => id !== jobId);
+              await chrome.storage.local.set({ activeJobs: ids });
+              pollJobs();
+            }, 30_000);
+            stillActive.push(jobId); // Keep in list until timeout
+          }
+        }
+      } catch { /* skip unreachable jobs */ }
+    }
+
+    renderJobs(jobs);
+  } catch {
+    // Polling error — ignore
+  }
+}
+
+function renderJobs(jobs: any[]) {
+  if (jobs.length === 0) {
+    processingSection.style.display = "none";
+    return;
+  }
+
+  processingSection.style.display = "block";
+  processingJobsEl.innerHTML = "";
+
+  for (const job of jobs) {
+    const card = document.createElement("div");
+    const statusClass = job.status === "completed" ? "job-completed" : job.status === "failed" ? "job-failed" : "";
+    card.className = `job-card ${statusClass}`;
+
+    const progress = getProgressForStatus(job.status, job.progress);
+    const statusLabel = getStatusLabel(job);
+    const isAnimating = job.status !== "completed" && job.status !== "failed";
+
+    card.innerHTML = `
+      <div class="job-title">${escapeHtml(job.meetingTitle || "Meeting")}</div>
+      <div class="job-progress-bar">
+        <div class="job-progress-fill ${isAnimating ? "animating" : ""}" style="width: ${progress}%"></div>
+      </div>
+      <div class="job-status">${statusLabel}</div>
+    `;
+
+    processingJobsEl.appendChild(card);
+  }
+}
+
+function getProgressForStatus(status: string, serverProgress: number): number {
+  switch (status) {
+    case "concatenating": return 10;
+    case "converting": return 30;
+    case "transcribing": return Math.max(50, serverProgress);
+    case "attributing": return 90;
+    case "completed": return 100;
+    case "failed": return 100;
+    default: return serverProgress;
+  }
+}
+
+function getStatusLabel(job: any): string {
+  switch (job.status) {
+    case "concatenating": return "Preparing audio...";
+    case "converting": return "Converting format...";
+    case "transcribing": return "Transcribing with Whisper...";
+    case "attributing": return "Identifying speakers...";
+    case "completed": {
+      const id = job.result?.id || "";
+      return `Done${id ? ` — ID: ${id.slice(0, 8)}...` : ""}`;
+    }
+    case "failed": return `Failed: ${(job.error || "Unknown error").slice(0, 80)}`;
+    default: return "Processing...";
+  }
+}
+
+function escapeHtml(str: string): string {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // ── UI State ─────────────────────────────────────────────────────────────
 
 function setIdleUI() {
@@ -285,10 +411,10 @@ function setRecordingUI() {
 
 function setUploadingUI() {
   toggleBtn.disabled = true;
-  toggleBtn.textContent = "Uploading...";
+  toggleBtn.textContent = "Stopping...";
   toggleBtn.className = "btn btn-uploading";
   statusBar.className = "status-bar status-uploading";
-  statusText.textContent = "Uploading & transcribing...";
+  statusText.textContent = "Saving recording...";
 }
 
 function showSuccess(message: string) {

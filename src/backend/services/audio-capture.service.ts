@@ -14,6 +14,7 @@ import type { CommandExecutor } from "./command-executor.service.js";
 import type { WhisperTranscriptionServiceResult } from "./whisper-transcription.service.js";
 import type { AudioTranscriptsRepository, FtsEntry } from "../db/repositories/audio-transcripts.repository.js";
 import type { EncryptionService } from "./encryption.service.js";
+import type { SpeakerAttributionService } from "./speaker-attribution.service.js";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ export type AudioCaptureServiceDependencies = {
   whisperService: WhisperTranscriptionServiceResult;
   audioTranscriptsRepo: AudioTranscriptsRepository;
   encryptionService: EncryptionService;
+  speakerAttributionService?: SpeakerAttributionService;
 };
 
 // ── Service interface ────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ export interface AudioCaptureServiceResult {
     meetingUrl?: string;
     startTime: string;
     endTime: string;
+    attendees?: string[];
   }): Promise<Result<ProcessedTranscript, DomainError>>;
 }
 
@@ -83,7 +86,7 @@ async function convertToWav(
 export function createAudioCaptureService(
   deps: AudioCaptureServiceDependencies
 ): AudioCaptureServiceResult {
-  const { logger, dataDir, commandExecutor, whisperService, audioTranscriptsRepo, encryptionService } = deps;
+  const { logger, dataDir, commandExecutor, whisperService, audioTranscriptsRepo, encryptionService, speakerAttributionService } = deps;
 
   return {
     async processUpload(params): Promise<Result<ProcessedTranscript, DomainError>> {
@@ -94,6 +97,7 @@ export function createAudioCaptureService(
         meetingUrl,
         startTime,
         endTime,
+        attendees = [],
       } = params;
 
       if (audioBuffer.length === 0) {
@@ -157,9 +161,38 @@ export function createAudioCaptureService(
 
         const transcript = transcribeResult.value;
 
+        // Run speaker attribution via Claude — identifies speaker turns and assigns names
+        let segments = transcript.segments;
+        if (speakerAttributionService) {
+          logger.info(
+            { segmentCount: segments.length, attendeeCount: attendees.length, attendees },
+            "Starting speaker attribution via Claude CLI",
+          );
+          const attributionResult = await speakerAttributionService.attributeSpeakers({
+            segments,
+            attendees,
+            meetingTitle,
+          });
+          if (attributionResult._tag === "Ok") {
+            segments = attributionResult.value;
+            const uniqueSpeakers = [...new Set(segments.map((s) => s.speaker).filter(Boolean))];
+            logger.info(
+              { uniqueSpeakers, segmentCount: segments.length },
+              "Speaker attribution completed successfully",
+            );
+          } else {
+            logger.warn(
+              { error: attributionResult.error },
+              "Speaker attribution failed, keeping generic labels",
+            );
+          }
+        } else {
+          logger.warn("Speaker attribution service not available — skipping");
+        }
+
         // Encrypt transcript content
         const contentJson = JSON.stringify({
-          segments: transcript.segments,
+          segments,
           fullText: transcript.fullText,
         });
         const { encryptedData, iv } = encryptionService.encrypt(contentJson);
@@ -174,7 +207,8 @@ export function createAudioCaptureService(
           durationSeconds: transcript.durationSeconds,
           language: transcript.language,
           whisperModel: transcript.modelUsed,
-          segmentCount: transcript.segments.length,
+          segmentCount: segments.length,
+          attendees: attendees.length > 0 ? JSON.stringify(attendees) : null,
           encryptedContent: encryptedData,
           iv,
         });

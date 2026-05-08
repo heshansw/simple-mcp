@@ -99,6 +99,11 @@ export function MeetingDetailPage() {
                   <span style={{ color: "#9ca3af", marginRight: "0.75rem", userSelect: "none" }}>
                     {seg.startTime}
                   </span>
+                  {seg.speaker && (
+                    <span style={{ color: "#3b82f6", fontWeight: 600, marginRight: "0.5rem" }}>
+                      {seg.speaker}:
+                    </span>
+                  )}
                   <span>{seg.text}</span>
                 </div>
               ))}
