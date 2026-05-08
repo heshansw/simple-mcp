@@ -1,7 +1,11 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { APP_DISPLAY_NAME } from "@shared/mcp-client.js";
+import { useActiveBackgroundJobCount } from "@frontend/api/code-health.api";
 
 export function Root() {
+  const { data: activeJobs } = useActiveBackgroundJobCount();
+  const activeCount = activeJobs?.count ?? 0;
+
   return (
     <div
       style={{
@@ -58,6 +62,10 @@ export function Root() {
           <NavLink to="/connections">Connections</NavLink>
           <NavLink to="/confluence">Confluence</NavLink>
           <NavLink to="/databases">Databases</NavLink>
+
+          <NavSection label={activeCount > 0 ? `Code Quality (${activeCount})` : "Code Quality"} />
+          <NavLink to="/code-health">Projects</NavLink>
+          <NavLink to="/code-health/sessions">Sessions</NavLink>
 
           <NavSection label="System" />
           <NavLink to="/settings">Settings</NavLink>

@@ -24,6 +24,8 @@ function mapDomainErrorToStatus(error: DomainError): number {
       return 500;
     case "AgentExecutionError":
       return 500;
+    case "CodeHealthError":
+      return 422;
     default: {
       const _exhaustive: never = error;
       return _exhaustive;
@@ -45,6 +47,8 @@ function mapDomainErrorToCode(error: DomainError): string {
       return "DATABASE_ERROR";
     case "AgentExecutionError":
       return "AGENT_EXECUTION_ERROR";
+    case "CodeHealthError":
+      return "CODE_HEALTH_ERROR";
     default: {
       const _exhaustive: never = error;
       return _exhaustive;
@@ -103,6 +107,9 @@ export function errorHandlerMiddleware(logger: pino.Logger) {
             break;
           case "AgentExecutionError":
             message = `Agent ${error.agentId} failed during ${error.phase}: ${error.message}`;
+            break;
+          case "CodeHealthError":
+            message = error.filePath ? `${error.message} (${error.filePath})` : error.message;
             break;
           default: {
             const _exhaustive: never = error;

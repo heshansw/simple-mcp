@@ -160,6 +160,33 @@ import { registerDbListSchemasTool } from "./tools/local-database/db-list-schema
 import { registerDbListTablesTool } from "./tools/local-database/db-list-tables.tool.js";
 import { registerDbDescribeTableTool } from "./tools/local-database/db-describe-table.tool.js";
 import { registerDbQueryTool } from "./tools/local-database/db-query.tool.js";
+// Code Health tools
+import { registerAnalyzeFileTool } from "./tools/code-health/analyze-file.tool.js";
+import { registerAnalyzeDirectoryTool } from "./tools/code-health/analyze-directory.tool.js";
+import { registerSnapshotTool } from "./tools/code-health/snapshot.tool.js";
+import { registerTrendsTool } from "./tools/code-health/trends.tool.js";
+import { registerStartSessionTool } from "./tools/code-health/start-session.tool.js";
+import { registerSessionCheckTool } from "./tools/code-health/session-check.tool.js";
+import { registerEndSessionTool } from "./tools/code-health/end-session.tool.js";
+import { registerPreCommitCheckTool } from "./tools/code-health/pre-commit-check.tool.js";
+import { registerHotspotsTool } from "./tools/code-health/hotspots.tool.js";
+import { registerFunctionRankingTool } from "./tools/code-health/function-ranking.tool.js";
+import { registerDuplicationTool } from "./tools/code-health/duplication.tool.js";
+import { registerTypeCoverageTool } from "./tools/code-health/type-coverage.tool.js";
+import { registerAnalyzePrTool } from "./tools/code-health/analyze-pr.tool.js";
+// Code Health services
+import { createAstAnalysisService } from "./services/code-health/ast-analysis.service.js";
+import { createHealthScoringService } from "./services/code-health/health-scoring.service.js";
+import { createCodeHealthService } from "./services/code-health/code-health.service.js";
+import { createGitAnalysisService } from "./services/code-health/git-analysis.service.js";
+// Code Health repositories
+import { createCodeHealthSnapshotsRepository } from "./db/repositories/code-health-snapshots.repository.js";
+import { createCodeHealthFileMetricsRepository } from "./db/repositories/code-health-file-metrics.repository.js";
+import { createCodeHealthFunctionMetricsRepository } from "./db/repositories/code-health-function-metrics.repository.js";
+import { createCodeHealthEventsRepository } from "./db/repositories/code-health-events.repository.js";
+import { createCodeHealthSessionsRepository } from "./db/repositories/code-health-sessions.repository.js";
+import { createCodeHealthBackgroundJobsRepository } from "./db/repositories/code-health-background-jobs.repository.js";
+import { createFileAccessTracker } from "./services/code-health/file-access-tracker.service.js";
 
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
@@ -214,6 +241,13 @@ export async function createServer(
   const meetTranscriptsRepo = createMeetTranscriptsRepository(db);
   const audioTranscriptsRepo = createAudioTranscriptsRepository(db);
   const meetingAnalysesRepo = createMeetingAnalysesRepository(db);
+  // Code Health repositories
+  const codeHealthSnapshotsRepo = createCodeHealthSnapshotsRepository(db);
+  const codeHealthFileMetricsRepo = createCodeHealthFileMetricsRepository(db);
+  const codeHealthFunctionMetricsRepo = createCodeHealthFunctionMetricsRepository(db);
+  const codeHealthEventsRepo = createCodeHealthEventsRepository(db);
+  const codeHealthSessionsRepo = createCodeHealthSessionsRepository(db);
+  const codeHealthBackgroundJobsRepo = createCodeHealthBackgroundJobsRepository(db);
   createSyncMetadataRepository(db); // Used internally but not exported
 
   // Create encryption service
@@ -593,7 +627,22 @@ export async function createServer(
   logger.info("Audio capture MCP tools registered");
 
   // Local filesystem tools — always registered (operations are gated by folder registration)
-  const fsToolDeps = { fsService: localFilesystemService, logger };
+  // NOTE: fileAccessTracker is injected later (after code health services are created).
+  // We use a deferred reference so the tracker can be set post-initialization.
+  let _fileAccessTracker: { recordFileRead(filePath: string, triggerTool: string): void } | null = null;
+  const trackedFsService: typeof localFilesystemService = Object.create(localFilesystemService, {
+    readFile: {
+      value: async (...args: Parameters<typeof localFilesystemService.readFile>) => {
+        const result = await localFilesystemService.readFile(...args);
+        // Fire-and-forget: track the file read for background analysis
+        if (result._tag === "Ok" && result.value.absolute_path) {
+          _fileAccessTracker?.recordFileRead(result.value.absolute_path, "fs_read_file");
+        }
+        return result;
+      },
+    },
+  });
+  const fsToolDeps = { fsService: trackedFsService, logger };
   registerFsListDirectoryTool(mcpServer, fsToolDeps);
   registerFsReadFileTool(mcpServer, fsToolDeps);
   registerFsSearchFilesTool(mcpServer, fsToolDeps);
@@ -1138,6 +1187,45 @@ export async function createServer(
 
   console.error("[startup] Agent execution engine initialized");
   logger.info("Agent execution engine ready");
+
+  // ── Code Health services ──────────────────────────────────────────────
+  const astAnalysis = createAstAnalysisService({ logger });
+  const healthScoring = createHealthScoringService({ logger });
+  const codeHealthService = createCodeHealthService({ astAnalysis, healthScoring, logger });
+  const gitAnalysis = createGitAnalysisService({ logger });
+
+  // ── Code Health tools ─────────────────────────────────────────────────
+  const codeHealthToolDeps = { codeHealthService, logger };
+  registerAnalyzeFileTool(mcpServer, { ...codeHealthToolDeps, backgroundJobsRepo: codeHealthBackgroundJobsRepo });
+  registerAnalyzeDirectoryTool(mcpServer, codeHealthToolDeps);
+  registerSnapshotTool(mcpServer, {
+    codeHealthService,
+    snapshotsRepo: codeHealthSnapshotsRepo,
+    fileMetricsRepo: codeHealthFileMetricsRepo,
+    functionMetricsRepo: codeHealthFunctionMetricsRepo,
+    logger,
+  });
+  registerTrendsTool(mcpServer, { snapshotsRepo: codeHealthSnapshotsRepo, logger });
+  registerStartSessionTool(mcpServer, { codeHealthService, sessionsRepo: codeHealthSessionsRepo, logger });
+  registerSessionCheckTool(mcpServer, { codeHealthService, sessionsRepo: codeHealthSessionsRepo, eventsRepo: codeHealthEventsRepo, logger });
+  registerEndSessionTool(mcpServer, { codeHealthService, sessionsRepo: codeHealthSessionsRepo, eventsRepo: codeHealthEventsRepo, logger });
+  registerPreCommitCheckTool(mcpServer, { codeHealthService, snapshotsRepo: codeHealthSnapshotsRepo, eventsRepo: codeHealthEventsRepo, logger });
+  registerHotspotsTool(mcpServer, { codeHealthService, gitAnalysis, logger });
+  registerFunctionRankingTool(mcpServer, codeHealthToolDeps);
+  registerDuplicationTool(mcpServer, { logger });
+  registerTypeCoverageTool(mcpServer, { logger });
+  registerAnalyzePrTool(mcpServer, { codeHealthService, githubService, eventsRepo: codeHealthEventsRepo, logger });
+  logger.info("Code Health MCP tools registered (13 tools)");
+
+  // ── Background File Access Tracker ──────────────────────────────────
+  const fileAccessTracker = createFileAccessTracker({
+    codeHealthService,
+    backgroundJobsRepo: codeHealthBackgroundJobsRepo,
+    eventsRepo: codeHealthEventsRepo,
+    logger,
+  });
+  // Wire the deferred tracker reference for filesystem reads
+  _fileAccessTracker = fileAccessTracker;
 
   // Register resources and prompts
   const resourceDeps = {
@@ -2476,6 +2564,141 @@ export async function createServer(
     return c.json(setting);
   });
 
+  // ── Code Health REST API ──────────────────────────────────────────────
+  httpApp.get("/api/code-health/projects", async (c) => {
+    const workspaces = await workspacesRepo.findAll();
+    const projects = await Promise.all(workspaces.map(async (ws) => {
+      const folders: string[] = JSON.parse(ws.folderIds);
+      const folderRecords = await Promise.all(folders.map(id => folderAccessRepo.findById(id)));
+      const dirPath = folderRecords.find(f => f)?.absolutePath ?? "";
+      const latest = await codeHealthSnapshotsRepo.findLatest(dirPath);
+      // Count individually scanned files (background jobs) across all folders
+      let scannedFileCount = 0;
+      for (const folder of folderRecords) {
+        if (!folder) continue;
+        scannedFileCount += await codeHealthBackgroundJobsRepo.countCompletedByDirectory(folder.absolutePath);
+      }
+      return {
+        id: ws.id,
+        name: ws.name,
+        directoryPath: dirPath,
+        latestScore: latest?.overallScore ?? null,
+        latestGrade: latest?.grade ?? null,
+        fileCount: scannedFileCount,
+        lastAnalyzedAt: latest?.createdAt ?? null,
+      };
+    }));
+    return c.json(projects);
+  });
+
+  httpApp.get("/api/code-health/projects/:id", async (c) => {
+    const ws = await workspacesRepo.findById(c.req.param("id"));
+    if (!ws) return c.json({ error: "Not found" }, 404);
+    const folders: string[] = JSON.parse(ws.folderIds);
+    const folderRecords = await Promise.all(folders.map(id => folderAccessRepo.findById(id)));
+    const dirPath = folderRecords.find(f => f)?.absolutePath ?? "";
+    const snapshot = await codeHealthSnapshotsRepo.findLatest(dirPath);
+    return c.json({
+      project: { id: ws.id, name: ws.name, directoryPath: dirPath, latestScore: snapshot?.overallScore ?? null, latestGrade: snapshot?.grade ?? null, fileCount: snapshot?.fileCount ?? 0, lastAnalyzedAt: snapshot?.createdAt ?? null },
+      snapshot: snapshot ?? null,
+    });
+  });
+
+  httpApp.get("/api/code-health/projects/:id/trends", async (c) => {
+    const ws = await workspacesRepo.findById(c.req.param("id"));
+    if (!ws) return c.json({ error: "Not found" }, 404);
+    const folders: string[] = JSON.parse(ws.folderIds);
+    const folderRecords = await Promise.all(folders.map(id => folderAccessRepo.findById(id)));
+    const dirPath = folderRecords.find(f => f)?.absolutePath ?? "";
+    const snapshots = await codeHealthSnapshotsRepo.findByDirectory(dirPath, 100);
+    return c.json(snapshots.reverse().map(s => ({ date: s.createdAt, score: s.overallScore, grade: s.grade, fileCount: s.fileCount })));
+  });
+
+  httpApp.get("/api/code-health/snapshots/:id/files", async (c) => {
+    const files = await codeHealthFileMetricsRepo.findBySnapshot(c.req.param("id"));
+    return c.json(files);
+  });
+
+  httpApp.get("/api/code-health/files/:id/functions", async (c) => {
+    const funcs = await codeHealthFunctionMetricsRepo.findByFileMetric(c.req.param("id"));
+    return c.json(funcs);
+  });
+
+  httpApp.get("/api/code-health/projects/:id/events", async (c) => {
+    const events = await codeHealthEventsRepo.findRecent(50);
+    return c.json(events);
+  });
+
+  httpApp.get("/api/code-health/sessions", async (c) => {
+    const sessions = await codeHealthSessionsRepo.findAll(50);
+    return c.json(sessions);
+  });
+
+  httpApp.get("/api/code-health/background-jobs", async (c) => {
+    const jobs = await codeHealthBackgroundJobsRepo.findRecent(50);
+    return c.json(jobs);
+  });
+
+  httpApp.get("/api/code-health/background-jobs/active", async (_c) => {
+    return _c.json({ count: fileAccessTracker.getActiveJobCount() });
+  });
+
+  httpApp.get("/api/code-health/projects/:id/scanned-files", async (c) => {
+    const ws = await workspacesRepo.findById(c.req.param("id"));
+    if (!ws) return c.json({ error: "Not found" }, 404);
+    const folders: string[] = JSON.parse(ws.folderIds);
+    const folderRecords = await Promise.all(folders.map(id => folderAccessRepo.findById(id)));
+    // Get scanned files across all folders in this workspace
+    const allJobs: Array<{ id: string; filePath: string; score: number | null; grade: string | null; issueCount: number; issuesJson: string; triggerTool: string; completedAt: string | null; createdAt: string }> = [];
+    for (const folder of folderRecords) {
+      if (!folder) continue;
+      const jobs = await codeHealthBackgroundJobsRepo.findCompletedByDirectory(folder.absolutePath, 200);
+      for (const job of jobs) {
+        // Deduplicate: keep latest scan per file
+        if (!allJobs.some(j => j.filePath === job.filePath)) {
+          allJobs.push({
+            id: job.id,
+            filePath: job.filePath,
+            score: job.score,
+            grade: job.grade,
+            issueCount: job.issueCount,
+            issuesJson: job.issuesJson,
+            triggerTool: job.triggerTool,
+            completedAt: job.completedAt,
+            createdAt: job.createdAt,
+          });
+        }
+      }
+    }
+    return c.json(allJobs);
+  });
+
+  httpApp.post("/api/code-health/projects/:id/snapshot", async (c) => {
+    const ws = await workspacesRepo.findById(c.req.param("id"));
+    if (!ws) return c.json({ error: "Not found" }, 404);
+    const folders: string[] = JSON.parse(ws.folderIds);
+    const folderRecords = await Promise.all(folders.map(id => folderAccessRepo.findById(id)));
+    const dirPath = folderRecords.find(f => f)?.absolutePath ?? "";
+    if (!dirPath) return c.json({ error: "No directory path found" }, 400);
+    const result = await codeHealthService.analyzeDirectory(dirPath, {});
+    if (isErr(result)) return c.json({ error: domainErrorMessage(result.error) }, 500);
+    // Persist snapshot
+    const snapshot = await codeHealthSnapshotsRepo.create({
+      directoryPath: dirPath,
+      workspaceId: ws.id,
+      overallScore: result.value.overallScore,
+      grade: result.value.grade,
+      fileCount: result.value.fileCount,
+      totalLoc: result.value.totalLoc,
+      totalFunctions: result.value.totalFunctions,
+      avgCyclomatic: 0,
+      avgCognitive: 0,
+      duplicationPct: 0,
+      configJson: "{}",
+    });
+    return c.json({ snapshotId: snapshot.id });
+  });
+
   // Auto-create dedicated local MCP client placeholders for Claude and Codex.
   try {
     const existingConnections = await connectionsRepo.findAll();
@@ -2587,6 +2810,7 @@ export async function createServer(
   // Cleanup function
   const cleanup = async (): Promise<void> => {
     logger.info("Shutting down server");
+    fileAccessTracker.shutdown();
     scheduler.stop();
     await databaseQueryService.closeAll();
     logger.info("Server shutdown complete");

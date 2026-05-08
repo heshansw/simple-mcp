@@ -84,6 +84,12 @@ export type AgentExecutionError = {
   readonly phase: "planning" | "execution" | "reflection" | "delegation";
 };
 
+export type CodeHealthError = {
+  readonly _tag: "CodeHealthError";
+  readonly message: string;
+  readonly filePath: string | undefined;
+};
+
 // Union of all domain errors
 export type DomainError =
   | ValidationError
@@ -91,7 +97,8 @@ export type DomainError =
   | AuthorizationError
   | IntegrationError
   | DatabaseError
-  | AgentExecutionError;
+  | AgentExecutionError
+  | CodeHealthError;
 
 // Constructor functions for domain errors
 export function validationError(
@@ -139,6 +146,10 @@ export function agentExecutionError(
   return { _tag: "AgentExecutionError", agentId, runId, message, phase };
 }
 
+export function codeHealthError(message: string, filePath?: string): CodeHealthError {
+  return { _tag: "CodeHealthError", message, filePath: filePath ?? undefined };
+}
+
 /** Extract a human-readable message from any DomainError variant */
 export function domainErrorMessage(error: DomainError): string {
   switch (error._tag) {
@@ -154,6 +165,8 @@ export function domainErrorMessage(error: DomainError): string {
       return error.message;
     case "AgentExecutionError":
       return `Agent ${error.agentId} (run ${error.runId}) failed during ${error.phase}: ${error.message}`;
+    case "CodeHealthError":
+      return error.filePath ? `${error.message} (${error.filePath})` : error.message;
     default: {
       const _exhaustive: never = error;
       return String(_exhaustive);

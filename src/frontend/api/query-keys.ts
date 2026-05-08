@@ -83,3 +83,16 @@ export const githubKeys = {
   reviewRequested: () => [...githubKeys.all, "review-requested"] as const,
   created: () => [...githubKeys.all, "created"] as const,
 };
+
+export const codeHealthKeys = {
+  all: ["code-health"] as const,
+  projects: () => [...codeHealthKeys.all, "projects"] as const,
+  project: (id: string) => [...codeHealthKeys.all, "project", id] as const,
+  trends: (id: string) => [...codeHealthKeys.all, "trends", id] as const,
+  files: (snapshotId: string) => [...codeHealthKeys.all, "files", snapshotId] as const,
+  sessions: () => [...codeHealthKeys.all, "sessions"] as const,
+  events: (projectId: string) => [...codeHealthKeys.all, "events", projectId] as const,
+  backgroundJobs: () => [...codeHealthKeys.all, "background-jobs"] as const,
+  backgroundJobsActive: () => [...codeHealthKeys.all, "background-jobs-active"] as const,
+  scannedFiles: (projectId: string) => [...codeHealthKeys.all, "scanned-files", projectId] as const,
+};
