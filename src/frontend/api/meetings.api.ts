@@ -17,7 +17,7 @@ export type AudioTranscriptSummary = {
 
 export type AudioTranscriptDetail = AudioTranscriptSummary & {
   content: {
-    segments: Array<{ startTime: string; endTime: string; text: string }>;
+    segments: Array<{ startTime: string; endTime: string; text: string; speaker?: string }>;
     fullText: string;
   };
 };

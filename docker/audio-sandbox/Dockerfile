@@ -43,7 +43,7 @@ RUN ldconfig
 RUN mkdir -p /data/audio /data/models
 
 # Download Whisper model at build time (no host-side curl needed)
-ARG WHISPER_MODEL=base
+ARG WHISPER_MODEL=small
 RUN curl -L -o /data/models/ggml-${WHISPER_MODEL}.bin \
     https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${WHISPER_MODEL}.bin
 

@@ -36,7 +36,7 @@ export function registerGetAudioTranscriptTool(
 
       const raw = deps.encryptionService.decrypt(transcript.encryptedContent, transcript.iv);
       const content = JSON.parse(raw) as {
-        segments: Array<{ startTime: string; endTime: string; text: string }>;
+        segments: Array<{ startTime: string; endTime: string; text: string; speaker?: string }>;
         fullText: string;
       };
 

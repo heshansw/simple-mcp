@@ -316,6 +316,8 @@ async function createTables(
     "ALTER TABLE review_session_drafts ADD COLUMN model TEXT",
     // Rename google-calendar → google for unified Google connection
     "UPDATE connections SET integration_type = 'google' WHERE integration_type = 'google-calendar'",
+    // Add attendees column for speaker diarization
+    "ALTER TABLE audio_transcripts ADD COLUMN attendees TEXT",
   ];
 
   for (const sql of migrations) {

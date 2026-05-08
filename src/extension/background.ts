@@ -6,6 +6,8 @@ type RecordingState = {
   meetingTitle: string | null;
   meetingUrl: string | null;
   tabId: number | null;
+  sessionId: string | null;
+  attendees: string[];
 };
 
 // ── State ────────────────────────────────────────────────────────────────
@@ -16,6 +18,8 @@ let currentState: RecordingState = {
   meetingTitle: null,
   meetingUrl: null,
   tabId: null,
+  sessionId: null,
+  attendees: [],
 };
 
 const MCP_SERVER_URL = "http://localhost:3101";
@@ -50,7 +54,7 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === "SET_RECORDING_STATE") {
-      currentState = message.state;
+      currentState = { ...currentState, ...message.state };
       if (message.state.isRecording) {
         chrome.action.setBadgeText({ text: "REC" });
         chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
@@ -66,6 +70,21 @@ chrome.runtime.onMessage.addListener(
       if (!currentState.meetingTitle) {
         currentState.meetingTitle = message.title;
       }
+      return false;
+    }
+
+    if (message.type === "MEETING_ATTENDEES") {
+      // Merge new attendees with existing list (deduplicate)
+      const existing = new Set(currentState.attendees);
+      for (const name of message.attendees || []) {
+        existing.add(name);
+      }
+      currentState.attendees = [...existing];
+      return false;
+    }
+
+    if (message.type === "RECORDING_ENDED_UNEXPECTEDLY") {
+      handleUnexpectedEnd(message).catch(() => {});
       return false;
     }
 
@@ -89,6 +108,28 @@ async function ensureOffscreenDocument(): Promise<void> {
   });
 }
 
+// ── Session management ──────────────────────────────────────────────────
+
+async function createAudioSession(
+  meetingTitle: string,
+  meetingUrl: string,
+  startTime: string,
+  attendees: string[],
+): Promise<string> {
+  const response = await fetch(`${MCP_SERVER_URL}/api/audio/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ meetingTitle, meetingUrl, startTime, attendees }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create session: HTTP ${response.status}`);
+  }
+
+  const session = await response.json() as { id: string };
+  return session.id;
+}
+
 // ── Recording logic ──────────────────────────────────────────────────────
 
 async function startRecording(
@@ -105,6 +146,14 @@ async function startRecording(
     // Create offscreen document for MediaRecorder
     await ensureOffscreenDocument();
 
+    // Clean up any stale streams from a previous recording that wasn't properly stopped
+    try {
+      const status = await chrome.runtime.sendMessage({ type: "OFFSCREEN_GET_STATUS" });
+      if (status?.isRecording) {
+        await chrome.runtime.sendMessage({ type: "OFFSCREEN_STOP_RECORDING" });
+      }
+    } catch { /* offscreen may not exist yet or not be recording */ }
+
     // For tab-based modes, obtain the streamId here in the service worker
     let streamId: string | undefined;
     if ((captureMode === "tab" || captureMode === "tab+mic") && tabId) {
@@ -113,24 +162,40 @@ async function startRecording(
       });
     }
 
+    const startTime = new Date().toISOString();
+    const resolvedTitle = meetingTitle || "Untitled Meeting";
+    const resolvedUrl = meetingUrl || "";
+
+    // Create a server-side session for chunked uploads
+    let sessionId = "";
+    try {
+      sessionId = await createAudioSession(resolvedTitle, resolvedUrl, startTime, currentState.attendees);
+    } catch (error) {
+      // Session creation failed — recording can still work but won't use chunked upload
+      console.error("Failed to create audio session:", error);
+    }
+
     // Tell offscreen document to start recording
     const result = await chrome.runtime.sendMessage({
       type: "OFFSCREEN_START_RECORDING",
       captureMode,
       streamId,
+      serverUrl: MCP_SERVER_URL,
+      sessionId,
     });
 
     if (!result?.success) {
       return { type: "ERROR", error: result?.error || "Offscreen recording failed to start" };
     }
 
-    const startTime = new Date().toISOString();
     currentState = {
       isRecording: true,
       startTime,
-      meetingTitle: meetingTitle || "Untitled Meeting",
-      meetingUrl: meetingUrl || null,
+      meetingTitle: resolvedTitle,
+      meetingUrl: resolvedUrl,
       tabId: tabId || null,
+      sessionId,
+      attendees: currentState.attendees,
     };
 
     await chrome.action.setBadgeText({ text: "REC" });
@@ -145,8 +210,7 @@ async function startRecording(
 
 async function stopRecording(): Promise<{
   type: string;
-  uploaded?: boolean;
-  transcriptId?: string;
+  jobId?: string;
   error?: string;
 }> {
   if (!currentState.isRecording) {
@@ -154,10 +218,7 @@ async function stopRecording(): Promise<{
   }
 
   try {
-    const endTime = new Date().toISOString();
-    const savedState = { ...currentState };
-
-    // Tell offscreen document to stop and get the audio data
+    // Tell offscreen document to stop — it uploads remaining chunks and triggers finalize
     const result = await chrome.runtime.sendMessage({
       type: "OFFSCREEN_STOP_RECORDING",
     });
@@ -169,65 +230,58 @@ async function stopRecording(): Promise<{
       meetingTitle: null,
       meetingUrl: null,
       tabId: null,
+      sessionId: null,
+      attendees: [],
     };
 
     await chrome.action.setBadgeText({ text: "" });
     await chrome.storage.local.remove("recordingState");
 
-    if (!result?.success) {
-      return { type: "RECORDING_STOPPED", uploaded: false, error: result?.error || "Failed to get recording data" };
-    }
-
-    // Convert array back to Blob
-    const audioData = new Uint8Array(result.buffer);
-    const audioBlob = new Blob([audioData], { type: result.mimeType || "audio/webm" });
-
-    // Upload to MCP server
-    try {
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "recording.webm");
-      formData.append("meetingTitle", savedState.meetingTitle || "Untitled Meeting");
-      formData.append("meetingUrl", savedState.meetingUrl || "");
-      formData.append("startTime", savedState.startTime || endTime);
-      formData.append("endTime", endTime);
-
-      const response = await fetch(`${MCP_SERVER_URL}/api/audio/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        return {
-          type: "RECORDING_STOPPED",
-          uploaded: false,
-          error: `Upload failed: HTTP ${response.status} — ${errorText.slice(0, 200)}`,
-        };
+    if (result?.success && result.jobId) {
+      // Store active job for popup polling
+      const stored = await chrome.storage.local.get("activeJobs");
+      const activeJobs: string[] = stored.activeJobs || [];
+      if (!activeJobs.includes(result.jobId)) {
+        activeJobs.push(result.jobId);
       }
+      await chrome.storage.local.set({ activeJobs });
 
-      const uploadResult = (await response.json()) as { id?: string };
-      return {
-        type: "RECORDING_STOPPED",
-        uploaded: true,
-        transcriptId: uploadResult.id,
-      };
-    } catch (error) {
-      return {
-        type: "RECORDING_STOPPED",
-        uploaded: false,
-        error: `Upload failed: ${String(error)}. Is the MCP server running on ${MCP_SERVER_URL}?`,
-      };
+      return { type: "RECORDING_STOPPED", jobId: result.jobId };
     }
+
+    return {
+      type: "RECORDING_STOPPED",
+      error: result?.error || "Failed to process recording",
+    };
   } catch (error) {
     return { type: "ERROR", error: `Stop recording failed: ${String(error)}` };
   }
+}
+
+// ── Handle unexpected recording end (tab closed, navigated, etc.) ─────
+
+async function handleUnexpectedEnd(message: any): Promise<void> {
+  // Reset state — the offscreen document handles upload + finalization directly
+  currentState = {
+    isRecording: false,
+    startTime: null,
+    meetingTitle: null,
+    meetingUrl: null,
+    tabId: null,
+    sessionId: null,
+    attendees: [],
+  };
+  await chrome.action.setBadgeText({ text: "" });
+  await chrome.storage.local.remove("recordingState");
 }
 
 // ── Restore state on service worker wake ──────────────────────────────
 
 chrome.storage.local.get("recordingState", (result) => {
   if (result.recordingState?.isRecording) {
-    chrome.action.setBadgeText({ text: "" });
-    chrome.storage.local.remove("recordingState");
+    // Restore in-memory state — offscreen document may still be recording
+    currentState = result.recordingState;
+    chrome.action.setBadgeText({ text: "REC" });
+    chrome.action.setBadgeBackgroundColor({ color: "#ef4444" });
   }
 });

@@ -17,6 +17,7 @@ export type TranscriptionSegment = {
   startTime: string; // "00:01:23.456"
   endTime: string;
   text: string;
+  speaker?: string; // "Speaker 1", "Speaker 2", etc. (from tinydiarize)
 };
 
 export type TranscriptionResult = {
@@ -46,7 +47,7 @@ export type WhisperTranscriptionDependencies = {
   commandExecutor: CommandExecutor;
   sandboxMode: "local" | "docker";
   whisperBinPath?: string; // default: "whisper-cli"
-  modelName?: string; // default: "large-v3"
+  modelName?: string; // default: "small"
   modelsDir?: string; // default: ~/.simple-mcp/models/
 };
 
@@ -72,6 +73,7 @@ function parseVtt(vttContent: string): TranscriptionSegment[] {
   const segments: TranscriptionSegment[] = [];
   const lines = vttContent.split("\n");
   let i = 0;
+  let currentSpeaker = 1;
 
   while (i < lines.length) {
     const line = lines[i]!.trim();
@@ -93,11 +95,22 @@ function parseVtt(vttContent: string): TranscriptionSegment[] {
       }
 
       if (textLines.length > 0) {
-        segments.push({
-          startTime,
-          endTime,
-          text: textLines.join(" "),
-        });
+        let text = textLines.join(" ");
+
+        // Detect [SPEAKER_TURN] token from tinydiarize
+        if (text.includes("[SPEAKER_TURN]")) {
+          currentSpeaker++;
+          text = text.replace(/\[SPEAKER_TURN\]/g, "").trim();
+        }
+
+        if (text) {
+          segments.push({
+            startTime,
+            endTime,
+            text,
+            speaker: `Speaker ${currentSpeaker}`,
+          });
+        }
       }
     } else {
       i++;
@@ -127,7 +140,7 @@ export function createWhisperTranscriptionService(
 ): WhisperTranscriptionServiceResult {
   const { logger, commandExecutor, sandboxMode } = deps;
   const whisperBin = deps.whisperBinPath ?? "whisper-cli";
-  const modelName = deps.modelName ?? "large-v3";
+  const modelName = deps.modelName ?? "small";
   const homeDir = process.env.HOME || process.env.USERPROFILE || "/tmp";
   const modelsDir = deps.modelsDir ?? join(homeDir, ".simple-mcp", "models");
 
@@ -173,6 +186,7 @@ export function createWhisperTranscriptionService(
           "-otxt",
           "-l", "auto",
           "-np",
+          "-tdrz", // tinydiarize: inserts [SPEAKER_TURN] tokens at speaker changes
         ];
 
         logger.info({ whisperBin, args, sandboxMode }, "Starting Whisper transcription");

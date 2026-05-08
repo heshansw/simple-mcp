@@ -253,6 +253,7 @@ export const audioTranscriptsTable = sqliteTable("audio_transcripts", {
   language: text("language").notNull().default("en"),
   whisperModel: text("whisper_model").notNull(),
   segmentCount: integer("segment_count").notNull().default(0),
+  attendees: text("attendees"), // JSON array of attendee names, nullable
   encryptedContent: text("encrypted_content").notNull(),
   iv: text("iv").notNull(),
   createdAt: text("created_at").notNull(),
