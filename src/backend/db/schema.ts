@@ -392,6 +392,7 @@ export const codeHealthBackgroundJobsTable = sqliteTable("code_health_background
   grade: text("grade"),
   issueCount: integer("issue_count").notNull().default(0),
   issuesJson: text("issues_json").notNull().default("[]"),
+  fileMtime: text("file_mtime"),
   triggerTool: text("trigger_tool").notNull(),
   errorMessage: text("error_message"),
   startedAt: text("started_at"),

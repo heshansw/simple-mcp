@@ -87,6 +87,19 @@ function selectWeights(language: SupportedLanguage): SignalWeights {
 
 // ── Signal Computation ───────────────────────────────────────────────────
 
+function computeCodeSmellsScore(metrics: FileAstMetrics): number {
+  const smells = metrics.codeSmells;
+  if (!smells) return 10;
+
+  let score = 10;
+  score -= Math.min(smells.consoleStatements * 0.5, 3);
+  score -= Math.min(smells.todoFixmeCount * 0.3, 2);
+  score -= Math.min(smells.magicNumberCount * 0.2, 2);
+  if (smells.isGodFile) score -= 2;
+
+  return clamp(score, 1, 10);
+}
+
 function computeBreakdown(
   metrics: FileAstMetrics,
   options: {
@@ -131,6 +144,7 @@ function computeBreakdown(
       : 10,
     nestingDepth: round2(linearInterpolate(maxNesting, 2, 8)),
     parameterCount: round2(linearInterpolate(avgParams, 2, 7)),
+    codeSmells: round2(computeCodeSmellsScore(metrics)),
   };
 }
 
@@ -145,7 +159,8 @@ function computeOverall(
     breakdown.functionSize * weights.functionSize +
     breakdown.typeSafety * weights.typeSafety +
     breakdown.nestingDepth * weights.nestingDepth +
-    breakdown.parameterCount * weights.parameterCount;
+    breakdown.parameterCount * weights.parameterCount +
+    breakdown.codeSmells * weights.codeSmells;
 
   return round2(clamp(raw, 1, 10));
 }
@@ -171,6 +186,8 @@ const SIGNAL_SUGGESTIONS: Record<keyof SignalBreakdown, string> = {
     "Reduce nesting depth by using early returns or extracting helper functions",
   parameterCount:
     "Consider using an options object instead of multiple parameters",
+  codeSmells:
+    "Address code smells: remove console statements, resolve TODOs, extract magic numbers into named constants",
 };
 
 function generateSignalIssues(
@@ -294,6 +311,55 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
   return issues;
 }
 
+function generateCodeSmellIssues(metrics: FileAstMetrics): HealthIssue[] {
+  const smells = metrics.codeSmells;
+  if (!smells) return [];
+
+  const issues: HealthIssue[] = [];
+
+  if (smells.consoleStatements > 0) {
+    issues.push({
+      severity: "warning",
+      signal: "codeSmells",
+      message: `${smells.consoleStatements} console statement(s) found`,
+      filePath: metrics.filePath,
+      suggestion: "Remove console statements or replace with a proper logger",
+    });
+  }
+
+  if (smells.todoFixmeCount > 0) {
+    issues.push({
+      severity: "info",
+      signal: "codeSmells",
+      message: `${smells.todoFixmeCount} TODO/FIXME comment(s) found`,
+      filePath: metrics.filePath,
+      suggestion: "Resolve TODO/FIXME comments or convert them to tracked issues",
+    });
+  }
+
+  if (smells.isGodFile) {
+    issues.push({
+      severity: "warning",
+      signal: "codeSmells",
+      message: "File detected as a god file (too many responsibilities)",
+      filePath: metrics.filePath,
+      suggestion: "Split this file into smaller, focused modules",
+    });
+  }
+
+  if (smells.magicNumberCount > 5) {
+    issues.push({
+      severity: "warning",
+      signal: "codeSmells",
+      message: `${smells.magicNumberCount} magic number(s) found`,
+      filePath: metrics.filePath,
+      suggestion: "Extract magic numbers into named constants",
+    });
+  }
+
+  return issues;
+}
+
 // ── Factory ──────────────────────────────────────────────────────────────
 
 export function createHealthScoringService(
@@ -315,7 +381,8 @@ export function createHealthScoringService(
 
       const signalIssues = generateSignalIssues(breakdown, metrics);
       const perFunctionIssues = generatePerFunctionIssues(metrics);
-      const issues = [...signalIssues, ...perFunctionIssues];
+      const codeSmellIssues = generateCodeSmellIssues(metrics);
+      const issues = [...signalIssues, ...perFunctionIssues, ...codeSmellIssues];
 
       deps.logger.info("Scored file", {
         filePath: metrics.filePath,
