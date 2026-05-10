@@ -1196,7 +1196,7 @@ export async function createServer(
   const gitAnalysis = createGitAnalysisService({ logger });
 
   // ── Code Health AI review service ────────────────────────────────────
-  const aiCodeReviewService = createAiCodeReviewService({ getAnthropicApiKey, logger });
+  const aiCodeReviewService = createAiCodeReviewService({ logger });
 
   // ── Code Health tools ─────────────────────────────────────────────────
   const codeHealthToolDeps = { codeHealthService, logger };

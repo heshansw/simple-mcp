@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { spawn } from "node:child_process";
 import type { Result } from "@shared/result.js";
 import { ok, err, integrationError } from "@shared/result.js";
 import type { DomainError } from "@shared/result.js";
@@ -9,11 +9,10 @@ import type {
   SupportedLanguage,
 } from "@shared/schemas/code-health.schema.js";
 
-const DEFAULT_MODEL = "claude-sonnet-4-20250514";
-const MAX_SOURCE_CHARS = 50_000; // Truncate very large files to control cost
+const MAX_SOURCE_CHARS = 50_000;
+const CLI_TIMEOUT_MS = 120_000;
 
 export type AiCodeReviewDeps = {
-  getAnthropicApiKey: () => Promise<string | null>;
   logger: {
     info(msg: string, meta?: unknown): void;
     error(msg: string, meta?: unknown): void;
@@ -35,22 +34,21 @@ export type AiCodeReviewService = {
     language: SupportedLanguage,
     staticMetrics: FileAstMetrics,
     staticScore: HealthScore,
-    model?: string,
   ): Promise<Result<AiCodeReviewResult, DomainError>>;
 };
 
-const SYSTEM_PROMPT = `You are an expert code reviewer specializing in code quality assessment. You receive a source file along with its static analysis metrics. Your job is to provide a QUALITATIVE review that identifies issues static analysis CANNOT detect.
+const REVIEW_PROMPT_TEMPLATE = `You are an expert code reviewer. Analyze the following source file and provide a quality assessment.
 
-Focus on:
-1. **Design & Architecture**: Anti-patterns, god classes, poor separation of concerns, tight coupling
-2. **Naming Quality**: Unclear variable/function/class names, misleading names, inconsistent conventions
-3. **Error Handling**: Missing try/catch, unhandled promise rejections, swallowed errors, missing null checks
-4. **Security**: XSS vulnerabilities, injection risks, hardcoded secrets, auth issues, unsafe data handling
-5. **Dead Code**: Unreachable branches, unused variables/imports, commented-out code
-6. **API Misuse**: Framework anti-patterns, deprecated API usage, incorrect usage patterns
-7. **Testability**: Tight coupling that prevents unit testing, hidden dependencies, side effects
-8. **Performance**: Unnecessary re-renders (React), N+1 queries, memory leaks, expensive operations in loops
-9. **Readability**: Complex conditionals that should be extracted, deeply nested ternaries, unclear logic flow
+Focus on what static analysis CANNOT detect:
+1. Design & Architecture: Anti-patterns, god classes, poor separation of concerns, tight coupling
+2. Naming Quality: Unclear variable/function/class names, misleading names
+3. Error Handling: Missing try/catch, unhandled rejections, swallowed errors, missing null checks
+4. Security: XSS, injection risks, hardcoded secrets, auth issues
+5. Dead Code: Unreachable branches, unused variables/imports, commented-out code
+6. API Misuse: Framework anti-patterns, deprecated API usage
+7. Testability: Tight coupling, hidden dependencies, side effects
+8. Performance: Unnecessary re-renders (React), memory leaks, expensive operations in loops
+9. Readability: Complex conditionals, deeply nested ternaries, unclear logic flow
 
 Score strictly on a 1-10 scale:
 - 9-10: Production-ready, well-designed, minimal issues
@@ -59,51 +57,20 @@ Score strictly on a 1-10 scale:
 - 3-4: Poor quality, significant refactoring needed
 - 1-2: Critical issues, should not be deployed as-is
 
-Return ONLY valid JSON (no markdown, no code fences):
-{
-  "aiScore": <number 1-10>,
-  "aiGrade": "<A|B|C|D|F>",
-  "issues": [
-    {
-      "severity": "critical|warning|info",
-      "signal": "aiReview",
-      "message": "<clear description of the issue>",
-      "line": <line number or null if file-level>,
-      "suggestion": "<actionable fix>"
-    }
-  ],
-  "summary": "<1-2 sentence overall assessment>"
-}`;
-
-function buildUserPrompt(
-  filePath: string,
-  language: SupportedLanguage,
-  staticMetrics: FileAstMetrics,
-  staticScore: HealthScore,
-  truncatedSource: string,
-): string {
-  const codeSmellsLine = staticMetrics.codeSmells
-    ? `- Console statements: ${staticMetrics.codeSmells.consoleStatements}, TODOs: ${staticMetrics.codeSmells.todoFixmeCount}, Magic numbers: ${staticMetrics.codeSmells.magicNumberCount}`
-    : "";
-
-  return `Review this ${language} file: ${filePath}
-
 ## Static Analysis Summary
-- Overall Score: ${staticScore.overall}/10 (Grade ${staticScore.grade})
-- Complexity: ${staticScore.breakdown.complexity}/10 (avg cyclomatic: ${staticMetrics.averageCyclomatic.toFixed(1)})
-- Maintainability: ${staticScore.breakdown.maintainability}/10 (MI: ${staticMetrics.maintainabilityIndex.toFixed(1)})
-- Function Size: ${staticScore.breakdown.functionSize}/10
-- Nesting Depth: ${staticScore.breakdown.nestingDepth}/10
-- LOC: ${staticMetrics.loc}, Functions: ${staticMetrics.functions.length}
-${codeSmellsLine}
+- Overall Score: STATIC_SCORE/10 (Grade STATIC_GRADE)
+- Complexity: COMPLEXITY_SCORE/10 (avg cyclomatic: AVG_CYCLOMATIC)
+- Maintainability: MAINTAINABILITY_SCORE/10 (MI: MI_VALUE)
+- LOC: LOC_COUNT, Functions: FUNC_COUNT
+CODE_SMELLS_LINE
 
-## Source Code
-\`\`\`${language}
-${truncatedSource}
+## Source Code (LANGUAGE): FILE_PATH
+\`\`\`LANGUAGE
+SOURCE_CODE
 \`\`\`
 
-Provide your qualitative review as JSON.`;
-}
+Return ONLY valid JSON (no markdown fences, no explanation):
+{"aiScore": <1-10>, "aiGrade": "<A|B|C|D|F>", "issues": [{"severity": "critical|warning|info", "signal": "aiReview", "message": "<description>", "line": <number or null>, "suggestion": "<fix>"}], "summary": "<1-2 sentences>"}`;
 
 type RawAiIssue = {
   severity?: string;
@@ -119,6 +86,72 @@ type RawAiResponse = {
   issues?: ReadonlyArray<RawAiIssue>;
   summary?: string;
 };
+
+function runClaudeCli(
+  prompt: string,
+  timeoutMs: number = CLI_TIMEOUT_MS,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve) => {
+    const envPath = [
+      "/opt/homebrew/bin",
+      "/usr/local/bin",
+      process.env.PATH ?? "",
+    ].join(":");
+
+    const proc = spawn("claude", [
+      "-p",
+      "--permission-mode", "bypassPermissions",
+    ], {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, PATH: envPath },
+    });
+
+    proc.stdin.write(prompt);
+    proc.stdin.end();
+
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (data: Buffer) => { stdout += data.toString(); });
+    proc.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
+
+    const timer = setTimeout(() => {
+      proc.kill("SIGTERM");
+      resolve({ stdout, stderr: stderr + "\nClaude CLI timed out", exitCode: 124 });
+    }, timeoutMs);
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ stdout, stderr, exitCode: code ?? 1 });
+    });
+  });
+}
+
+function buildPrompt(
+  filePath: string,
+  language: SupportedLanguage,
+  staticMetrics: FileAstMetrics,
+  staticScore: HealthScore,
+  truncatedSource: string,
+): string {
+  const codeSmellsLine = staticMetrics.codeSmells
+    ? `- Code Smells: ${staticMetrics.codeSmells.consoleStatements} console stmts, ${staticMetrics.codeSmells.todoFixmeCount} TODOs, ${staticMetrics.codeSmells.magicNumberCount} magic numbers, ${staticMetrics.codeSmells.isGodFile ? "GOD FILE" : "ok"}`
+    : "";
+
+  return REVIEW_PROMPT_TEMPLATE
+    .replace(/STATIC_SCORE/g, String(staticScore.overall))
+    .replace(/STATIC_GRADE/g, staticScore.grade)
+    .replace(/COMPLEXITY_SCORE/g, String(staticScore.breakdown.complexity))
+    .replace(/AVG_CYCLOMATIC/g, staticMetrics.averageCyclomatic.toFixed(1))
+    .replace(/MAINTAINABILITY_SCORE/g, String(staticScore.breakdown.maintainability))
+    .replace(/MI_VALUE/g, staticMetrics.maintainabilityIndex.toFixed(1))
+    .replace(/LOC_COUNT/g, String(staticMetrics.loc))
+    .replace(/FUNC_COUNT/g, String(staticMetrics.functions.length))
+    .replace(/CODE_SMELLS_LINE/g, codeSmellsLine)
+    .replace(/LANGUAGE/g, language)
+    .replace(/FILE_PATH/g, filePath)
+    .replace(/SOURCE_CODE/g, truncatedSource);
+}
 
 function parseAiIssues(
   rawIssues: ReadonlyArray<RawAiIssue>,
@@ -139,8 +172,13 @@ function parseAiIssues(
   }));
 }
 
-function extractJsonText(responseText: string): string {
-  return responseText
+function extractJson(text: string): string {
+  // Try to find JSON in the response — Claude CLI may include extra text
+  const jsonMatch = text.match(/\{[\s\S]*"aiScore"[\s\S]*\}/);
+  if (jsonMatch) return jsonMatch[0];
+
+  // Fallback: strip markdown code fences
+  return text
     .trim()
     .replace(/^```json?\n?/, "")
     .replace(/\n?```$/, "")
@@ -157,26 +195,14 @@ export function createAiCodeReviewService(
       language,
       staticMetrics,
       staticScore,
-      model,
     ) {
-      const apiKey = await deps.getAnthropicApiKey();
-      if (!apiKey) {
-        return err(
-          integrationError(
-            "anthropic",
-            "No Anthropic API key configured. Set ANTHROPIC_API_KEY or add an Anthropic connection.",
-          ),
-        );
-      }
-
-      const selectedModel = model ?? DEFAULT_MODEL;
       const truncatedSource =
         source.length > MAX_SOURCE_CHARS
           ? source.slice(0, MAX_SOURCE_CHARS) +
             "\n\n// ... [truncated for review] ..."
           : source;
 
-      const userPrompt = buildUserPrompt(
+      const prompt = buildPrompt(
         filePath,
         language,
         staticMetrics,
@@ -185,41 +211,43 @@ export function createAiCodeReviewService(
       );
 
       try {
-        deps.logger.info("Starting AI code review", {
-          filePath,
-          model: selectedModel,
-        });
+        deps.logger.info("Starting AI code review via Claude CLI", { filePath });
 
-        const client = new Anthropic({ apiKey });
-        const message = await client.messages.create({
-          model: selectedModel,
-          max_tokens: 4096,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userPrompt }],
-        });
+        const result = await runClaudeCli(prompt);
 
-        const textBlock = message.content.find(
-          (block) => block.type === "text",
-        );
-        if (!textBlock || textBlock.type !== "text") {
+        if (result.exitCode !== 0) {
+          deps.logger.error("Claude CLI code review failed", {
+            filePath,
+            exitCode: result.exitCode,
+            stderr: result.stderr.slice(0, 300),
+          });
           return err(
-            integrationError("anthropic", "No text response from Claude"),
+            integrationError(
+              "claude-cli",
+              `Claude CLI exited with code ${result.exitCode}: ${result.stderr.slice(0, 200)}`,
+            ),
           );
         }
 
-        const responseText = textBlock.text.trim();
-        const jsonText = extractJsonText(responseText);
+        const responseText = result.stdout.trim();
+        if (!responseText) {
+          return err(
+            integrationError("claude-cli", "Claude CLI returned empty response"),
+          );
+        }
+
+        const jsonText = extractJson(responseText);
 
         let parsed: RawAiResponse;
         try {
           parsed = JSON.parse(jsonText) as RawAiResponse;
         } catch {
           deps.logger.error("Failed to parse AI review response", {
-            responseText: responseText.slice(0, 200),
+            responseText: responseText.slice(0, 300),
           });
           return err(
             integrationError(
-              "anthropic",
+              "claude-cli",
               "Failed to parse AI review response as JSON",
             ),
           );
@@ -250,13 +278,13 @@ export function createAiCodeReviewService(
           aiGrade,
           issues,
           summary,
-          model: selectedModel,
+          model: "claude-cli",
         });
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         deps.logger.error("AI code review failed", { filePath, error: msg });
         return err(
-          integrationError("anthropic", `AI review failed: ${msg}`),
+          integrationError("claude-cli", `AI review failed: ${msg}`),
         );
       }
     },
