@@ -393,6 +393,8 @@ export const codeHealthBackgroundJobsTable = sqliteTable("code_health_background
   issueCount: integer("issue_count").notNull().default(0),
   issuesJson: text("issues_json").notNull().default("[]"),
   fileMtime: text("file_mtime"),
+  aiScore: real("ai_score"),
+  aiReviewJson: text("ai_review_json"),
   triggerTool: text("trigger_tool").notNull(),
   errorMessage: text("error_message"),
   startedAt: text("started_at"),

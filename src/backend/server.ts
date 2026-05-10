@@ -187,6 +187,7 @@ import { createCodeHealthEventsRepository } from "./db/repositories/code-health-
 import { createCodeHealthSessionsRepository } from "./db/repositories/code-health-sessions.repository.js";
 import { createCodeHealthBackgroundJobsRepository } from "./db/repositories/code-health-background-jobs.repository.js";
 import { createFileAccessTracker } from "./services/code-health/file-access-tracker.service.js";
+import { createAiCodeReviewService } from "./services/code-health/ai-code-review.service.js";
 
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
@@ -1194,9 +1195,12 @@ export async function createServer(
   const codeHealthService = createCodeHealthService({ astAnalysis, healthScoring, logger });
   const gitAnalysis = createGitAnalysisService({ logger });
 
+  // ── Code Health AI review service ────────────────────────────────────
+  const aiCodeReviewService = createAiCodeReviewService({ getAnthropicApiKey, logger });
+
   // ── Code Health tools ─────────────────────────────────────────────────
   const codeHealthToolDeps = { codeHealthService, logger };
-  registerAnalyzeFileTool(mcpServer, { ...codeHealthToolDeps, backgroundJobsRepo: codeHealthBackgroundJobsRepo });
+  registerAnalyzeFileTool(mcpServer, { ...codeHealthToolDeps, backgroundJobsRepo: codeHealthBackgroundJobsRepo, aiCodeReviewService });
   registerAnalyzeDirectoryTool(mcpServer, codeHealthToolDeps);
   registerSnapshotTool(mcpServer, {
     codeHealthService,

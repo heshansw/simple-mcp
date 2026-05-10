@@ -156,6 +156,15 @@ export type HealthScore = z.infer<typeof HealthScoreSchema>;
 
 // ── File Health Report ──────────────────────────────────────────────────
 
+export const AiReviewResultSchema = z.object({
+  aiScore: z.number().min(1).max(10),
+  aiGrade: z.string(),
+  issues: z.array(HealthIssueSchema),
+  summary: z.string(),
+  model: z.string(),
+});
+export type AiReviewResult = z.infer<typeof AiReviewResultSchema>;
+
 export const FileHealthReportSchema = z.object({
   filePath: z.string(),
   language: SupportedLanguageSchema,
@@ -163,6 +172,7 @@ export const FileHealthReportSchema = z.object({
   metrics: FileAstMetricsSchema,
   functions: z.array(FunctionMetricsSchema).optional(),
   connectedFiles: z.array(z.string()).optional(),
+  aiReviewResult: AiReviewResultSchema.optional(),
 });
 export type FileHealthReport = z.infer<typeof FileHealthReportSchema>;
 
@@ -323,6 +333,7 @@ export const AnalyzeFileInputSchema = z.object({
   includeSuggestions: z.boolean().default(true).describe("Include improvement suggestions"),
   scanImports: z.boolean().default(false).describe("Also analyze imported/connected files in background"),
   importDepth: z.number().int().min(0).max(3).default(1).describe("How deep to follow imports (0=none, 1=direct imports)"),
+  aiReview: z.boolean().default(false).describe("Run Claude AI review on top of static analysis for deeper qualitative insights"),
 });
 
 export const AnalyzeDirectoryInputSchema = z.object({

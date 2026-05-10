@@ -128,22 +128,22 @@ function computeBreakdown(
 
   return {
     complexity: round2(
-      linearInterpolate(metrics.averageCyclomatic, 3, 25),
+      linearInterpolate(metrics.averageCyclomatic, 1, 15),
     ),
     maintainability: round2(
-      linearInterpolateInverted(metrics.maintainabilityIndex, 85, 20),
+      linearInterpolateInverted(metrics.maintainabilityIndex, 100, 40),
     ),
     duplication: round2(
-      linearInterpolate(options.duplicationPercentage, 0, 30),
+      linearInterpolate(options.duplicationPercentage, 0, 20),
     ),
-    functionSize: round2(linearInterpolate(avgFunctionLoc, 15, 100)),
+    functionSize: round2(linearInterpolate(avgFunctionLoc, 8, 50)),
     typeSafety: isTypescript
       ? round2(
           linearInterpolateInverted(options.typeCoveragePercentage, 100, 50),
         )
       : 10,
-    nestingDepth: round2(linearInterpolate(maxNesting, 2, 8)),
-    parameterCount: round2(linearInterpolate(avgParams, 2, 7)),
+    nestingDepth: round2(linearInterpolate(maxNesting, 1, 5)),
+    parameterCount: round2(linearInterpolate(avgParams, 1, 5)),
     codeSmells: round2(computeCodeSmellsScore(metrics)),
   };
 }
@@ -170,9 +170,9 @@ function computeOverall(
 type IssueSeverity = HealthIssue["severity"];
 
 function severityForScore(score: number): IssueSeverity | null {
-  if (score < 3) return "critical";
-  if (score < 5) return "warning";
-  if (score < 7) return "info";
+  if (score < 4) return "critical";
+  if (score < 6) return "warning";
+  if (score < 8) return "info";
   return null;
 }
 
@@ -232,7 +232,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
 
   for (const fn of metrics.functions) {
     // Cyclomatic complexity
-    if (fn.cyclomatic > 20) {
+    if (fn.cyclomatic > 15) {
       issues.push({
         severity: "critical",
         signal: "complexity",
@@ -242,7 +242,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
         functionName: fn.name,
         suggestion: "Consider breaking this function into smaller pieces",
       });
-    } else if (fn.cyclomatic > 10) {
+    } else if (fn.cyclomatic > 8) {
       issues.push({
         severity: "warning",
         signal: "complexity",
@@ -255,7 +255,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
     }
 
     // Function size (LOC)
-    if (fn.loc > 100) {
+    if (fn.loc > 60) {
       issues.push({
         severity: "critical",
         signal: "functionSize",
@@ -266,7 +266,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
         suggestion:
           "Split large functions into smaller, focused functions",
       });
-    } else if (fn.loc > 50) {
+    } else if (fn.loc > 30) {
       issues.push({
         severity: "warning",
         signal: "functionSize",
@@ -280,7 +280,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
     }
 
     // Nesting depth
-    if (fn.nestingDepth > 4) {
+    if (fn.nestingDepth > 3) {
       issues.push({
         severity: "warning",
         signal: "nestingDepth",
@@ -294,7 +294,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
     }
 
     // Parameter count
-    if (fn.parameterCount > 4) {
+    if (fn.parameterCount > 3) {
       issues.push({
         severity: "warning",
         signal: "parameterCount",

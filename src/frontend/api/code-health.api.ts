@@ -147,6 +147,8 @@ export type BackgroundJob = {
   grade: string | null;
   issueCount: number;
   issuesJson: string;
+  aiScore: number | null;
+  aiReviewJson: string | null;
   triggerTool: string;
   errorMessage: string | null;
   startedAt: string | null;

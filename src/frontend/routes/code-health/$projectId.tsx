@@ -74,6 +74,11 @@ export function CodeHealthProjectDetailPage() {
   const totalIssues = allIssues.length;
   const criticalCount = allIssues.filter(i => i.issue.severity === "critical").length;
   const warningCount = allIssues.filter(i => i.issue.severity === "warning").length;
+  const aiIssueCount = allIssues.filter(i => i.issue.signal === "aiReview").length;
+  const aiReviewedFiles = completedFiles.filter((f: BackgroundJob) => f.aiScore != null);
+  const avgAiScore = aiReviewedFiles.length > 0
+    ? aiReviewedFiles.reduce((sum: number, f: BackgroundJob) => sum + (f.aiScore ?? 0), 0) / aiReviewedFiles.length
+    : null;
 
   return (
     <div>
@@ -102,6 +107,8 @@ export function CodeHealthProjectDetailPage() {
         {totalIssues > 0 && <StatCard label="Total Issues" value={totalIssues} color={criticalCount > 0 ? "#dc2626" : "#ca8a04"} />}
         {criticalCount > 0 && <StatCard label="Critical" value={criticalCount} color="#dc2626" />}
         {warningCount > 0 && <StatCard label="Warnings" value={warningCount} color="#ca8a04" />}
+        {avgAiScore != null && <StatCard label="AI Score" value={avgAiScore.toFixed(1)} color="#7c3aed" />}
+        {aiIssueCount > 0 && <StatCard label="AI Issues" value={aiIssueCount} color="#7c3aed" />}
       </div>
 
       {/* Trend chart */}
@@ -223,13 +230,13 @@ export function CodeHealthProjectDetailPage() {
                         padding: "0.1rem 0.375rem",
                         borderRadius: "0.25rem",
                         flexShrink: 0,
-                        backgroundColor: entry.issue.severity === "critical" ? "#fef2f2" : entry.issue.severity === "warning" ? "#fffbeb" : "#eff6ff",
-                        color: entry.issue.severity === "critical" ? "#dc2626" : entry.issue.severity === "warning" ? "#ca8a04" : "#2563eb",
+                        backgroundColor: entry.issue.signal === "aiReview" ? "#f3e8ff" : entry.issue.severity === "critical" ? "#fef2f2" : entry.issue.severity === "warning" ? "#fffbeb" : "#eff6ff",
+                        color: entry.issue.signal === "aiReview" ? "#7c3aed" : entry.issue.severity === "critical" ? "#dc2626" : entry.issue.severity === "warning" ? "#ca8a04" : "#2563eb",
                       }}>
-                        {entry.issue.severity.toUpperCase()}
+                        {entry.issue.signal === "aiReview" ? "AI" : entry.issue.severity.toUpperCase()}
                       </span>
-                      <span style={{ fontSize: "0.7rem", color: "#6b7280", minWidth: "5rem", flexShrink: 0 }}>
-                        {entry.issue.signal}
+                      <span style={{ fontSize: "0.7rem", color: entry.issue.signal === "aiReview" ? "#7c3aed" : "#6b7280", minWidth: "5rem", flexShrink: 0 }}>
+                        {entry.issue.signal === "aiReview" ? entry.issue.severity : entry.issue.signal}
                       </span>
                       {entry.issue.line && (
                         <span style={{ fontSize: "0.7rem", color: "#9ca3af", flexShrink: 0 }}>
