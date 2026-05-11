@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.8.0...simple-mcp-v0.9.0) (2026-05-08)
+
+
+### Features
+
+* **audio:** auto-summarize meetings via Claude CLI after transcription ([#33](https://github.com/heshansw/simple-mcp/issues/33)) ([bbaed01](https://github.com/heshansw/simple-mcp/commit/bbaed014d67b1664eab541176f5eff0c77dbecc9))
+* **audio:** chunked upload, async transcription & speaker diarization ([#37](https://github.com/heshansw/simple-mcp/issues/37)) ([86a1e1f](https://github.com/heshansw/simple-mcp/commit/86a1e1fe1d7bc4dc3e8a549d4ee874524765e70f))
+* **audio:** dockerize ffmpeg + whisper-cpp for sandboxed audio processing ([#35](https://github.com/heshansw/simple-mcp/issues/35)) ([36768d7](https://github.com/heshansw/simple-mcp/commit/36768d73969b5d1f28802d1daaacbea2e7963b91))
+* **code-health:** add comprehensive code health analysis MCP feature ([#38](https://github.com/heshansw/simple-mcp/issues/38)) ([425d600](https://github.com/heshansw/simple-mcp/commit/425d6005313038efe725c7df15cee8e454907ef9))
+* **extension:** replace BlackHole with Tab Audio + Mic mode ([#36](https://github.com/heshansw/simple-mcp/issues/36)) ([b85c2c8](https://github.com/heshansw/simple-mcp/commit/b85c2c898f66314b38a877cbb5ed67986f7642af))
+
 ## [0.8.0](https://github.com/heshansw/simple-mcp/compare/simple-mcp-v0.7.0...simple-mcp-v0.8.0) (2026-05-06)
 
 
