@@ -16,6 +16,7 @@ export interface CodeHealthBackgroundJobsRepository {
   countActive(): Promise<number>;
   findCompletedByDirectory(directoryPath: string, limit?: number): Promise<CodeHealthBackgroundJob[]>;
   countCompletedByDirectory(directoryPath: string): Promise<number>;
+  findLatestCompletedByFilePath(filePath: string): Promise<CodeHealthBackgroundJob | undefined>;
 }
 
 export function createCodeHealthBackgroundJobsRepository(db: DrizzleDB): CodeHealthBackgroundJobsRepository {
@@ -97,6 +98,19 @@ export function createCodeHealthBackgroundJobsRepository(db: DrizzleDB): CodeHea
           )
         );
       return results.length;
+    },
+
+    async findLatestCompletedByFilePath(filePath) {
+      const results = await db.select().from(codeHealthBackgroundJobsTable)
+        .where(
+          and(
+            eq(codeHealthBackgroundJobsTable.filePath, filePath),
+            eq(codeHealthBackgroundJobsTable.status, "completed")
+          )
+        )
+        .orderBy(desc(codeHealthBackgroundJobsTable.createdAt))
+        .limit(1);
+      return results[0];
     },
   };
 }

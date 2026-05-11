@@ -87,6 +87,19 @@ function selectWeights(language: SupportedLanguage): SignalWeights {
 
 // ── Signal Computation ───────────────────────────────────────────────────
 
+function computeCodeSmellsScore(metrics: FileAstMetrics): number {
+  const smells = metrics.codeSmells;
+  if (!smells) return 10;
+
+  let score = 10;
+  score -= Math.min(smells.consoleStatements * 0.5, 3);
+  score -= Math.min(smells.todoFixmeCount * 0.3, 2);
+  score -= Math.min(smells.magicNumberCount * 0.2, 2);
+  if (smells.isGodFile) score -= 2;
+
+  return clamp(score, 1, 10);
+}
+
 function computeBreakdown(
   metrics: FileAstMetrics,
   options: {
@@ -115,22 +128,23 @@ function computeBreakdown(
 
   return {
     complexity: round2(
-      linearInterpolate(metrics.averageCyclomatic, 3, 25),
+      linearInterpolate(metrics.averageCyclomatic, 1, 15),
     ),
     maintainability: round2(
-      linearInterpolateInverted(metrics.maintainabilityIndex, 85, 20),
+      linearInterpolateInverted(metrics.maintainabilityIndex, 100, 40),
     ),
     duplication: round2(
-      linearInterpolate(options.duplicationPercentage, 0, 30),
+      linearInterpolate(options.duplicationPercentage, 0, 20),
     ),
-    functionSize: round2(linearInterpolate(avgFunctionLoc, 15, 100)),
+    functionSize: round2(linearInterpolate(avgFunctionLoc, 8, 50)),
     typeSafety: isTypescript
       ? round2(
           linearInterpolateInverted(options.typeCoveragePercentage, 100, 50),
         )
       : 10,
-    nestingDepth: round2(linearInterpolate(maxNesting, 2, 8)),
-    parameterCount: round2(linearInterpolate(avgParams, 2, 7)),
+    nestingDepth: round2(linearInterpolate(maxNesting, 1, 5)),
+    parameterCount: round2(linearInterpolate(avgParams, 1, 5)),
+    codeSmells: round2(computeCodeSmellsScore(metrics)),
   };
 }
 
@@ -145,7 +159,8 @@ function computeOverall(
     breakdown.functionSize * weights.functionSize +
     breakdown.typeSafety * weights.typeSafety +
     breakdown.nestingDepth * weights.nestingDepth +
-    breakdown.parameterCount * weights.parameterCount;
+    breakdown.parameterCount * weights.parameterCount +
+    breakdown.codeSmells * weights.codeSmells;
 
   return round2(clamp(raw, 1, 10));
 }
@@ -155,9 +170,9 @@ function computeOverall(
 type IssueSeverity = HealthIssue["severity"];
 
 function severityForScore(score: number): IssueSeverity | null {
-  if (score < 3) return "critical";
-  if (score < 5) return "warning";
-  if (score < 7) return "info";
+  if (score < 4) return "critical";
+  if (score < 6) return "warning";
+  if (score < 8) return "info";
   return null;
 }
 
@@ -171,6 +186,8 @@ const SIGNAL_SUGGESTIONS: Record<keyof SignalBreakdown, string> = {
     "Reduce nesting depth by using early returns or extracting helper functions",
   parameterCount:
     "Consider using an options object instead of multiple parameters",
+  codeSmells:
+    "Address code smells: remove console statements, resolve TODOs, extract magic numbers into named constants",
 };
 
 function generateSignalIssues(
@@ -215,7 +232,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
 
   for (const fn of metrics.functions) {
     // Cyclomatic complexity
-    if (fn.cyclomatic > 20) {
+    if (fn.cyclomatic > 15) {
       issues.push({
         severity: "critical",
         signal: "complexity",
@@ -225,7 +242,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
         functionName: fn.name,
         suggestion: "Consider breaking this function into smaller pieces",
       });
-    } else if (fn.cyclomatic > 10) {
+    } else if (fn.cyclomatic > 8) {
       issues.push({
         severity: "warning",
         signal: "complexity",
@@ -238,7 +255,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
     }
 
     // Function size (LOC)
-    if (fn.loc > 100) {
+    if (fn.loc > 60) {
       issues.push({
         severity: "critical",
         signal: "functionSize",
@@ -249,7 +266,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
         suggestion:
           "Split large functions into smaller, focused functions",
       });
-    } else if (fn.loc > 50) {
+    } else if (fn.loc > 30) {
       issues.push({
         severity: "warning",
         signal: "functionSize",
@@ -263,7 +280,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
     }
 
     // Nesting depth
-    if (fn.nestingDepth > 4) {
+    if (fn.nestingDepth > 3) {
       issues.push({
         severity: "warning",
         signal: "nestingDepth",
@@ -277,7 +294,7 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
     }
 
     // Parameter count
-    if (fn.parameterCount > 4) {
+    if (fn.parameterCount > 3) {
       issues.push({
         severity: "warning",
         signal: "parameterCount",
@@ -289,6 +306,55 @@ function generatePerFunctionIssues(metrics: FileAstMetrics): HealthIssue[] {
           "Consider using an options object instead of multiple parameters",
       });
     }
+  }
+
+  return issues;
+}
+
+function generateCodeSmellIssues(metrics: FileAstMetrics): HealthIssue[] {
+  const smells = metrics.codeSmells;
+  if (!smells) return [];
+
+  const issues: HealthIssue[] = [];
+
+  if (smells.consoleStatements > 0) {
+    issues.push({
+      severity: "warning",
+      signal: "codeSmells",
+      message: `${smells.consoleStatements} console statement(s) found`,
+      filePath: metrics.filePath,
+      suggestion: "Remove console statements or replace with a proper logger",
+    });
+  }
+
+  if (smells.todoFixmeCount > 0) {
+    issues.push({
+      severity: "info",
+      signal: "codeSmells",
+      message: `${smells.todoFixmeCount} TODO/FIXME comment(s) found`,
+      filePath: metrics.filePath,
+      suggestion: "Resolve TODO/FIXME comments or convert them to tracked issues",
+    });
+  }
+
+  if (smells.isGodFile) {
+    issues.push({
+      severity: "warning",
+      signal: "codeSmells",
+      message: "File detected as a god file (too many responsibilities)",
+      filePath: metrics.filePath,
+      suggestion: "Split this file into smaller, focused modules",
+    });
+  }
+
+  if (smells.magicNumberCount > 5) {
+    issues.push({
+      severity: "warning",
+      signal: "codeSmells",
+      message: `${smells.magicNumberCount} magic number(s) found`,
+      filePath: metrics.filePath,
+      suggestion: "Extract magic numbers into named constants",
+    });
   }
 
   return issues;
@@ -315,7 +381,8 @@ export function createHealthScoringService(
 
       const signalIssues = generateSignalIssues(breakdown, metrics);
       const perFunctionIssues = generatePerFunctionIssues(metrics);
-      const issues = [...signalIssues, ...perFunctionIssues];
+      const codeSmellIssues = generateCodeSmellIssues(metrics);
+      const issues = [...signalIssues, ...perFunctionIssues, ...codeSmellIssues];
 
       deps.logger.info("Scored file", {
         filePath: metrics.filePath,

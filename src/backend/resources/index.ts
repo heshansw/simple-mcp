@@ -68,6 +68,55 @@ Updated: ${conn.updatedAt}`,
     }
   );
 
+  // Register code health instructions resource
+  server.resource(
+    "code-health://instructions",
+    "Code quality guard instructions — read this to enable automatic quality checks after writing code",
+    async () => {
+      return {
+        contents: [
+          {
+            uri: "code-health://instructions",
+            text: `# Code Quality Guard — MCP Instructions
+
+When the user asks you to activate code quality guard (or uses the code-quality-guard prompt), follow these rules for the rest of the session:
+
+## After Writing or Modifying Any Code File
+
+1. Call \`code_health_analyze_file\` with the file path you just wrote/modified
+2. If the score is below 8/10:
+   a. Read the issues from the response
+   b. Fix the highest-severity issues first (critical → warning → info)
+   c. Re-analyze the file
+   d. Repeat up to 3 times
+3. Report the final score to the user
+
+## Supported File Types
+- TypeScript: .ts, .tsx
+- JavaScript: .js, .jsx, .mjs
+- Java: .java
+
+## Optional: AI-Enhanced Review
+Pass \`aiReview: true\` to get Claude CLI-powered qualitative review on top of static analysis. This adds ~15-30 seconds but catches design issues, naming problems, security concerns, and more.
+
+## Available Tools
+- \`code_health_analyze_file\` — Analyze a single file
+- \`code_health_analyze_directory\` — Analyze all files in a directory
+- \`code_health_start_session\` / \`code_health_session_check\` / \`code_health_end_session\` — Track quality across a coding session
+- \`code_health_pre_commit_check\` — Quality gate before committing
+- \`code_health_hotspots\` — Find worst files by git churn + complexity
+- \`code_health_function_ranking\` — Find worst functions across a project
+
+## Scoring
+- 8 signals: complexity, maintainability, duplication, function size, type safety, nesting depth, parameter count, code smells
+- Score 1-10, Grade A-F
+- When AI review is enabled: 70% static + 30% AI blended score`,
+          },
+        ],
+      };
+    }
+  );
+
   // Register agents list resource
   server.resource(
     "agents://list",

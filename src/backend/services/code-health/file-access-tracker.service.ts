@@ -1,11 +1,11 @@
 import { extname } from "node:path";
+import { stat } from "node:fs/promises";
 import type { CodeHealthService } from "./code-health.service.js";
 import type { CodeHealthBackgroundJobsRepository } from "../../db/repositories/code-health-background-jobs.repository.js";
 import type { CodeHealthEventsRepository } from "../../db/repositories/code-health-events.repository.js";
 import { isOk } from "@shared/result.js";
 
-const SUPPORTED_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".java"]);
-const DEBOUNCE_HOURS = 24;
+const SUPPORTED_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".java"]);
 const WORKER_INTERVAL_MS = 2_000;
 const MAX_QUEUE_SIZE = 200;
 
@@ -57,11 +57,12 @@ export function createFileAccessTracker(deps: FileAccessTrackerDeps): FileAccess
     const { filePath, triggerTool } = item;
 
     try {
-      // Debounce: check if file was analyzed in the last 24 hours
-      const sinceIso = new Date(Date.now() - DEBOUNCE_HOURS * 60 * 60 * 1000).toISOString();
-      const recent = await deps.backgroundJobsRepo.findRecentByFilePath(filePath, sinceIso);
-      if (recent) {
-        deps.logger.info("Background analysis skipped (debounce)", { filePath, lastAnalyzed: recent.createdAt });
+      // Debounce: skip if file has not been modified since last completed analysis
+      const fileStat = await stat(filePath);
+      const fileMtimeIso = fileStat.mtime.toISOString();
+      const recent = await deps.backgroundJobsRepo.findLatestCompletedByFilePath(filePath);
+      if (recent && recent.fileMtime === fileMtimeIso) {
+        deps.logger.info("Background analysis skipped (file unchanged)", { filePath, mtime: fileMtimeIso });
         return;
       }
 
@@ -94,6 +95,7 @@ export function createFileAccessTracker(deps: FileAccessTrackerDeps): FileAccess
           grade: report.score.grade,
           issueCount: report.score.issues.length,
           issuesJson: JSON.stringify(report.score.issues),
+          fileMtime: fileMtimeIso,
           completedAt: new Date().toISOString(),
         });
 

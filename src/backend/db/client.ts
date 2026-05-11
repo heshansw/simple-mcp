@@ -380,6 +380,9 @@ async function createTables(
       grade TEXT,
       issue_count INTEGER NOT NULL DEFAULT 0,
       issues_json TEXT NOT NULL DEFAULT '[]',
+      file_mtime TEXT,
+      ai_score REAL,
+      ai_review_json TEXT,
       trigger_tool TEXT NOT NULL,
       error_message TEXT,
       started_at TEXT,
@@ -428,6 +431,11 @@ async function createTables(
     "ALTER TABLE audio_transcripts ADD COLUMN attendees TEXT",
     // Add issues_json to background jobs for per-file issue tracking
     "ALTER TABLE code_health_background_jobs ADD COLUMN issues_json TEXT NOT NULL DEFAULT '[]'",
+    // Add file_mtime for mtime-based debounce instead of time-based
+    "ALTER TABLE code_health_background_jobs ADD COLUMN file_mtime TEXT",
+    // Add AI review columns for blended scoring
+    "ALTER TABLE code_health_background_jobs ADD COLUMN ai_score REAL",
+    "ALTER TABLE code_health_background_jobs ADD COLUMN ai_review_json TEXT",
   ];
 
   for (const sql of migrations) {

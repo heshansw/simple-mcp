@@ -8,7 +8,7 @@ export type SupportedLanguage = z.infer<typeof SupportedLanguageSchema>;
 
 export const SUPPORTED_EXTENSIONS: Record<SupportedLanguage, ReadonlyArray<string>> = {
   typescript: [".ts", ".tsx"],
-  javascript: [".js", ".jsx"],
+  javascript: [".js", ".jsx", ".mjs"],
   java: [".java"],
 } as const;
 
@@ -35,23 +35,25 @@ export type TriggerType = z.infer<typeof TriggerTypeSchema>;
 // ── Signal weights ──────────────────────────────────────────────────────
 
 export const SIGNAL_WEIGHTS = {
-  complexity: 0.25,
-  maintainability: 0.20,
-  duplication: 0.15,
-  functionSize: 0.15,
+  complexity: 0.22,
+  maintainability: 0.18,
+  duplication: 0.13,
+  functionSize: 0.13,
   typeSafety: 0.10,
   nestingDepth: 0.08,
-  parameterCount: 0.07,
+  parameterCount: 0.06,
+  codeSmells: 0.10,
 } as const;
 
 export const SIGNAL_WEIGHTS_NO_TYPES = {
-  complexity: 0.30,
-  maintainability: 0.25,
-  duplication: 0.15,
-  functionSize: 0.15,
+  complexity: 0.27,
+  maintainability: 0.23,
+  duplication: 0.13,
+  functionSize: 0.13,
   typeSafety: 0,
   nestingDepth: 0.08,
-  parameterCount: 0.07,
+  parameterCount: 0.06,
+  codeSmells: 0.10,
 } as const;
 
 // ── Halstead Metrics ────────────────────────────────────────────────────
@@ -94,6 +96,22 @@ export const FileAstMetricsSchema = z.object({
   averageCognitive: z.number(),
   maxCognitive: z.number(),
   maintainabilityIndex: z.number(),
+  codeSmells: z.object({
+    consoleStatements: z.number().int(),
+    todoFixmeCount: z.number().int(),
+    magicNumberCount: z.number().int(),
+    commentRatio: z.number(),
+    importCount: z.number().int(),
+    isGodFile: z.boolean(),
+  }).optional(),
+  classMetrics: z.array(z.object({
+    name: z.string(),
+    fieldCount: z.number().int(),
+    methodCount: z.number().int(),
+    loc: z.number().int(),
+    startLine: z.number().int(),
+    endLine: z.number().int(),
+  })).optional(),
 });
 export type FileAstMetrics = z.infer<typeof FileAstMetricsSchema>;
 
@@ -122,6 +140,7 @@ export const SignalBreakdownSchema = z.object({
   typeSafety: z.number().min(1).max(10),
   nestingDepth: z.number().min(1).max(10),
   parameterCount: z.number().min(1).max(10),
+  codeSmells: z.number().min(1).max(10),
 });
 export type SignalBreakdown = z.infer<typeof SignalBreakdownSchema>;
 
@@ -137,12 +156,23 @@ export type HealthScore = z.infer<typeof HealthScoreSchema>;
 
 // ── File Health Report ──────────────────────────────────────────────────
 
+export const AiReviewResultSchema = z.object({
+  aiScore: z.number().min(1).max(10),
+  aiGrade: z.string(),
+  issues: z.array(HealthIssueSchema),
+  summary: z.string(),
+  model: z.string(),
+});
+export type AiReviewResult = z.infer<typeof AiReviewResultSchema>;
+
 export const FileHealthReportSchema = z.object({
   filePath: z.string(),
   language: SupportedLanguageSchema,
   score: HealthScoreSchema,
   metrics: FileAstMetricsSchema,
   functions: z.array(FunctionMetricsSchema).optional(),
+  connectedFiles: z.array(z.string()).optional(),
+  aiReviewResult: AiReviewResultSchema.optional(),
 });
 export type FileHealthReport = z.infer<typeof FileHealthReportSchema>;
 
@@ -301,6 +331,9 @@ export const AnalyzeFileInputSchema = z.object({
   filePath: z.string().min(1).describe("Absolute path to the file to analyze"),
   includePerFunctionMetrics: z.boolean().default(true).describe("Include per-function metric breakdown"),
   includeSuggestions: z.boolean().default(true).describe("Include improvement suggestions"),
+  scanImports: z.boolean().default(false).describe("Also analyze imported/connected files in background"),
+  importDepth: z.number().int().min(0).max(3).default(1).describe("How deep to follow imports (0=none, 1=direct imports)"),
+  aiReview: z.boolean().default(false).describe("Run Claude AI review on top of static analysis for deeper qualitative insights"),
 });
 
 export const AnalyzeDirectoryInputSchema = z.object({

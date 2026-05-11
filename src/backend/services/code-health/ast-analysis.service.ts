@@ -17,6 +17,29 @@ import type {
 } from "@shared/schemas/code-health.schema.js";
 import { SUPPORTED_EXTENSIONS } from "@shared/schemas/code-health.schema.js";
 
+import { computeNestingDepths } from "./ts-nesting.service.js";
+import { computeJavaCognitiveComplexity } from "./java-cognitive-complexity.service.js";
+import { analyzeCodeSmells } from "./code-smells.service.js";
+
+// ── cognitive-complexity-ts dynamic import ────────────────────────────
+
+type CognitiveComplexityFn = (
+  source: string,
+  fileName: string,
+) => { inner: Array<{ name: string; score: number; line: number }> };
+
+let getCognitiveComplexity: CognitiveComplexityFn | null = null;
+
+try {
+  const mod = await import("cognitive-complexity-ts");
+  getCognitiveComplexity =
+    (mod.getSourceOutput as CognitiveComplexityFn | undefined) ??
+    (mod.default?.getSourceOutput as CognitiveComplexityFn | undefined) ??
+    null;
+} catch {
+  // Package not available, fall back to cyclomatic-based approximation
+}
+
 // ── Types ──────────────────────────────────────────────────────────────
 
 export type AstAnalysisDeps = {
@@ -185,11 +208,47 @@ const JAVA_COMPLEXITY_TOKENS = [
 function getMethodName(methodNode: CstNode): string {
   if (!methodNode.children) return "<anonymous>";
 
-  const identifiers = methodNode.children["methodDeclarator"] as
+  // Constructor: look for the class name via constructorDeclarator > simpleTypeName > Identifier
+  const constructorDeclarators = methodNode.children["constructorDeclarator"] as
     | ReadonlyArray<CstNode>
     | undefined;
-  if (identifiers) {
-    for (const declarator of identifiers) {
+  if (constructorDeclarators) {
+    for (const declarator of constructorDeclarators) {
+      if (isCstNode(declarator) && declarator.children) {
+        const typeNames = declarator.children["simpleTypeName"] as
+          | ReadonlyArray<CstNode>
+          | undefined;
+        if (typeNames) {
+          for (const typeName of typeNames) {
+            if (isCstNode(typeName) && typeName.children) {
+              const ids = typeName.children["Identifier"] as
+                | ReadonlyArray<CstToken>
+                | undefined;
+              const firstId = ids?.[0];
+              if (firstId?.image) {
+                return `<constructor:${firstId.image}>`;
+              }
+            }
+          }
+        }
+        // Fallback: try direct Identifier on constructorDeclarator
+        const ids = declarator.children["Identifier"] as
+          | ReadonlyArray<CstToken>
+          | undefined;
+        const firstId = ids?.[0];
+        if (firstId?.image) {
+          return `<constructor:${firstId.image}>`;
+        }
+      }
+    }
+  }
+
+  // Regular method: methodDeclarator > Identifier
+  const methodDeclarators = methodNode.children["methodDeclarator"] as
+    | ReadonlyArray<CstNode>
+    | undefined;
+  if (methodDeclarators) {
+    for (const declarator of methodDeclarators) {
       if (isCstNode(declarator) && declarator.children) {
         const ids = declarator.children["Identifier"] as
           | ReadonlyArray<CstToken>
@@ -202,7 +261,36 @@ function getMethodName(methodNode: CstNode): string {
     }
   }
 
-  return "<anonymous>";
+  // Interface method: interfaceMethodDeclaration wraps a methodHeader > methodDeclarator
+  const methodHeaders = methodNode.children["methodHeader"] as
+    | ReadonlyArray<CstNode>
+    | undefined;
+  if (methodHeaders) {
+    for (const header of methodHeaders) {
+      if (isCstNode(header) && header.children) {
+        const innerDeclarators = header.children["methodDeclarator"] as
+          | ReadonlyArray<CstNode>
+          | undefined;
+        if (innerDeclarators) {
+          for (const declarator of innerDeclarators) {
+            if (isCstNode(declarator) && declarator.children) {
+              const ids = declarator.children["Identifier"] as
+                | ReadonlyArray<CstToken>
+                | undefined;
+              const firstId = ids?.[0];
+              if (firstId?.image) {
+                return firstId.image;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Lambda/anonymous fallback: use line number
+  const { startLine } = getNodeLineRange(methodNode);
+  return `lambda@${startLine}`;
 }
 
 function countMethodParameters(methodNode: CstNode): number {
@@ -245,11 +333,25 @@ function analyzeJavaFile(
       loc,
       parameterCount: paramCount,
       cyclomatic,
-      cognitive: cyclomatic,
+      cognitive: cyclomatic, // Placeholder; overwritten below with real cognitive complexity
       halstead: { ...DEFAULT_HALSTEAD },
       nestingDepth,
     };
   });
+
+  // Compute real cognitive complexity for Java methods
+  if (functions.length > 0) {
+    const cognitiveResults = computeJavaCognitiveComplexity(
+      source,
+      functions.map((f) => ({ startLine: f.startLine, endLine: f.endLine })),
+    );
+    for (let i = 0; i < functions.length; i++) {
+      const cogResult = cognitiveResults[i];
+      if (cogResult) {
+        functions[i] = { ...functions[i], cognitive: cogResult.cognitiveComplexity } as FunctionMetrics;
+      }
+    }
+  }
 
   const cyclomatics = functions.map((f) => f.cyclomatic);
   const cognitives = functions.map((f) => f.cognitive);
@@ -284,6 +386,9 @@ function analyzeJavaFile(
     ),
   );
 
+  // Code smells analysis
+  const codeSmells = analyzeCodeSmells(source, "java", functions.length);
+
   return {
     filePath,
     language: "java",
@@ -295,6 +400,14 @@ function analyzeJavaFile(
     averageCognitive,
     maxCognitive,
     maintainabilityIndex,
+    codeSmells: {
+      consoleStatements: codeSmells.consoleStatements.length,
+      todoFixmeCount: codeSmells.todoFixmeCount,
+      magicNumberCount: codeSmells.magicNumbers.length,
+      commentRatio: codeSmells.commentRatio,
+      importCount: codeSmells.importCount,
+      isGodFile: codeSmells.isGodFile,
+    },
   };
 }
 
@@ -343,24 +456,76 @@ function analyzeTsJsFile(
   const lines = source.split("\n");
   const totalLoc = lines.length;
 
-  const functions: FunctionMetrics[] = result.methods.map((method) => ({
-    name: method.name,
-    startLine: method.lineStart,
-    endLine: method.lineEnd,
-    loc: method.sloc.logical,
-    parameterCount: method.paramCount,
-    cyclomatic: method.cyclomatic,
-    cognitive: method.cyclomatic, // escomplex doesn't compute cognitive; approximate with cyclomatic
-    halstead: {
-      effort: method.halstead.effort,
-      difficulty: method.halstead.difficulty,
-      volume: method.halstead.volume,
-      vocabulary: method.halstead.vocabulary,
-      length: method.halstead.length,
-      bugs: method.halstead.bugs,
-    },
-    nestingDepth: 0, // escomplex doesn't track nesting depth directly
-  }));
+  // Compute real nesting depths using TypeScript compiler API
+  const nestingDepths = computeNestingDepths(source, filePath);
+
+  // Try to get cognitive complexity from cognitive-complexity-ts
+  let cognitiveScores: Map<number, number> | null = null;
+  if (getCognitiveComplexity) {
+    try {
+      const output = getCognitiveComplexity(source, filePath);
+      if (output?.inner) {
+        cognitiveScores = new Map<number, number>();
+        for (const item of output.inner) {
+          cognitiveScores.set(item.line, item.score);
+        }
+      }
+    } catch {
+      // Fall back to cyclomatic
+    }
+  }
+
+  const functions: FunctionMetrics[] = result.methods.map((method) => {
+    // Find matching nesting depth by overlapping line ranges
+    const matchingNesting = nestingDepths.find(
+      (nd) =>
+        nd.startLine <= method.lineStart && nd.endLine >= method.lineEnd,
+    ) ?? nestingDepths.find(
+      // Looser match: function starts within the nesting range
+      (nd) =>
+        Math.abs(nd.startLine - method.lineStart) <= 1 &&
+        Math.abs(nd.endLine - method.lineEnd) <= 1,
+    );
+
+    // Find matching cognitive complexity score by line number
+    let cognitive = method.cyclomatic; // fallback
+    if (cognitiveScores) {
+      // Try exact match first, then nearby lines (escomplex and cognitive-complexity-ts
+      // may report slightly different start lines)
+      const exactScore = cognitiveScores.get(method.lineStart);
+      if (exactScore !== undefined) {
+        cognitive = exactScore;
+      } else {
+        // Check +/- 2 lines for a match
+        for (let offset = -2; offset <= 2; offset++) {
+          const nearbyScore = cognitiveScores.get(method.lineStart + offset);
+          if (nearbyScore !== undefined) {
+            cognitive = nearbyScore;
+            break;
+          }
+        }
+      }
+    }
+
+    return {
+      name: method.name,
+      startLine: method.lineStart,
+      endLine: method.lineEnd,
+      loc: method.sloc.logical,
+      parameterCount: method.paramCount,
+      cyclomatic: method.cyclomatic,
+      cognitive,
+      halstead: {
+        effort: method.halstead.effort,
+        difficulty: method.halstead.difficulty,
+        volume: method.halstead.volume,
+        vocabulary: method.halstead.vocabulary,
+        length: method.halstead.length,
+        bugs: method.halstead.bugs,
+      },
+      nestingDepth: matchingNesting?.maxNestingDepth ?? 0,
+    };
+  });
 
   const cyclomatics = functions.map((f) => f.cyclomatic);
   const cognitives = functions.map((f) => f.cognitive);
@@ -382,6 +547,9 @@ function analyzeTsJsFile(
       ? Math.max(...cognitives)
       : result.aggregate.cyclomatic;
 
+  // Code smells analysis
+  const codeSmells = analyzeCodeSmells(source, language, functions.length);
+
   return {
     filePath,
     language,
@@ -393,6 +561,14 @@ function analyzeTsJsFile(
     averageCognitive,
     maxCognitive,
     maintainabilityIndex: result.maintainability,
+    codeSmells: {
+      consoleStatements: codeSmells.consoleStatements.length,
+      todoFixmeCount: codeSmells.todoFixmeCount,
+      magicNumberCount: codeSmells.magicNumbers.length,
+      commentRatio: codeSmells.commentRatio,
+      importCount: codeSmells.importCount,
+      isGodFile: codeSmells.isGodFile,
+    },
   };
 }
 

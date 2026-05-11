@@ -159,6 +159,62 @@ Be constructive — suggest fixes, not just problems. Acknowledge good patterns.
     }
   );
 
+  // Register code-quality-guard prompt
+  server.prompt(
+    "code-quality-guard",
+    "Activates the code quality self-correcting loop. After writing or modifying code, automatically analyze and iterate until quality reaches the target score.",
+    z.object({
+      targetScore: z.string().optional().default("8").describe("Minimum acceptable score (1-10)"),
+      useAiReview: z.string().optional().default("false").describe("Include Claude AI review (slower but more thorough)"),
+    }).shape,
+    async () => {
+      return {
+        messages: [
+          {
+            role: "user" as const,
+            content: {
+              type: "text" as const,
+              text: "Activate code quality guard for this session.",
+            },
+          },
+          {
+            role: "assistant" as const,
+            content: {
+              type: "text" as const,
+              text: `Code Quality Guard is now active. I will follow these rules for the rest of this session:
+
+## Code Quality Self-Correcting Loop
+
+**After every file I write or modify**, I will automatically:
+
+1. **Analyze** the file using \`code_health_analyze_file\` with the file path
+2. **Check** if the score meets the target (minimum 8/10)
+3. **If below target**: Review the issues, apply fixes, and re-analyze
+4. **Repeat** until the score reaches the target or 3 iterations are completed
+5. **Report** the final score and any remaining issues
+
+### Rules
+- I will NOT skip the quality check, even for small changes
+- I will fix issues in order of severity: critical → warning → info
+- I will NOT just suppress warnings — I will fix the root cause
+- If I cannot reach the target in 3 iterations, I will report the remaining issues
+- For new files, I will aim for score 9+ on the first write
+
+### What I check
+- Cyclomatic & cognitive complexity
+- Function size and nesting depth
+- Code smells (console.log, TODO, magic numbers, god files)
+- Parameter counts
+- Maintainability index
+
+I will now apply this to every file I create or modify going forward.`,
+            },
+          },
+        ],
+      };
+    }
+  );
+
   // Register agent-help prompt
   server.prompt(
     "agent-help",
